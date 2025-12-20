@@ -2,6 +2,7 @@
 
 import { ConnectButton } from '@rainbow-me/rainbowkit';
 import { Coins } from 'lucide-react';
+import { Button, Flex, Card, Text, Heading } from '@radix-ui/themes';
 
 export default function Home() {
   return (
@@ -56,6 +57,25 @@ export default function Home() {
             </p>
             <ConnectButton />
           </div>
+
+          {/* Radix UI Demo */}
+          <Card className="mt-8">
+            <Flex direction="column" gap="3" align="center">
+              <Heading size="4">Radix UI is Ready!</Heading>
+              <Text color="gray">Beautiful, accessible components for your Web3 app</Text>
+              <Flex gap="3">
+                <Button size="3" variant="solid">
+                  Hey 👋
+                </Button>
+                <Button size="3" variant="soft">
+                  Soft Button
+                </Button>
+                <Button size="3" variant="outline">
+                  Outline
+                </Button>
+              </Flex>
+            </Flex>
+          </Card>
         </div>
       </main>
 
