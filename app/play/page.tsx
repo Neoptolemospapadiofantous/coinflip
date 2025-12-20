@@ -1,0 +1,291 @@
+'use client';
+
+import { useState } from 'react';
+import { useAccount } from 'wagmi';
+import { ConnectButton } from '@rainbow-me/rainbowkit';
+import {
+  Container,
+  Section,
+  Flex,
+  Heading,
+  Text,
+  Button,
+  Card,
+  Callout,
+} from '@radix-ui/themes';
+import { Layout } from '@/components/layout/Layout';
+import { TierSelector } from '@/components/game/TierSelector';
+import { CoinChoice } from '@/components/game/CoinChoice';
+import { useGameStore } from '@/store/gameStore';
+import { useCreateGame } from '@/hooks/useContract';
+import { useTiers } from '@/hooks/useTiers';
+import { Info, Loader2, CheckCircle2, AlertCircle } from 'lucide-react';
+import { formatCurrency } from '@/lib/utils';
+import { parseEther } from 'viem';
+
+enum GameStep {
+  SELECT_TIER = 'select_tier',
+  CHOOSE_SIDE = 'choose_side',
+  CONFIRM = 'confirm',
+  CREATING = 'creating',
+  WAITING = 'waiting',
+}
+
+export default function PlayPage() {
+  const { isConnected } = useAccount();
+  const [step, setStep] = useState<GameStep>(GameStep.SELECT_TIER);
+  const { selectedTier, coinChoice, resetGame } = useGameStore();
+  const { createGame, isLoading, isSuccess, txHash, error } = useCreateGame();
+  const { data: tiers } = useTiers();
+
+  const currentTier = tiers?.find((t) => t.id === selectedTier);
+
+  const handleCreateGame = () => {
+    if (selectedTier === null || coinChoice === null || !currentTier) return;
+
+    setStep(GameStep.CREATING);
+    createGame(selectedTier, coinChoice, currentTier.amountUsd.toString());
+  };
+
+  const handleReset = () => {
+    resetGame();
+    setStep(GameStep.SELECT_TIER);
+  };
+
+  // Update step based on selection
+  const canProceedToChooseSide = selectedTier !== null;
+  const canProceedToConfirm = selectedTier !== null && coinChoice !== null;
+
+  if (!isConnected) {
+    return (
+      <Layout>
+        <Section size="3">
+          <Container size="2">
+            <Flex direction="column" align="center" gap="6" py="9">
+              <Card className="glass" size="4">
+                <Flex direction="column" gap="4" p="6" align="center">
+                  <Heading size="6">Connect Your Wallet</Heading>
+                  <Text size="3" color="gray" align="center">
+                    Please connect your Web3 wallet to start playing
+                  </Text>
+                  <ConnectButton />
+                </Flex>
+              </Card>
+            </Flex>
+          </Container>
+        </Section>
+      </Layout>
+    );
+  }
+
+  return (
+    <Layout>
+      <Section size="3">
+        <Container size="3">
+          <Flex direction="column" gap="6" py="6">
+            {/* Header */}
+            <Flex direction="column" gap="2" align="center">
+              <Heading size="8">Create a Game</Heading>
+              <Text size="3" color="gray">
+                Choose your bet amount, pick a side, and let's flip!
+              </Text>
+            </Flex>
+
+            {/* Steps Indicator */}
+            <Card className="glass">
+              <Flex gap="2" p="4" justify="center" wrap="wrap">
+                <StepIndicator
+                  number={1}
+                  label="Select Tier"
+                  active={step === GameStep.SELECT_TIER}
+                  completed={selectedTier !== null}
+                />
+                <StepIndicator
+                  number={2}
+                  label="Choose Side"
+                  active={step === GameStep.CHOOSE_SIDE}
+                  completed={coinChoice !== null}
+                />
+                <StepIndicator
+                  number={3}
+                  label="Confirm"
+                  active={step === GameStep.CONFIRM}
+                  completed={step === GameStep.CREATING || step === GameStep.WAITING}
+                />
+              </Flex>
+            </Card>
+
+            {/* Step Content */}
+            <Card className="glass" size="4">
+              <Flex direction="column" gap="6" p="6">
+                {/* Step 1: Select Tier */}
+                {step === GameStep.SELECT_TIER && (
+                  <>
+                    <TierSelector />
+                    <Button
+                      size="4"
+                      disabled={!canProceedToChooseSide}
+                      onClick={() => setStep(GameStep.CHOOSE_SIDE)}
+                    >
+                      Next: Choose Your Side
+                    </Button>
+                  </>
+                )}
+
+                {/* Step 2: Choose Side */}
+                {step === GameStep.CHOOSE_SIDE && (
+                  <>
+                    <CoinChoice />
+                    <Flex gap="3">
+                      <Button size="4" variant="soft" onClick={() => setStep(GameStep.SELECT_TIER)}>
+                        Back
+                      </Button>
+                      <Button
+                        size="4"
+                        className="flex-1"
+                        disabled={!canProceedToConfirm}
+                        onClick={() => setStep(GameStep.CONFIRM)}
+                      >
+                        Next: Confirm
+                      </Button>
+                    </Flex>
+                  </>
+                )}
+
+                {/* Step 3: Confirm */}
+                {step === GameStep.CONFIRM && (
+                  <>
+                    <Flex direction="column" gap="4">
+                      <Heading size="5">Confirm Your Game</Heading>
+
+                      <Flex direction="column" gap="3">
+                        <Flex justify="between">
+                          <Text color="gray">Bet Amount:</Text>
+                          <Text weight="bold">${currentTier?.amountUsd}</Text>
+                        </Flex>
+                        <Flex justify="between">
+                          <Text color="gray">Your Choice:</Text>
+                          <Text weight="bold">{coinChoice ? 'Tails 🪙' : 'Heads 👑'}</Text>
+                        </Flex>
+                        <Flex justify="between">
+                          <Text color="gray">Potential Win:</Text>
+                          <Text weight="bold" className="text-green-400">
+                            ${currentTier?.winAmountUsd}
+                          </Text>
+                        </Flex>
+                      </Flex>
+
+                      <Callout.Root color="blue" size="1">
+                        <Callout.Icon>
+                          <Info className="w-4 h-4" />
+                        </Callout.Icon>
+                        <Callout.Text>
+                          After creating the game, you'll be matched with an opponent. The game will
+                          resolve automatically using Chainlink VRF.
+                        </Callout.Text>
+                      </Callout.Root>
+                    </Flex>
+
+                    <Flex gap="3">
+                      <Button size="4" variant="soft" onClick={() => setStep(GameStep.CHOOSE_SIDE)}>
+                        Back
+                      </Button>
+                      <Button size="4" className="flex-1" onClick={handleCreateGame}>
+                        Create Game
+                      </Button>
+                    </Flex>
+                  </>
+                )}
+
+                {/* Step 4: Creating/Waiting */}
+                {(step === GameStep.CREATING || step === GameStep.WAITING) && (
+                  <Flex direction="column" gap="4" align="center" py="6">
+                    {isLoading && (
+                      <>
+                        <Loader2 className="w-16 h-16 text-cyan-400 animate-spin" />
+                        <Heading size="5">Creating Game...</Heading>
+                        <Text size="2" color="gray" align="center">
+                          Please confirm the transaction in your wallet
+                        </Text>
+                      </>
+                    )}
+
+                    {isSuccess && (
+                      <>
+                        <CheckCircle2 className="w-16 h-16 text-green-400" />
+                        <Heading size="5">Game Created!</Heading>
+                        <Text size="2" color="gray" align="center">
+                          Waiting for an opponent to join...
+                        </Text>
+                        {txHash && (
+                          <Text size="1" color="gray">
+                            Transaction: {txHash.slice(0, 10)}...{txHash.slice(-8)}
+                          </Text>
+                        )}
+                        <Button size="3" variant="soft" onClick={handleReset}>
+                          Create Another Game
+                        </Button>
+                      </>
+                    )}
+
+                    {error && (
+                      <>
+                        <AlertCircle className="w-16 h-16 text-red-400" />
+                        <Heading size="5">Error Creating Game</Heading>
+                        <Text size="2" color="gray" align="center">
+                          {error.message}
+                        </Text>
+                        <Button size="3" onClick={handleReset}>
+                          Try Again
+                        </Button>
+                      </>
+                    )}
+                  </Flex>
+                )}
+              </Flex>
+            </Card>
+          </Flex>
+        </Container>
+      </Section>
+    </Layout>
+  );
+}
+
+function StepIndicator({
+  number,
+  label,
+  active,
+  completed,
+}: {
+  number: number;
+  label: string;
+  active: boolean;
+  completed: boolean;
+}) {
+  return (
+    <Flex align="center" gap="2">
+      <Flex
+        align="center"
+        justify="center"
+        className={`w-8 h-8 rounded-full border-2 ${
+          completed
+            ? 'bg-cyan-500 border-cyan-500'
+            : active
+              ? 'border-cyan-500'
+              : 'border-slate-600'
+        }`}
+      >
+        <Text
+          size="2"
+          weight="bold"
+          className={completed || active ? 'text-white' : 'text-slate-500'}
+        >
+          {number}
+        </Text>
+      </Flex>
+      <Text size="2" weight={active ? 'bold' : 'regular'} color={active ? undefined : 'gray'}>
+        {label}
+      </Text>
+    </Flex>
+  );
+}

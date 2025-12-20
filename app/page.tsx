@@ -14,6 +14,7 @@ import {
   Badge,
 } from '@radix-ui/themes';
 import { Layout } from '@/components/layout/Layout';
+import Link from 'next/link';
 
 export default function Home() {
   return (
@@ -40,10 +41,12 @@ export default function Home() {
 
             {/* CTA Buttons */}
             <Flex gap="3" wrap="wrap" justify="center">
-              <Button size="4" variant="solid" className="cursor-pointer">
-                <Dices className="w-4 h-4" />
-                Start Playing
-              </Button>
+              <Link href="/play">
+                <Button size="4" variant="solid" className="cursor-pointer">
+                  <Dices className="w-4 h-4" />
+                  Start Playing
+                </Button>
+              </Link>
               <Button size="4" variant="soft" className="cursor-pointer">
                 View Games
               </Button>
