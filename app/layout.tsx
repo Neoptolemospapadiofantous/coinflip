@@ -19,9 +19,15 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en">
+    <html lang="en" className="dark">
       <body className={inter.className}>
-        <Theme accentColor="blue" grayColor="slate" radius="medium" scaling="100%">
+        <Theme
+          appearance="dark"
+          accentColor="cyan"
+          grayColor="slate"
+          radius="medium"
+          scaling="100%"
+        >
           <Providers>{children}</Providers>
         </Theme>
       </body>

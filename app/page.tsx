@@ -1,91 +1,137 @@
 'use client';
 
-import { ConnectButton } from '@rainbow-me/rainbowkit';
-import { Coins } from 'lucide-react';
-import { Button, Flex, Card, Text, Heading } from '@radix-ui/themes';
+import { Zap, Shield, Dices } from 'lucide-react';
+import {
+  Button,
+  Flex,
+  Card,
+  Text,
+  Heading,
+  Container,
+  Section,
+  Box,
+  Grid,
+  Badge,
+} from '@radix-ui/themes';
+import { Layout } from '@/components/layout/Layout';
 
 export default function Home() {
   return (
-    <div className="min-h-screen flex flex-col">
-      {/* Header */}
-      <header className="border-b bg-white/50 backdrop-blur-sm">
-        <div className="container mx-auto px-4 py-4 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <Coins className="w-8 h-8 text-primary-600" />
-            <h1 className="text-2xl font-bold text-gray-900">CoinFlip</h1>
-          </div>
-          <ConnectButton />
-        </div>
-      </header>
-
-      {/* Main Content */}
-      <main className="flex-1 flex items-center justify-center">
-        <div className="text-center space-y-8 max-w-2xl mx-auto px-4">
-          {/* Hero Section */}
-          <div className="space-y-4">
-            <h2 className="text-6xl font-bold text-gray-900">
-              Flip. Win. Repeat.
-            </h2>
-            <p className="text-xl text-gray-600">
-              Provably fair coin-flip gambling on Polygon with instant payouts
-            </p>
-          </div>
-
-          {/* Features */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mt-12">
-            <FeatureCard
-              icon="🎲"
-              title="Provably Fair"
-              description="Powered by Chainlink VRF for verifiable randomness"
-            />
-            <FeatureCard
-              icon="⚡"
-              title="Instant Payouts"
-              description="Automatic payouts directly to your wallet"
-            />
-            <FeatureCard
-              icon="🔒"
-              title="Non-Custodial"
-              description="You always control your funds"
-            />
-          </div>
-
-          {/* CTA */}
-          <div className="pt-8">
-            <p className="text-sm text-gray-500 mb-4">
-              Connect your wallet to get started
-            </p>
-            <ConnectButton />
-          </div>
-
-          {/* Radix UI Demo */}
-          <Card className="mt-8">
-            <Flex direction="column" gap="3" align="center">
-              <Heading size="4">Radix UI is Ready!</Heading>
-              <Text color="gray">Beautiful, accessible components for your Web3 app</Text>
-              <Flex gap="3">
-                <Button size="3" variant="solid">
-                  Hey 👋
-                </Button>
-                <Button size="3" variant="soft">
-                  Soft Button
-                </Button>
-                <Button size="3" variant="outline">
-                  Outline
-                </Button>
-              </Flex>
+    <Layout>
+      <Section size="3" style={{ flex: 1 }}>
+        <Container size="3">
+          <Flex direction="column" align="center" gap="6" py="9">
+            {/* Main Heading */}
+            <Flex direction="column" align="center" gap="4" className="text-center">
+              <Badge size="2" color="cyan" variant="soft" radius="full">
+                🎲 Provably Fair Gaming
+              </Badge>
+              <Heading
+                size="9"
+                className="bg-gradient-to-r from-cyan-400 via-blue-400 to-purple-400 bg-clip-text text-transparent"
+              >
+                Flip. Win. Repeat.
+              </Heading>
+              <Text size="5" color="gray" className="max-w-2xl">
+                The first provably fair coin-flip game on Polygon. Powered by Chainlink VRF for
+                verifiable randomness and instant payouts.
+              </Text>
             </Flex>
-          </Card>
-        </div>
-      </main>
 
-      {/* Footer */}
-      <footer className="border-t bg-white/50 backdrop-blur-sm py-6">
-        <div className="container mx-auto px-4 text-center text-sm text-gray-600">
-          <p>Built with Next.js, wagmi, and Chainlink VRF</p>
-        </div>
-      </footer>
-    </div>
+            {/* CTA Buttons */}
+            <Flex gap="3" wrap="wrap" justify="center">
+              <Button size="4" variant="solid" className="cursor-pointer">
+                <Dices className="w-4 h-4" />
+                Start Playing
+              </Button>
+              <Button size="4" variant="soft" className="cursor-pointer">
+                View Games
+              </Button>
+              <Button size="4" variant="outline" className="cursor-pointer">
+                Learn More
+              </Button>
+            </Flex>
+
+            {/* Stats */}
+            <Grid columns="3" gap="4" width="100%" className="max-w-2xl mt-8">
+              <StatCard label="Total Volume" value="$1.2M" />
+              <StatCard label="Games Played" value="15,234" />
+              <StatCard label="Active Players" value="892" />
+            </Grid>
+
+            {/* Features Grid */}
+            <Grid columns={{ initial: '1', md: '3' }} gap="4" width="100%" className="mt-12">
+              <FeatureCard
+                icon={<Dices className="w-8 h-8 text-cyan-400" />}
+                title="Provably Fair"
+                description="Powered by Chainlink VRF for verifiable randomness. Every flip is transparent and auditable on-chain."
+              />
+              <FeatureCard
+                icon={<Zap className="w-8 h-8 text-yellow-400" />}
+                title="Instant Payouts"
+                description="Automatic payouts directly to your wallet within seconds. No waiting, no manual claims."
+              />
+              <FeatureCard
+                icon={<Shield className="w-8 h-8 text-green-400" />}
+                title="Non-Custodial"
+                description="You always control your funds. Smart contracts handle everything securely on-chain."
+              />
+            </Grid>
+
+            {/* Tier Selection Preview */}
+            <Box className="w-full max-w-4xl mt-12">
+              <Card className="glass glass-hover">
+                <Flex direction="column" gap="4" p="5">
+                  <Flex align="center" justify="between">
+                    <Heading size="5">Choose Your Bet</Heading>
+                    <Badge color="green" variant="soft">
+                      Live
+                    </Badge>
+                  </Flex>
+                  <Grid columns={{ initial: '2', md: '5' }} gap="3">
+                    <TierButton amount="$5" players={12} />
+                    <TierButton amount="$10" players={8} active />
+                    <TierButton amount="$25" players={5} />
+                    <TierButton amount="$50" players={3} />
+                    <TierButton amount="$100" players={1} />
+                  </Grid>
+                </Flex>
+              </Card>
+            </Box>
+
+            {/* How It Works */}
+            <Box className="w-full max-w-4xl mt-12">
+              <Flex direction="column" gap="6">
+                <Heading size="6" align="center">
+                  How It Works
+                </Heading>
+                <Grid columns={{ initial: '1', md: '4' }} gap="4">
+                  <StepCard number="1" title="Connect Wallet" description="Link your Web3 wallet" />
+                  <StepCard number="2" title="Choose Tier" description="Select bet amount" />
+                  <StepCard number="3" title="Pick Side" description="Heads or tails?" />
+                  <StepCard number="4" title="Win & Earn" description="Instant payout!" />
+                </Grid>
+              </Flex>
+            </Box>
+          </Flex>
+        </Container>
+      </Section>
+    </Layout>
+  );
+}
+
+function StatCard({ label, value }: { label: string; value: string }) {
+  return (
+    <Card className="glass">
+      <Flex direction="column" gap="1" p="3" align="center">
+        <Text size="1" color="gray" weight="medium">
+          {label}
+        </Text>
+        <Heading size="5" className="text-cyan-400">
+          {value}
+        </Heading>
+      </Flex>
+    </Card>
   );
 }
 
@@ -94,15 +140,78 @@ function FeatureCard({
   title,
   description,
 }: {
-  icon: string;
+  icon: React.ReactNode;
   title: string;
   description: string;
 }) {
   return (
-    <div className="p-6 bg-white rounded-xl shadow-sm border border-gray-100 hover:shadow-md transition-shadow">
-      <div className="text-4xl mb-3">{icon}</div>
-      <h3 className="font-semibold text-lg text-gray-900 mb-2">{title}</h3>
-      <p className="text-sm text-gray-600">{description}</p>
-    </div>
+    <Card className="glass glass-hover">
+      <Flex direction="column" gap="3" p="5">
+        <Box className="p-3 rounded-lg bg-slate-800/50 border border-slate-700/50 w-fit">
+          {icon}
+        </Box>
+        <Heading size="4">{title}</Heading>
+        <Text size="2" color="gray">
+          {description}
+        </Text>
+      </Flex>
+    </Card>
+  );
+}
+
+function TierButton({
+  amount,
+  players,
+  active = false,
+}: {
+  amount: string;
+  players: number;
+  active?: boolean;
+}) {
+  return (
+    <Button
+      variant={active ? 'solid' : 'soft'}
+      size="3"
+      className={`cursor-pointer ${active ? '' : 'opacity-80 hover:opacity-100'}`}
+    >
+      <Flex direction="column" gap="1" align="center" py="2">
+        <Text size="5" weight="bold">
+          {amount}
+        </Text>
+        <Text size="1" color="gray">
+          {players} waiting
+        </Text>
+      </Flex>
+    </Button>
+  );
+}
+
+function StepCard({
+  number,
+  title,
+  description,
+}: {
+  number: string;
+  title: string;
+  description: string;
+}) {
+  return (
+    <Card className="glass glass-hover">
+      <Flex direction="column" gap="2" p="4" align="center">
+        <Flex
+          align="center"
+          justify="center"
+          className="w-10 h-10 rounded-full bg-cyan-500/20 border border-cyan-500/30"
+        >
+          <Text size="4" weight="bold" className="text-cyan-400">
+            {number}
+          </Text>
+        </Flex>
+        <Heading size="3">{title}</Heading>
+        <Text size="1" color="gray" align="center">
+          {description}
+        </Text>
+      </Flex>
+    </Card>
   );
 }

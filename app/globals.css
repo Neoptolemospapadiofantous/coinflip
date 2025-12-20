@@ -4,12 +4,16 @@
 
 @layer base {
   :root {
-    --background: 0 0% 100%;
-    --foreground: 222.2 84% 4.9%;
+    --background: 222.2 84% 4.9%;
+    --foreground: 210 40% 98%;
+  }
+
+  * {
+    @apply border-slate-700;
   }
 
   body {
-    @apply bg-gradient-to-br from-slate-50 to-slate-100 min-h-screen;
+    @apply bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 min-h-screen text-slate-100;
   }
 }
 
@@ -20,5 +24,14 @@
 
   .rotate-y-180 {
     transform: rotateY(180deg);
+  }
+
+  /* Glassmorphism utilities for dark mode */
+  .glass {
+    @apply bg-slate-800/50 backdrop-blur-xl border border-slate-700/50;
+  }
+
+  .glass-hover {
+    @apply hover:bg-slate-800/70 hover:border-slate-600/50 transition-all duration-200;
   }
 }
