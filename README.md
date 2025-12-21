@@ -68,12 +68,23 @@ A non-custodial crypto coin-flip gambling game built with Next.js, wagmi, and Ch
    - `NEXT_PUBLIC_SUPABASE_ANON_KEY`: Your Supabase anonymous key
    - `NEXT_PUBLIC_ALCHEMY_API_KEY`: Get from [Alchemy](https://www.alchemy.com)
 
-4. **Run the development server**
+4. **Verify database setup (optional)**
+
+   Check if Supabase is configured:
+   ```bash
+   pnpm verify-db
+   ```
+
+   Or visit: [http://localhost:3000/admin/setup](http://localhost:3000/admin/setup)
+
+   **Note:** The app works with mock data by default, so you can skip this step initially.
+
+5. **Run the development server**
    ```bash
    pnpm dev
    ```
 
-5. **Open your browser**
+6. **Open your browser**
 
    Navigate to [http://localhost:3000](http://localhost:3000)
 
@@ -121,6 +132,9 @@ pnpm lint
 
 # Format code
 pnpm format
+
+# Verify database setup
+pnpm verify-db    # or pnpm check-db
 ```
 
 ## Next Steps
