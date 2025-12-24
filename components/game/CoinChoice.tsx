@@ -27,18 +27,16 @@ export function CoinChoice() {
           const isSelected = coinChoice === choice.value;
 
           return (
-            <Button
+            <Card
               key={choice.label}
-              variant={isSelected ? 'solid' : 'soft'}
-              size="4"
               className={`cursor-pointer flex-1 transition-all duration-300 ${
                 isSelected
-                  ? 'neon-border-cyan scale-105 animate-pulse-slow'
-                  : 'hover:scale-102 hover:border-cyan-400/30'
+                  ? 'card-solid border-cyan-500 neon-border-cyan scale-105 animate-pulse-slow'
+                  : 'card-simple hover:scale-102 hover:border-cyan-400/30'
               }`}
               onClick={() => setCoinChoice(choice.value)}
             >
-              <Flex direction="column" gap="3" align="center" py="4" className="w-full">
+              <Flex direction="column" gap="3" align="center" p="6">
                 {/* Emoji with animation */}
                 <Text
                   className={`text-6xl transition-transform duration-300 ${
@@ -58,7 +56,7 @@ export function CoinChoice() {
                   {choice.description}
                 </Text>
               </Flex>
-            </Button>
+            </Card>
           );
         })}
       </Flex>
