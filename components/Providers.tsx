@@ -5,7 +5,6 @@ import { WagmiProvider } from 'wagmi';
 import { RainbowKitProvider } from '@rainbow-me/rainbowkit';
 import { config } from '@/lib/wagmi';
 import { useState } from 'react';
-import { Toaster } from 'react-hot-toast';
 
 import '@rainbow-me/rainbowkit/styles.css';
 
@@ -17,7 +16,6 @@ export function Providers({ children }: { children: React.ReactNode }) {
       <QueryClientProvider client={queryClient}>
         <RainbowKitProvider>
           {children}
-          <Toaster position="bottom-right" />
         </RainbowKitProvider>
       </QueryClientProvider>
     </WagmiProvider>

@@ -25,8 +25,9 @@ export default function RootLayout({
           appearance="dark"
           accentColor="cyan"
           grayColor="slate"
-          radius="medium"
+          radius="large"
           scaling="100%"
+          panelBackground="solid"
         >
           <Providers>{children}</Providers>
         </Theme>
