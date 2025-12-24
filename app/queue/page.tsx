@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useAccount } from 'wagmi';
 import { ConnectButton } from '@rainbow-me/rainbowkit';
 import {
@@ -21,20 +21,78 @@ import { useTiers } from '@/hooks/useTiers';
 import { useJoinGame } from '@/hooks/useContract';
 import { usePendingGames, useGameStats } from '@/hooks/useGames';
 import { formatCurrency } from '@/lib/utils';
-import { Clock, Users, Loader2, TrendingUp, XCircle, AlertCircle } from 'lucide-react';
+import { Clock, Users, Loader2, TrendingUp, XCircle, AlertCircle, Wifi, WifiOff } from 'lucide-react';
 import Link from 'next/link';
 import { StatusBadge } from '@/components/game/StatusBadge';
 import { useCancelGame } from '@/hooks/useContract';
+import { supabase } from '@/lib/supabase';
+import { useQueryClient } from '@tanstack/react-query';
+import { useGameStore } from '@/store/gameStore';
+import { Game } from '@/types/game';
 
 export default function QueuePage() {
   const { isConnected, address } = useAccount();
   const { data: tiers } = useTiers();
-  const { data: pendingGames, isLoading: isLoadingGames } = usePendingGames();
-  const { data: gameStats } = useGameStats();
-  const { joinGame, isLoading, isSuccess, error } = useJoinGame();
+  const { data: pendingGames, isLoading: isLoadingGames, refetch } = usePendingGames();
+  const { data: gameStats, refetch: refetchStats } = useGameStats();
+  const { joinGame, isLoading, isSuccess, txHash, error } = useJoinGame();
   const { cancelGame, isLoading: isCanceling } = useCancelGame();
   const [selectedGame, setSelectedGame] = useState<any>(null);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [isLive, setIsLive] = useState(false);
+  const [joinedGameId, setJoinedGameId] = useState<string | null>(null);
+  const queryClient = useQueryClient();
+  const { setActiveGame, setActiveGameId, setShowMatchModal } = useGameStore();
+
+  // Refs for cleanup
+  const mountedRef = useRef(true);
+  const joinedChannelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
+
+  // Cleanup on unmount
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      if (joinedChannelRef.current) {
+        joinedChannelRef.current.unsubscribe();
+        joinedChannelRef.current = null;
+      }
+    };
+  }, []);
+
+  // Real-time subscription for queue updates
+  useEffect(() => {
+    console.log('📡 Setting up queue real-time subscription...');
+
+    const channel = supabase
+      .channel('queue-updates')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'games',
+        },
+        (payload) => {
+          if (!mountedRef.current) return;
+          console.log('🔄 Queue update received:', payload.eventType);
+
+          // Refetch pending games
+          refetch();
+          refetchStats();
+        }
+      )
+      .subscribe((status) => {
+        if (!mountedRef.current) return;
+        console.log('📡 Queue subscription status:', status);
+        setIsLive(status === 'SUBSCRIBED');
+      });
+
+    return () => {
+      console.log('🔌 Cleaning up queue subscription');
+      channel.unsubscribe();
+    };
+  }, [refetch, refetchStats]);
 
   // Separate user's games from other games
   const myPendingGames = pendingGames?.filter(
@@ -44,35 +102,87 @@ export default function QueuePage() {
     (game) => game.creator_address.toLowerCase() !== address?.toLowerCase()
   );
 
-  const handleJoinClick = (game: any, tier: any) => {
+  const handleJoinClick = useCallback((game: any, tier: any) => {
     setSelectedGame({ ...game, tier });
     setIsDialogOpen(true);
-  };
+  }, []);
 
-  const handleConfirmJoin = () => {
+  const handleConfirmJoin = useCallback(() => {
     if (selectedGame) {
-      // Joiner automatically gets the opposite side of the creator
       const joinerChoice = !selectedGame.creator_choice;
+      setJoinedGameId(selectedGame.id);
       joinGame(selectedGame.id, joinerChoice, selectedGame.tier.amount);
     }
-  };
+  }, [selectedGame, joinGame]);
 
-  const handleCancelGame = (gameId: string) => {
+  const handleCancelGame = useCallback((gameId: string) => {
     if (confirm('Are you sure you want to cancel this game? You will be refunded.')) {
       cancelGame(gameId);
     }
-  };
+  }, [cancelGame]);
 
-  // Close dialog 3 seconds after successful join
-  useEffect(() => {
-    if (isSuccess) {
-      const timer = setTimeout(() => {
-        setIsDialogOpen(false);
-        setSelectedGame(null);
-      }, 3000);
-      return () => clearTimeout(timer);
+  const handleDialogClose = useCallback(() => {
+    setIsDialogOpen(false);
+    setSelectedGame(null);
+    setJoinedGameId(null);
+    // Cleanup joined game subscription
+    if (joinedChannelRef.current) {
+      joinedChannelRef.current.unsubscribe();
+      joinedChannelRef.current = null;
     }
-  }, [isSuccess]);
+  }, []);
+
+  // Track joined game for modal display - single subscription
+  useEffect(() => {
+    if (!isSuccess || !joinedGameId) return;
+
+    console.log('🎮 Setting up joined game subscription:', joinedGameId);
+
+    // Cleanup any existing subscription
+    if (joinedChannelRef.current) {
+      joinedChannelRef.current.unsubscribe();
+    }
+
+    const channel = supabase
+      .channel(`joined-game:${joinedGameId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'games',
+          filter: `id=eq.${joinedGameId}`,
+        },
+        (payload) => {
+          if (!mountedRef.current) return;
+          const updatedGame = payload.new as Game;
+          console.log('🎮 Joined game updated:', updatedGame.status);
+
+          if (updatedGame.status === 'matched' || updatedGame.status === 'resolved') {
+            setActiveGame(updatedGame);
+            setActiveGameId(updatedGame.id);
+            if (updatedGame.status === 'matched') {
+              setShowMatchModal(true);
+            }
+            handleDialogClose();
+          }
+        }
+      )
+      .subscribe();
+
+    joinedChannelRef.current = channel;
+
+    // Auto-close dialog after showing success state
+    const timer = setTimeout(() => {
+      if (mountedRef.current) {
+        handleDialogClose();
+      }
+    }, 3000);
+
+    return () => {
+      clearTimeout(timer);
+    };
+  }, [isSuccess, joinedGameId, setActiveGame, setActiveGameId, setShowMatchModal, handleDialogClose]);
 
   if (!isConnected) {
     return (
@@ -104,9 +214,24 @@ export default function QueuePage() {
             {/* Header */}
             <Flex direction="column" gap="2" align="center">
               <Heading size="8">Game Queue</Heading>
-              <Text size="3" color="gray">
-                Join an existing game or create your own
-              </Text>
+              <Flex align="center" gap="3">
+                <Text size="3" color="gray">
+                  Join an existing game or create your own
+                </Text>
+                <Flex align="center" gap="1">
+                  {isLive ? (
+                    <>
+                      <Wifi className="w-3 h-3 text-green-400" />
+                      <Text size="1" className="text-green-400">Live</Text>
+                    </>
+                  ) : (
+                    <>
+                      <WifiOff className="w-3 h-3 text-gray-500" />
+                      <Text size="1" color="gray">Connecting...</Text>
+                    </>
+                  )}
+                </Flex>
+              </Flex>
             </Flex>
 
             {/* Stats */}

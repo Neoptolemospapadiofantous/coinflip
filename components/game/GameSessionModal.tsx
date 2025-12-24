@@ -1,11 +1,11 @@
 'use client';
 
 import { Dialog, Flex, Heading, Text, Button, Card, Callout } from '@radix-ui/themes';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { CoinFlip3D, CoinFlip2D } from './CoinFlip3D';
 import { Game } from '@/types/game';
 import { formatCurrency } from '@/lib/utils';
-import { Loader2, Users, Trophy, Zap, AlertTriangle } from 'lucide-react';
+import { Loader2, Users, Trophy, Zap, AlertTriangle, Clock } from 'lucide-react';
 import { useGameStore } from '@/store/gameStore';
 import { validateGameState } from '@/hooks/useGameSync';
 
@@ -16,11 +16,22 @@ interface GameSessionModalProps {
   userAddress?: string;
 }
 
+// VRF timeout in seconds (2 minutes)
+const VRF_TIMEOUT_SECONDS = 120;
+
 export function GameSessionModal({ game, open, onClose, userAddress }: GameSessionModalProps) {
   const [isFlipping, setIsFlipping] = useState(false);
   const [showResult, setShowResult] = useState(false);
   const [skipped, setSkipped] = useState(false);
+  const [vrfElapsedSeconds, setVrfElapsedSeconds] = useState(0);
+  const [vrfTimedOut, setVrfTimedOut] = useState(false);
   const { resetGame } = useGameStore();
+
+  // Refs for tracking
+  const vrfTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const vrfStartTimeRef = useRef<number | null>(null);
+  const lastGameIdRef = useRef<string | null>(null);
+  const lastGameStatusRef = useRef<string | null>(null);
 
   // Determine if user is part of this game
   const isCreator = game?.creator_address?.toLowerCase() === userAddress?.toLowerCase();
@@ -33,23 +44,89 @@ export function GameSessionModal({ game, open, onClose, userAddress }: GameSessi
   // Validate game state
   const validation = game ? validateGameState(game) : { valid: false, errors: [] };
 
-  // Reset state when game changes
+  // Handle game changes and status transitions
   useEffect(() => {
-    if (game) {
+    if (!game) {
+      // Reset all state when game is null
+      setIsFlipping(false);
+      setShowResult(false);
+      setSkipped(false);
+      setVrfElapsedSeconds(0);
+      setVrfTimedOut(false);
+      lastGameIdRef.current = null;
+      lastGameStatusRef.current = null;
+      return;
+    }
+
+    const isNewGame = lastGameIdRef.current !== game.id;
+    const statusChanged = lastGameStatusRef.current !== game.status;
+
+    // Track game ID and status
+    lastGameIdRef.current = game.id;
+    lastGameStatusRef.current = game.status;
+
+    // Reset state for new game
+    if (isNewGame) {
       setSkipped(false);
       setShowResult(false);
+      setIsFlipping(false);
+      setVrfElapsedSeconds(0);
+      setVrfTimedOut(false);
+    }
 
-      // If game is matched, show waiting for VRF
-      if (game.status === 'matched') {
-        setIsFlipping(false);
-      }
-
-      // If game is resolved AND state is valid, start animation
-      if (game.status === 'resolved' && validation.valid) {
-        setIsFlipping(true);
+    // Handle status transitions
+    if (game.status === 'matched') {
+      // Start VRF timer if not already started
+      if (!vrfStartTimeRef.current) {
+        vrfStartTimeRef.current = Date.now();
+        setVrfElapsedSeconds(0);
+        setVrfTimedOut(false);
       }
     }
+
+    // If game is resolved AND state is valid, start animation (only once)
+    if (game.status === 'resolved' && validation.valid && statusChanged) {
+      // Stop VRF timer
+      vrfStartTimeRef.current = null;
+      if (vrfTimerRef.current) {
+        clearInterval(vrfTimerRef.current);
+        vrfTimerRef.current = null;
+      }
+
+      // Start flip animation
+      setIsFlipping(true);
+      setVrfTimedOut(false);
+    }
   }, [game?.id, game?.status, validation.valid]);
+
+  // VRF elapsed timer
+  useEffect(() => {
+    if (game?.status === 'matched' && vrfStartTimeRef.current) {
+      vrfTimerRef.current = setInterval(() => {
+        const elapsed = Math.floor((Date.now() - vrfStartTimeRef.current!) / 1000);
+        setVrfElapsedSeconds(elapsed);
+
+        if (elapsed >= VRF_TIMEOUT_SECONDS) {
+          setVrfTimedOut(true);
+        }
+      }, 1000);
+
+      return () => {
+        if (vrfTimerRef.current) {
+          clearInterval(vrfTimerRef.current);
+        }
+      };
+    }
+  }, [game?.status]);
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      if (vrfTimerRef.current) {
+        clearInterval(vrfTimerRef.current);
+      }
+    };
+  }, []);
 
   const handleFlipComplete = () => {
     setShowResult(true);
@@ -62,8 +139,20 @@ export function GameSessionModal({ game, open, onClose, userAddress }: GameSessi
   };
 
   const handleClose = () => {
+    // Cleanup
+    vrfStartTimeRef.current = null;
+    if (vrfTimerRef.current) {
+      clearInterval(vrfTimerRef.current);
+      vrfTimerRef.current = null;
+    }
     resetGame();
     onClose();
+  };
+
+  const formatTime = (seconds: number): string => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
   };
 
   if (!game) return null;
@@ -79,9 +168,10 @@ export function GameSessionModal({ game, open, onClose, userAddress }: GameSessi
         <Dialog.Title>
           <Flex direction="column" gap="2" align="center">
             <Heading size="7" className="text-gradient-rainbow">
-              {game.status === 'matched' && 'Game Matched!'}
+              {game.status === 'matched' && !vrfTimedOut && 'Game Matched!'}
+              {game.status === 'matched' && vrfTimedOut && 'VRF Taking Longer Than Expected'}
               {game.status === 'resolved' && !showResult && 'Flipping Coin...'}
-              {game.status === 'resolved' && showResult && (isWinner ? 'You Won! 🎉' : 'Better Luck Next Time')}
+              {game.status === 'resolved' && showResult && (isWinner ? 'You Won!' : 'Better Luck Next Time')}
             </Heading>
             <Text size="2" color="gray">
               Game #{game.id}
@@ -93,16 +183,54 @@ export function GameSessionModal({ game, open, onClose, userAddress }: GameSessi
           {/* Game Status: Matched - Waiting for VRF */}
           {game.status === 'matched' && (
             <Flex direction="column" gap="5" align="center" py="6">
-              <Loader2 className="w-20 h-20 text-cyan-400 animate-spin glow-cyan" />
+              {!vrfTimedOut ? (
+                <>
+                  <Loader2 className="w-20 h-20 text-cyan-400 animate-spin glow-cyan" />
 
-              <Flex direction="column" gap="2" align="center">
-                <Heading size="5" className="text-gradient-cyan-purple">
-                  Requesting Random Number...
-                </Heading>
-                <Text size="3" color="gray" align="center">
-                  Chainlink VRF is generating a provably fair random number
-                </Text>
-              </Flex>
+                  <Flex direction="column" gap="2" align="center">
+                    <Heading size="5" className="text-gradient-cyan-purple">
+                      Requesting Random Number...
+                    </Heading>
+                    <Text size="3" color="gray" align="center">
+                      Chainlink VRF is generating a provably fair random number
+                    </Text>
+                  </Flex>
+
+                  {/* Timer */}
+                  <Flex align="center" gap="2" className="text-cyan-400">
+                    <Clock className="w-4 h-4" />
+                    <Text size="2" weight="bold">{formatTime(vrfElapsedSeconds)}</Text>
+                  </Flex>
+                </>
+              ) : (
+                <>
+                  <AlertTriangle className="w-20 h-20 text-yellow-400 animate-pulse" />
+
+                  <Flex direction="column" gap="2" align="center">
+                    <Heading size="5" className="text-yellow-400">
+                      VRF Response Delayed
+                    </Heading>
+                    <Text size="3" color="gray" align="center">
+                      The random number request is taking longer than expected.
+                      This can happen during network congestion.
+                    </Text>
+                  </Flex>
+
+                  <Flex align="center" gap="2" className="text-yellow-400">
+                    <Clock className="w-4 h-4" />
+                    <Text size="2" weight="bold">{formatTime(vrfElapsedSeconds)}</Text>
+                  </Flex>
+
+                  <Card className="w-full bg-yellow-500/10 border border-yellow-500/30">
+                    <Flex direction="column" gap="2" p="3">
+                      <Text size="2" className="text-yellow-400">
+                        Please wait. The result will appear automatically when VRF responds.
+                        You can safely close this modal - the game will complete on-chain.
+                      </Text>
+                    </Flex>
+                  </Card>
+                </>
+              )}
 
               <Card className="card-simple w-full">
                 <Flex direction="column" gap="3" p="4">
@@ -120,6 +248,7 @@ export function GameSessionModal({ game, open, onClose, userAddress }: GameSessi
                       </Text>
                       <Text size="1" className="font-mono text-gray-500">
                         {game.creator_address?.slice(0, 6)}...{game.creator_address?.slice(-4)}
+                        {isCreator && ' (You)'}
                       </Text>
                     </Flex>
 
@@ -129,6 +258,7 @@ export function GameSessionModal({ game, open, onClose, userAddress }: GameSessi
                       </Text>
                       <Text size="1" className="font-mono text-gray-500">
                         {game.joiner_address?.slice(0, 6)}...{game.joiner_address?.slice(-4)}
+                        {isJoiner && ' (You)'}
                       </Text>
                     </Flex>
                   </Flex>
@@ -142,9 +272,11 @@ export function GameSessionModal({ game, open, onClose, userAddress }: GameSessi
                 </Flex>
               </Card>
 
-              <Text size="1" color="gray" align="center" style={{ maxWidth: '400px' }}>
-                This usually takes 10-30 seconds. The result is cryptographically secure and cannot be manipulated.
-              </Text>
+              {!vrfTimedOut && (
+                <Text size="1" color="gray" align="center" style={{ maxWidth: '400px' }}>
+                  This usually takes 10-30 seconds. The result is cryptographically secure and cannot be manipulated.
+                </Text>
+              )}
             </Flex>
           )}
 
@@ -272,7 +404,7 @@ export function GameSessionModal({ game, open, onClose, userAddress }: GameSessi
                       gap="2"
                     >
                       <Text size="2" className="text-green-400">
-                        ✓ Payout has been sent to your wallet
+                        Payout has been sent to your wallet
                       </Text>
                     </Flex>
                   )}
@@ -293,7 +425,6 @@ export function GameSessionModal({ game, open, onClose, userAddress }: GameSessi
                   size="3"
                   onClick={() => {
                     handleClose();
-                    // Navigate to play page
                     window.location.href = '/play';
                   }}
                   className="flex-1 glow-cyan hover:scale-105 transition-transform"

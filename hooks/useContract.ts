@@ -84,18 +84,29 @@ export function useCancelGame() {
     data: hash,
     isPending: isWriting,
     error: writeError,
+    reset,
   } = useWriteContract();
 
   const { isLoading: isConfirming, isSuccess } = useWaitForTransactionReceipt({
     hash,
   });
 
-  const cancelGame = (gameId: string) => {
+  const cancelGame = (gameId: string | number | bigint) => {
+    // Reset any previous errors
+    reset();
+
+    // Convert to string and parse the game ID, handling both numeric strings and potential prefixes
+    const gameIdStr = String(gameId).replace(/^#/, ''); // Remove # prefix if present
+
+    console.log('Cancelling game:', gameIdStr);
+
+    // Let wagmi handle gas estimation dynamically
+    // If estimation fails (tx would revert), the error will be caught and displayed
     writeContract({
       address: contractAddress,
       abi: COINFLIP_ABI,
       functionName: 'cancelGame',
-      args: [BigInt(gameId)],
+      args: [BigInt(gameIdStr)],
     });
   };
 
@@ -105,6 +116,7 @@ export function useCancelGame() {
     isSuccess,
     txHash: hash,
     error: writeError,
+    reset,
   };
 }
 
