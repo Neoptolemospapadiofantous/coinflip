@@ -19,7 +19,13 @@ export function formatCurrency(wei: bigint | string, decimals = 18): string {
   const formatted = formatUnits(value, decimals);
   const num = parseFloat(formatted);
 
-  // Format with up to 4 decimal places, removing trailing zeros
+  // Handle very small amounts (show up to 8 decimals if needed)
+  if (num > 0 && num < 0.0001) {
+    // For tiny amounts, show up to 8 decimals
+    return num.toFixed(8).replace(/\.?0+$/, '') + ' ETH';
+  }
+
+  // For normal amounts, show up to 4 decimal places
   return num.toFixed(4).replace(/\.?0+$/, '') + ' ETH';
 }
 
