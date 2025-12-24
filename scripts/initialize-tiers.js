@@ -1,13 +1,14 @@
-import { ethers } from "hardhat";
+const hre = require("hardhat");
+const { parseEther } = require("ethers");
 
 async function main() {
   // Get network information
-  const network = await ethers.provider.getNetwork();
-  const chainId = Number(network.chainId);
+  const network = await hre.network.provider.request({ method: "eth_chainId" });
+  const chainId = parseInt(network, 16);
 
   // Determine which contract address to use based on network
-  let contractAddress: string | undefined;
-  let networkName: string;
+  let contractAddress;
+  let networkName;
 
   if (chainId === 11155111) {
     contractAddress = process.env.NEXT_PUBLIC_COINFLIP_CONTRACT_ADDRESS_SEPOLIA;
@@ -36,7 +37,20 @@ async function main() {
   console.log("Chain ID:", chainId);
   console.log("Initializing tiers for contract:", contractAddress);
 
-  const coinFlip = await ethers.getContractAt("CoinFlip", contractAddress);
+  // Get signer
+  const signers = await hre.network.provider.request({
+    method: "eth_accounts",
+  });
+
+  if (!signers || signers.length === 0) {
+    console.error("❌ No accounts found. Make sure PRIVATE_KEY is set in .env.local");
+    process.exit(1);
+  }
+
+  console.log("Using signer:", signers[0]);
+
+  // Get contract instance
+  const CoinFlip = await hre.artifacts.readArtifact("CoinFlip");
 
   // Detect if we're on testnet or mainnet
   const isTestnet = chainId === 11155111 || chainId === 80002 || chainId === 80001;
@@ -69,14 +83,37 @@ async function main() {
 
   const currencySymbol = chainId === 137 || chainId === 80002 || chainId === 80001 ? 'POL' : 'ETH';
 
+  const { Interface } = require("ethers");
+  const iface = new Interface(CoinFlip.abi);
+
   for (const tier of tiers) {
-    const amount = ethers.parseEther(tier.amount);
+    const amount = parseEther(tier.amount);
     console.log(`Tier ${tier.id}: ${tier.amount} ${currencySymbol} (~$${tier.usd})`);
 
-    const tx = await coinFlip.setTier(tier.id, amount, true);
-    await tx.wait();
+    const data = iface.encodeFunctionData("setTier", [tier.id, amount, true]);
 
-    console.log(`  ✅ Transaction: ${tx.hash}`);
+    const tx = await hre.network.provider.request({
+      method: "eth_sendTransaction",
+      params: [{
+        from: signers[0],
+        to: contractAddress,
+        data: data,
+      }],
+    });
+
+    console.log(`  ✅ Transaction: ${tx}`);
+
+    // Wait for confirmation
+    let receipt = null;
+    while (receipt === null) {
+      await new Promise(resolve => setTimeout(resolve, 2000));
+      receipt = await hre.network.provider.request({
+        method: "eth_getTransactionReceipt",
+        params: [tx],
+      });
+    }
+
+    console.log(`  ✅ Confirmed in block ${receipt.blockNumber}`);
   }
 
   console.log("\n✅ All tiers initialized successfully!");
