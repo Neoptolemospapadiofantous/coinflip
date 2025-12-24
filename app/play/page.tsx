@@ -170,20 +170,38 @@ export default function PlayPage() {
                           <Text weight="bold">{coinChoice ? 'Tails 🪙' : 'Heads 👑'}</Text>
                         </Flex>
                         <Flex justify="between">
+                          <Text color="gray">Opponent Gets:</Text>
+                          <Text weight="bold" color="gray">{!coinChoice ? 'Tails 🪙' : 'Heads 👑'}</Text>
+                        </Flex>
+                        <Flex justify="between">
                           <Text color="gray">Potential Win:</Text>
                           <Text weight="bold" className="text-green-400">
                             ${currentTier?.winAmountUsd}
                           </Text>
                         </Flex>
+                        <Flex justify="between">
+                          <Text size="1" color="gray">Platform Fee:</Text>
+                          <Text size="1" color="gray">5% (included)</Text>
+                        </Flex>
                       </Flex>
 
-                      <Callout.Root color="blue" size="1">
+                      <Callout.Root color="blue" size="2">
                         <Callout.Icon>
                           <Info className="w-4 h-4" />
                         </Callout.Icon>
                         <Callout.Text>
-                          After creating the game, you'll be matched with an opponent. The game will
-                          resolve automatically using Chainlink VRF.
+                          <Flex direction="column" gap="2">
+                            <Text weight="bold">What Happens Next:</Text>
+                            <Text size="2">
+                              1. Your game enters the queue<br />
+                              2. Another player joins (gets opposite side)<br />
+                              3. Chainlink VRF flips the coin (10-30 seconds)<br />
+                              4. Winner gets paid automatically!
+                            </Text>
+                            <Text size="1" style={{ fontStyle: 'italic' }}>
+                              Game expires if no one joins within 20 minutes
+                            </Text>
+                          </Flex>
                         </Callout.Text>
                       </Callout.Root>
                     </Flex>

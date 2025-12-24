@@ -24,42 +24,22 @@ export function TierSelector() {
 
   return (
     <Flex direction="column" gap="4">
-      <Flex align="center" justify="between">
-        <Heading size="5">Choose Your Bet</Heading>
-        {balance && (
-          <Text size="2" color="gray">
-            Balance: {formatCurrency(balance.value)}
-          </Text>
-        )}
+      <Flex direction="column" gap="2">
+        <Flex align="center" justify="between">
+          <Heading size="5">Choose Your Bet</Heading>
+          {balance && (
+            <Text size="2" color="gray">
+              Balance: {formatCurrency(balance.value)}
+            </Text>
+          )}
+        </Flex>
+        <Text size="2" color="gray">
+          Select your bet amount. Higher tiers mean bigger wins! You'll be matched with another player.
+        </Text>
       </Flex>
 
       {/* Network Indicator */}
       <NetworkIndicator />
-
-      {/* Debug Panel - Remove after testing */}
-      {tiers && tiers.length > 0 && (
-        <Card className="card-simple border-yellow-400/50">
-          <Flex direction="column" gap="2" p="3">
-            <Text size="2" weight="bold" className="text-yellow-400">🔍 Debug Info:</Text>
-            <Flex direction="column" gap="1">
-              <Text size="1" className={isConnected ? 'text-green-400' : 'text-red-400'}>
-                Wallet Connected: {isConnected ? 'YES ✅' : 'NO ❌'}
-              </Text>
-              {address && <Text size="1" color="gray">Address: {address.slice(0, 6)}...{address.slice(-4)}</Text>}
-              <Text size="1" className={isBalanceLoading ? 'text-yellow-400' : 'text-gray-400'}>
-                Balance Loading: {isBalanceLoading ? 'YES...' : 'NO'}
-              </Text>
-              {balanceError && <Text size="1" className="text-red-400">Balance Error: {balanceError.message}</Text>}
-              <Text size="1" color="gray">Your Balance: {balance ? (Number(balance.value) / 1e18).toFixed(8) : '0'} ETH</Text>
-              <Text size="1" color="gray">Tier 0 Amount: {(Number(BigInt(tiers[0].amount)) / 1e18).toFixed(8)} ETH (${tiers[0].amountUsd})</Text>
-              <Text size="1" color="gray">Tier 0 Amount (wei): {tiers[0].amount}</Text>
-              <Text size="1" className={balance && balance.value >= BigInt(tiers[0].amount) ? 'text-green-400' : 'text-red-400'}>
-                Can Afford Tier 0: {balance && balance.value >= BigInt(tiers[0].amount) ? 'YES ✅' : 'NO ❌'}
-              </Text>
-            </Flex>
-          </Flex>
-        </Card>
-      )}
 
       <Grid columns={{ initial: '2', md: '5' }} gap="3">
         {tiers?.map((tier) => {

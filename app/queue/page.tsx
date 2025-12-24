@@ -23,8 +23,6 @@ import { usePendingGames, useGameStats } from '@/hooks/useGames';
 import { formatCurrency } from '@/lib/utils';
 import { Clock, Users, Loader2, TrendingUp, XCircle, AlertCircle } from 'lucide-react';
 import Link from 'next/link';
-import { CoinChoice } from '@/components/game/CoinChoice';
-import { useGameStore } from '@/store/gameStore';
 import { StatusBadge } from '@/components/game/StatusBadge';
 import { useCancelGame } from '@/hooks/useContract';
 
@@ -33,7 +31,6 @@ export default function QueuePage() {
   const { data: tiers } = useTiers();
   const { data: pendingGames, isLoading: isLoadingGames } = usePendingGames();
   const { data: gameStats } = useGameStats();
-  const { coinChoice } = useGameStore();
   const { joinGame, isLoading, isSuccess, error } = useJoinGame();
   const { cancelGame, isLoading: isCanceling } = useCancelGame();
   const [selectedGame, setSelectedGame] = useState<any>(null);
@@ -53,8 +50,10 @@ export default function QueuePage() {
   };
 
   const handleConfirmJoin = () => {
-    if (selectedGame && coinChoice !== null) {
-      joinGame(selectedGame.id, coinChoice, selectedGame.tier.amount);
+    if (selectedGame) {
+      // Joiner automatically gets the opposite side of the creator
+      const joinerChoice = !selectedGame.creator_choice;
+      joinGame(selectedGame.id, joinerChoice, selectedGame.tier.amount);
     }
   };
 
@@ -332,7 +331,7 @@ export default function QueuePage() {
         <Dialog.Content style={{ maxWidth: 500 }}>
           <Dialog.Title>Join Game #{selectedGame?.id}</Dialog.Title>
           <Dialog.Description size="2" mb="4">
-            Choose your side to join this game
+            Review the game details and join
           </Dialog.Description>
 
           <Flex direction="column" gap="4">
@@ -367,8 +366,40 @@ export default function QueuePage() {
               </Flex>
             </Card>
 
-            {/* Coin Choice */}
-            {!isSuccess && !isLoading && <CoinChoice />}
+            {/* Coin Sides - Show automatic assignment */}
+            {!isSuccess && !isLoading && selectedGame && (
+              <Card className="card-solid border-cyan-500/60">
+                <Flex direction="column" gap="3" p="4">
+                  <Heading size="3" align="center">Coin Sides</Heading>
+
+                  <Flex direction="column" gap="2">
+                    <Flex justify="between" align="center">
+                      <Text size="2" color="gray">Creator chose:</Text>
+                      <Flex align="center" gap="2">
+                        <Text size="4">{selectedGame.creator_choice ? '🪙' : '👑'}</Text>
+                        <Text size="3" weight="bold">
+                          {selectedGame.creator_choice ? 'Tails' : 'Heads'}
+                        </Text>
+                      </Flex>
+                    </Flex>
+
+                    <Flex justify="between" align="center" className="bg-cyan-500/10 p-2 rounded">
+                      <Text size="2" weight="bold" className="text-cyan-400">You will play:</Text>
+                      <Flex align="center" gap="2">
+                        <Text size="4">{!selectedGame.creator_choice ? '🪙' : '👑'}</Text>
+                        <Text size="3" weight="bold" className="text-cyan-400">
+                          {!selectedGame.creator_choice ? 'Tails' : 'Heads'}
+                        </Text>
+                      </Flex>
+                    </Flex>
+                  </Flex>
+
+                  <Text size="1" color="gray" align="center" style={{ fontStyle: 'italic' }}>
+                    {!selectedGame.creator_choice ? 'If the coin lands on Tails, you win!' : 'If the coin lands on Heads, you win!'}
+                  </Text>
+                </Flex>
+              </Card>
+            )}
 
             {/* Loading State */}
             {isLoading && (
@@ -387,7 +418,7 @@ export default function QueuePage() {
                   ✓ Joined successfully!
                 </Text>
                 <Text size="2" color="gray" align="center">
-                  Waiting for Chainlink VRF to determine the winner (1-3 minutes)
+                  Chainlink VRF will determine the winner (10-30 seconds)
                 </Text>
               </Flex>
             )}
@@ -409,7 +440,7 @@ export default function QueuePage() {
                 </Button>
               </Dialog.Close>
               {!isSuccess && !isLoading && (
-                <Button onClick={handleConfirmJoin} disabled={coinChoice === null}>
+                <Button onClick={handleConfirmJoin}>
                   Confirm & Join
                 </Button>
               )}

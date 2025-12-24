@@ -1,20 +1,26 @@
 'use client';
 
 import { useGameStore } from '@/store/gameStore';
-import { Button, Flex, Text, Heading, Card } from '@radix-ui/themes';
+import { Button, Flex, Text, Heading, Card, Callout } from '@radix-ui/themes';
 import { getCoinSideEmoji } from '@/lib/utils';
+import { Info } from 'lucide-react';
 
 export function CoinChoice() {
   const { coinChoice, setCoinChoice } = useGameStore();
 
   const choices = [
-    { value: false, label: 'Heads', emoji: getCoinSideEmoji(false), description: 'Pick Heads' },
-    { value: true, label: 'Tails', emoji: getCoinSideEmoji(true), description: 'Pick Tails' },
+    { value: false, label: 'Heads', emoji: getCoinSideEmoji(false), description: "The King's Side" },
+    { value: true, label: 'Tails', emoji: getCoinSideEmoji(true), description: 'The Lucky Coin' },
   ];
 
   return (
     <Flex direction="column" gap="4">
-      <Heading size="5" className="text-gradient-cyan-purple">Choose Your Side</Heading>
+      <Flex direction="column" gap="2" align="center">
+        <Heading size="5" className="text-gradient-cyan-purple">Heads or Tails? 🪙</Heading>
+        <Text size="2" color="gray" align="center">
+          Pick your side - 50/50 chance to win!
+        </Text>
+      </Flex>
 
       <Flex gap="4" direction={{ initial: 'column', sm: 'row' }}>
         {choices.map((choice) => {
@@ -59,16 +65,30 @@ export function CoinChoice() {
 
       {coinChoice !== null && (
         <Card className="card-solid border-cyan-500/60 animate-slide-up">
-          <Flex direction="column" gap="2" p="3" align="center">
-            <Text size="2" weight="medium" className="text-cyan-100">
-              You chose: <span className="text-gradient-gold font-bold">{coinChoice ? 'Tails' : 'Heads'} {getCoinSideEmoji(coinChoice)}</span>
+          <Flex direction="column" gap="2" p="4" align="center">
+            <Text size="3" weight="bold" className="text-cyan-400">
+              ✓ You chose: {coinChoice ? 'Tails' : 'Heads'} {getCoinSideEmoji(coinChoice)}
             </Text>
-            <Text size="1" color="gray">
-              If the coin lands on {coinChoice ? 'Tails' : 'Heads'}, you win!
+            <Text size="2" color="gray" align="center">
+              Your opponent gets: {!coinChoice ? 'Tails' : 'Heads'} {getCoinSideEmoji(!coinChoice)}
+            </Text>
+            <Text size="2" align="center" className="text-green-400">
+              If it lands {coinChoice ? 'Tails' : 'Heads'}, you win! 🎉
             </Text>
           </Flex>
         </Card>
       )}
+
+      <Callout.Root color="blue" size="1">
+        <Callout.Icon>
+          <Info className="w-4 h-4" />
+        </Callout.Icon>
+        <Callout.Text>
+          <Text size="1">
+            🎲 Powered by Chainlink VRF - Provably fair and impossible to predict
+          </Text>
+        </Callout.Text>
+      </Callout.Root>
     </Flex>
   );
 }
