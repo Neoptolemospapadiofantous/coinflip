@@ -14,13 +14,14 @@ export function useGames() {
 
       if (error) {
         console.error('Error fetching games:', error);
-        return [];
+        throw new Error(`Failed to fetch games: ${error.message}`);
       }
 
       return data || [];
     },
     staleTime: 5000, // 5 seconds
     refetchInterval: 10000, // Refetch every 10 seconds
+    retry: 2, // Retry failed requests twice
   });
 }
 
@@ -37,13 +38,14 @@ export function usePendingGames() {
 
       if (error) {
         console.error('Error fetching pending games:', error);
-        return [];
+        throw new Error(`Failed to fetch pending games: ${error.message}`);
       }
 
       return data || [];
     },
     staleTime: 3000,
     refetchInterval: 5000, // Refresh often for queue
+    retry: 2,
   });
 }
 
@@ -59,13 +61,14 @@ export function useActiveGames() {
 
       if (error) {
         console.error('Error fetching active games:', error);
-        return [];
+        throw new Error(`Failed to fetch active games: ${error.message}`);
       }
 
       return data || [];
     },
     staleTime: 3000,
     refetchInterval: 5000,
+    retry: 2,
   });
 }
 
@@ -86,7 +89,7 @@ export function usePlayerGames(address: string | undefined) {
 
       if (error) {
         console.error('Error fetching player games:', error);
-        return [];
+        throw new Error(`Failed to fetch player games: ${error.message}`);
       }
 
       return data || [];
@@ -94,6 +97,7 @@ export function usePlayerGames(address: string | undefined) {
     enabled: !!address,
     staleTime: 5000,
     refetchInterval: 10000,
+    retry: 2,
   });
 }
 
@@ -162,7 +166,6 @@ export function useGameSubscription(gameId: string | null, callback: (game: Game
         filter: `id=eq.${gameId}`,
       },
       (payload) => {
-        console.log('Game updated:', payload.new);
         callback(payload.new as Game);
 
         // Invalidate queries to refetch
@@ -191,7 +194,6 @@ export function usePendingGamesSubscription(callback: () => void) {
         table: 'games',
       },
       () => {
-        console.log('New game created');
         callback();
         queryClient.invalidateQueries({ queryKey: ['games', 'pending'] });
         queryClient.invalidateQueries({ queryKey: ['games', 'active'] });

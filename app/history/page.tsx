@@ -62,11 +62,12 @@ export default function HistoryPage() {
     ).length,
   }));
 
+  // Filter out 0 values from pie chart to avoid overlap
   const winLossData = [
     { name: 'Wins', value: stats.wins, color: '#22c55e' },
     { name: 'Losses', value: stats.losses, color: '#ef4444' },
     { name: 'Pending', value: stats.pending, color: '#facc15' },
-  ];
+  ].filter(item => item.value > 0);
 
   // Recent games for timeline
   const recentGames = games
@@ -181,31 +182,37 @@ export default function HistoryPage() {
                 <Heading size="5" mb="4">
                   Win Distribution
                 </Heading>
-                <ResponsiveContainer width="100%" height={300}>
-                  <PieChart>
-                    <Pie
-                      data={winLossData}
-                      cx="50%"
-                      cy="50%"
-                      labelLine={false}
-                      label={({ name, percent }) => `${name} ${percent ? (percent * 100).toFixed(0) : 0}%`}
-                      outerRadius={80}
-                      fill="#8884d8"
-                      dataKey="value"
-                    >
-                      {winLossData.map((entry, index) => (
-                        <Cell key={`cell-${index}`} fill={entry.color} />
-                      ))}
-                    </Pie>
-                    <Tooltip
-                      contentStyle={{
-                        background: 'rgba(15, 23, 42, 0.9)',
-                        border: '1px solid rgba(6, 182, 212, 0.3)',
-                        borderRadius: '8px',
-                      }}
-                    />
-                  </PieChart>
-                </ResponsiveContainer>
+                {winLossData.length === 0 ? (
+                  <Flex align="center" justify="center" style={{ height: 300 }}>
+                    <Text color="gray" size="3">No resolved games yet</Text>
+                  </Flex>
+                ) : (
+                  <ResponsiveContainer width="100%" height={300}>
+                    <PieChart>
+                      <Pie
+                        data={winLossData}
+                        cx="50%"
+                        cy="50%"
+                        labelLine={false}
+                        label={({ name, percent }) => `${name} ${((percent ?? 0) * 100).toFixed(0)}%`}
+                        outerRadius={80}
+                        fill="#8884d8"
+                        dataKey="value"
+                      >
+                        {winLossData.map((entry, index) => (
+                          <Cell key={`cell-${index}`} fill={entry.color} />
+                        ))}
+                      </Pie>
+                      <Tooltip
+                        contentStyle={{
+                          background: 'rgba(15, 23, 42, 0.9)',
+                          border: '1px solid rgba(6, 182, 212, 0.3)',
+                          borderRadius: '8px',
+                        }}
+                      />
+                    </PieChart>
+                  </ResponsiveContainer>
+                )}
               </Card>
 
               {/* Games by Tier */}

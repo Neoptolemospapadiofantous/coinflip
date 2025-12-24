@@ -22,6 +22,8 @@ import { useTiers } from '@/hooks/useTiers';
 import { Info, Loader2, CheckCircle2, AlertCircle } from 'lucide-react';
 import { formatCurrency } from '@/lib/utils';
 import { parseEther } from 'viem';
+import { parseError } from '@/lib/errors';
+import { useEffect } from 'react';
 
 enum GameStep {
   SELECT_TIER = 'select_tier',
@@ -236,10 +238,19 @@ export default function PlayPage() {
                       <div className="animate-slide-up">
                         <Flex direction="column" gap="4" align="center">
                           <AlertCircle className="w-16 h-16 text-red-400 animate-pulse" />
-                          <Heading size="5" className="text-red-400">Error Creating Game</Heading>
-                          <Text size="2" color="gray" align="center">
-                            {error.message}
-                          </Text>
+                          <Heading size="5" className="text-red-400">
+                            {parseError(error).title}
+                          </Heading>
+                          <Flex direction="column" gap="2" align="center">
+                            <Text size="2" color="gray" align="center">
+                              {parseError(error).message}
+                            </Text>
+                            {parseError(error).suggestion && (
+                              <Text size="1" className="text-slate-400" align="center">
+                                {parseError(error).suggestion}
+                              </Text>
+                            )}
+                          </Flex>
                           <Button size="3" onClick={handleReset} className="hover:scale-105 transition-transform">
                             Try Again
                           </Button>

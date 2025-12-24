@@ -25,11 +25,22 @@ class SoundManager {
       countdown: '/sounds/countdown.mp3',
     };
 
-    // Preload sounds
+    // Preload sounds with error handling
     Object.entries(soundFiles).forEach(([name, path]) => {
-      const audio = new Audio(path);
-      audio.preload = 'auto';
-      this.sounds.set(name, audio);
+      try {
+        const audio = new Audio(path);
+        audio.preload = 'auto';
+
+        // Handle loading errors gracefully
+        audio.addEventListener('error', () => {
+          console.warn(`Failed to load sound: ${name} from ${path}`);
+          this.sounds.delete(name); // Remove failed sound from map
+        });
+
+        this.sounds.set(name, audio);
+      } catch (err) {
+        console.warn(`Error initializing sound: ${name}`, err);
+      }
     });
   }
 
@@ -38,11 +49,18 @@ class SoundManager {
 
     const sound = this.sounds.get(soundName);
     if (sound) {
-      sound.volume = volume;
-      sound.currentTime = 0;
-      sound.play().catch(() => {
-        // Silently fail if autoplay is blocked
-      });
+      try {
+        sound.volume = volume;
+        sound.currentTime = 0;
+        sound.play().catch((err) => {
+          // Silently fail if autoplay is blocked or sound unavailable
+          if (err.name !== 'NotAllowedError') {
+            console.warn(`Failed to play sound: ${soundName}`, err.message);
+          }
+        });
+      } catch (err) {
+        console.warn(`Error playing sound: ${soundName}`, err);
+      }
     }
   }
 

@@ -21,11 +21,12 @@ import { useTiers } from '@/hooks/useTiers';
 import { useJoinGame } from '@/hooks/useContract';
 import { usePendingGames, useGameStats } from '@/hooks/useGames';
 import { formatCurrency } from '@/lib/utils';
-import { Clock, Users, Loader2, TrendingUp } from 'lucide-react';
+import { Clock, Users, Loader2, TrendingUp, XCircle, AlertCircle } from 'lucide-react';
 import Link from 'next/link';
 import { CoinChoice } from '@/components/game/CoinChoice';
 import { useGameStore } from '@/store/gameStore';
 import { StatusBadge } from '@/components/game/StatusBadge';
+import { useCancelGame } from '@/hooks/useContract';
 
 export default function QueuePage() {
   const { isConnected, address } = useAccount();
@@ -34,8 +35,17 @@ export default function QueuePage() {
   const { data: gameStats } = useGameStats();
   const { coinChoice } = useGameStore();
   const { joinGame, isLoading, isSuccess, error } = useJoinGame();
+  const { cancelGame, isLoading: isCanceling } = useCancelGame();
   const [selectedGame, setSelectedGame] = useState<any>(null);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+
+  // Separate user's games from other games
+  const myPendingGames = pendingGames?.filter(
+    (game) => game.creator_address.toLowerCase() === address?.toLowerCase()
+  );
+  const otherPendingGames = pendingGames?.filter(
+    (game) => game.creator_address.toLowerCase() !== address?.toLowerCase()
+  );
 
   const handleJoinClick = (game: any, tier: any) => {
     setSelectedGame({ ...game, tier });
@@ -45,6 +55,12 @@ export default function QueuePage() {
   const handleConfirmJoin = () => {
     if (selectedGame && coinChoice !== null) {
       joinGame(selectedGame.id, coinChoice, selectedGame.tier.amount);
+    }
+  };
+
+  const handleCancelGame = (gameId: string) => {
+    if (confirm('Are you sure you want to cancel this game? You will be refunded.')) {
+      cancelGame(gameId);
     }
   };
 
@@ -106,7 +122,7 @@ export default function QueuePage() {
                       Players Waiting
                     </Text>
                     <Text size="5" weight="bold" className="text-gradient-gold">
-                      {pendingGames?.length || 0}
+                      {otherPendingGames?.length || 0}
                     </Text>
                   </Flex>
                 </Flex>
@@ -141,6 +157,70 @@ export default function QueuePage() {
               </Flex>
             </Card>
 
+            {/* User's Active Game (if any) */}
+            {myPendingGames && myPendingGames.length > 0 && (
+              <Card className="card-solid border-yellow-500/60 animate-slide-down">
+                <Flex direction="column" gap="4" p="6">
+                  <Flex align="center" gap="2">
+                    <AlertCircle className="w-5 h-5 text-yellow-400" />
+                    <Heading size="5" className="text-gradient-gold">Your Active Game</Heading>
+                  </Flex>
+
+                  {myPendingGames.map((game) => {
+                    const tier = tiers?.find((t) => t.id === game.tier);
+                    const timeAgo = Math.floor(
+                      (Date.now() - new Date(game.created_at).getTime()) / 1000
+                    );
+
+                    return (
+                      <Card key={game.id} variant="surface" className="bg-yellow-500/5 border border-yellow-500/20">
+                        <Flex direction="column" gap="3" p="4">
+                          <Flex justify="between" align="center">
+                            <Flex direction="column" gap="1">
+                              <Text size="2" weight="bold" className="text-yellow-400">
+                                Game #{game.id}
+                              </Text>
+                              <Text size="1" color="gray">
+                                Waiting for opponent...
+                              </Text>
+                            </Flex>
+                            <Badge color="yellow" size="2" className="glow-gold">
+                              ${tier?.amountUsd || game.amount_usd}
+                            </Badge>
+                          </Flex>
+
+                          <Flex justify="between" align="center">
+                            <Flex direction="column" gap="1">
+                              <Text size="1" color="gray">Created {timeAgo < 60 ? `${timeAgo}s` : `${Math.floor(timeAgo / 60)}m`} ago</Text>
+                              <Text size="1" color="gray">Your choice: {game.creator_choice ? 'Tails 🪙' : 'Heads 👑'}</Text>
+                            </Flex>
+                            <Button
+                              size="2"
+                              variant="soft"
+                              color="red"
+                              onClick={() => handleCancelGame(game.id)}
+                              disabled={isCanceling}
+                            >
+                              <XCircle className="w-4 h-4" />
+                              Cancel Game
+                            </Button>
+                          </Flex>
+
+                          <Card variant="surface" className="bg-blue-500/5 border border-blue-500/20">
+                            <Flex direction="column" gap="1" p="2">
+                              <Text size="1" color="blue">
+                                💡 Your game is visible to other players. You can navigate away and come back - it will stay active until someone joins or it times out (~20 minutes).
+                              </Text>
+                            </Flex>
+                          </Card>
+                        </Flex>
+                      </Card>
+                    );
+                  })}
+                </Flex>
+              </Card>
+            )}
+
             {/* Pending Games */}
             <Card className="card-simple" size="4">
               <Flex direction="column" gap="4" p="6">
@@ -160,7 +240,7 @@ export default function QueuePage() {
                       Loading games...
                     </Text>
                   </Flex>
-                ) : !pendingGames || pendingGames.length === 0 ? (
+                ) : !otherPendingGames || otherPendingGames.length === 0 ? (
                   <Flex direction="column" gap="4" align="center" py="9">
                     <Text size="4" color="gray">
                       No games waiting for players
@@ -184,9 +264,8 @@ export default function QueuePage() {
                     </Table.Header>
 
                     <Table.Body>
-                      {pendingGames.map((game, index) => {
+                      {otherPendingGames.map((game, index) => {
                         const tier = tiers?.find((t) => t.id === game.tier);
-                        const isOwnGame = game.creator_address.toLowerCase() === address?.toLowerCase();
                         const timeAgo = Math.floor(
                           (Date.now() - new Date(game.created_at).getTime()) / 1000
                         );
@@ -228,19 +307,13 @@ export default function QueuePage() {
                               </Flex>
                             </Table.Cell>
                             <Table.Cell>
-                              {isOwnGame ? (
-                                <Button variant="soft" size="2" disabled className="opacity-50">
-                                  Your Game
-                                </Button>
-                              ) : (
-                                <Button
-                                  size="2"
-                                  onClick={() => handleJoinClick(game, tier!)}
-                                  className="border-cyan-500/60 hover:scale-105 transition-transform"
-                                >
-                                  Join Game
-                                </Button>
-                              )}
+                              <Button
+                                size="2"
+                                onClick={() => handleJoinClick(game, tier!)}
+                                className="border-cyan-500/60 hover:scale-105 transition-transform"
+                              >
+                                Join Game
+                              </Button>
                             </Table.Cell>
                           </Table.Row>
                         );

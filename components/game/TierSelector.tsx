@@ -12,31 +12,15 @@ import { NetworkIndicator } from '@/components/ui/NetworkIndicator';
 export function TierSelector() {
   const { data: tiers, isLoading } = useTiers();
   const { selectedTier, setSelectedTier } = useGameStore();
-  const { address, isConnected } = useAccount();
+  const { address, isConnected, chain } = useAccount();
   const { data: balance, isLoading: isBalanceLoading, error: balanceError } = useBalance({
     address,
-  });
-
-  // Debug wallet connection
-  console.log('🔗 Wallet Connection:', {
-    isConnected,
-    address,
-    hasBalance: !!balance,
-    isBalanceLoading,
-    balanceError: balanceError?.message,
+    chainId: chain?.id, // Explicitly use the connected chain
   });
 
   if (isLoading) {
     return <TierSelectorSkeleton />;
   }
-
-  // Debug balance
-  console.log('💰 User Balance:', {
-    hasBalance: !!balance,
-    balanceWei: balance?.value.toString(),
-    balanceEth: balance ? (Number(balance.value) / 1e18).toFixed(8) : '0',
-    symbol: balance?.symbol,
-  });
 
   return (
     <Flex direction="column" gap="4">
@@ -82,18 +66,6 @@ export function TierSelector() {
           const tierAmount = BigInt(tier.amount); // tier.amount is already in wei
           const canAfford = balance ? balance.value >= tierAmount : false;
           const isSelected = selectedTier === tier.id;
-
-          // Debug logging
-          if (tier.id === 0) {
-            console.log('🔍 Debug Tier 0:', {
-              tierAmountUsd: tier.amountUsd,
-              tierAmountWei: tier.amount,
-              tierAmountEth: (Number(tierAmount) / 1e18).toFixed(8),
-              userBalanceWei: balance?.value.toString(),
-              userBalanceEth: balance ? (Number(balance.value) / 1e18).toFixed(8) : '0',
-              canAfford,
-            });
-          }
 
           return (
             <Button
