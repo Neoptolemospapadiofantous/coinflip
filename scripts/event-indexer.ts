@@ -32,11 +32,11 @@ const publicClient = createPublicClient({
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
 
-// Event signatures
-const GAME_CREATED_EVENT = parseAbiItem('event GameCreated(uint256 indexed gameId, address indexed creator, uint8 tier, bool choice, uint256 amount)');
-const GAME_MATCHED_EVENT = parseAbiItem('event GameMatched(uint256 indexed gameId, address indexed joiner, bool choice)');
-const GAME_RESOLVED_EVENT = parseAbiItem('event GameResolved(uint256 indexed gameId, address indexed winner, bool winnerChoice, uint256 randomNumber, uint256 payout)');
-const GAME_CANCELLED_EVENT = parseAbiItem('event GameCancelled(uint256 indexed gameId, address indexed creator)');
+// Event signatures (must match contract exactly!)
+const GAME_CREATED_EVENT = parseAbiItem('event GameCreated(uint256 indexed gameId, address indexed creator, uint8 tier, uint256 amount, bool choice)');
+const GAME_MATCHED_EVENT = parseAbiItem('event GameJoined(uint256 indexed gameId, address indexed joiner, uint256 totalPot)');
+const GAME_RESOLVED_EVENT = parseAbiItem('event GameResolved(uint256 indexed gameId, address indexed winner, address indexed loser, bool coinResult, uint256 payout)');
+const GAME_CANCELLED_EVENT = parseAbiItem('event GameCancelled(uint256 indexed gameId, address indexed creator, uint256 refundAmount)');
 
 interface IndexerState {
   lastProcessedBlock: bigint;
@@ -89,19 +89,18 @@ async function processGameCreated(log: any) {
   }
 }
 
-// Process GameMatched event
-async function processGameMatched(log: any) {
-  const { gameId, joiner, choice } = log.args;
+// Process GameJoined event
+async function processGameJoined(log: any) {
+  const { gameId, joiner, totalPot } = log.args;
   const blockNumber = log.blockNumber;
   const txHash = log.transactionHash;
 
-  console.log(`🤝 GameMatched: ID=${gameId}, Joiner=${joiner}`);
+  console.log(`🤝 GameJoined: ID=${gameId}, Joiner=${joiner}`);
 
   const { error } = await supabase
     .from('games')
     .update({
       joiner_address: joiner.toLowerCase(),
-      joiner_choice: choice,
       status: 'matched',
       matched_tx_hash: txHash,
       matched_block_number: blockNumber.toString(),
@@ -116,7 +115,7 @@ async function processGameMatched(log: any) {
 
 // Process GameResolved event
 async function processGameResolved(log: any) {
-  const { gameId, winner, winnerChoice, randomNumber, payout } = log.args;
+  const { gameId, winner, loser, coinResult, payout } = log.args;
   const blockNumber = log.blockNumber;
   const txHash = log.transactionHash;
 
@@ -126,7 +125,7 @@ async function processGameResolved(log: any) {
     .from('games')
     .update({
       winner_address: winner.toLowerCase(),
-      random_number: randomNumber.toString(),
+      coin_result: coinResult,
       payout: payout.toString(),
       status: 'resolved',
       resolved_tx_hash: txHash,
@@ -166,12 +165,13 @@ async function processGameCancelled(log: any) {
 // Main indexer function
 async function indexEvents(fromBlock: bigint, toBlock: bigint) {
   const CHUNK_SIZE = 10n; // Alchemy free tier limit
+  const CHUNK_DELAY = 500; // 500ms delay between chunks
   const totalBlocks = toBlock - fromBlock + 1n;
 
   console.log(`\n🔍 Indexing blocks ${fromBlock} to ${toBlock} (${totalBlocks} blocks)...`);
 
   let allCreatedLogs: any[] = [];
-  let allMatchedLogs: any[] = [];
+  let allJoinedLogs: any[] = [];
   let allResolvedLogs: any[] = [];
   let allCancelledLogs: any[] = [];
 
@@ -181,47 +181,58 @@ async function indexEvents(fromBlock: bigint, toBlock: bigint) {
 
     console.log(`  📦 Fetching blocks ${start} to ${end}...`);
 
-    // Fetch all events in parallel for this chunk
-    const [createdLogs, matchedLogs, resolvedLogs, cancelledLogs] = await Promise.all([
-      publicClient.getLogs({
-        address: CONTRACT_ADDRESS,
-        event: GAME_CREATED_EVENT,
-        fromBlock: start,
-        toBlock: end,
-      }),
-      publicClient.getLogs({
-        address: CONTRACT_ADDRESS,
-        event: GAME_MATCHED_EVENT,
-        fromBlock: start,
-        toBlock: end,
-      }),
-      publicClient.getLogs({
-        address: CONTRACT_ADDRESS,
-        event: GAME_RESOLVED_EVENT,
-        fromBlock: start,
-        toBlock: end,
-      }),
-      publicClient.getLogs({
-        address: CONTRACT_ADDRESS,
-        event: GAME_CANCELLED_EVENT,
-        fromBlock: start,
-        toBlock: end,
-      }),
-    ]);
+    try {
+      // Fetch all events in parallel for this chunk
+      const [createdLogs, joinedLogs, resolvedLogs, cancelledLogs] = await Promise.all([
+        publicClient.getLogs({
+          address: CONTRACT_ADDRESS,
+          event: GAME_CREATED_EVENT,
+          fromBlock: start,
+          toBlock: end,
+        }),
+        publicClient.getLogs({
+          address: CONTRACT_ADDRESS,
+          event: GAME_MATCHED_EVENT,
+          fromBlock: start,
+          toBlock: end,
+        }),
+        publicClient.getLogs({
+          address: CONTRACT_ADDRESS,
+          event: GAME_RESOLVED_EVENT,
+          fromBlock: start,
+          toBlock: end,
+        }),
+        publicClient.getLogs({
+          address: CONTRACT_ADDRESS,
+          event: GAME_CANCELLED_EVENT,
+          fromBlock: start,
+          toBlock: end,
+        }),
+      ]);
 
-    allCreatedLogs = [...allCreatedLogs, ...createdLogs];
-    allMatchedLogs = [...allMatchedLogs, ...matchedLogs];
-    allResolvedLogs = [...allResolvedLogs, ...resolvedLogs];
-    allCancelledLogs = [...allCancelledLogs, ...cancelledLogs];
+      allCreatedLogs = [...allCreatedLogs, ...createdLogs];
+      allJoinedLogs = [...allJoinedLogs, ...joinedLogs];
+      allResolvedLogs = [...allResolvedLogs, ...resolvedLogs];
+      allCancelledLogs = [...allCancelledLogs, ...cancelledLogs];
 
-    // Small delay to avoid rate limiting
-    await new Promise(resolve => setTimeout(resolve, 100));
+      // Delay to avoid rate limiting
+      await new Promise(resolve => setTimeout(resolve, CHUNK_DELAY));
+    } catch (error: any) {
+      // Handle rate limit errors
+      if (error.status === 429 || error.message?.includes('rate limit')) {
+        console.log('⏳ Rate limited! Waiting 10 seconds before retry...');
+        await new Promise(resolve => setTimeout(resolve, 10000));
+        start -= CHUNK_SIZE; // Retry this chunk
+        continue;
+      }
+      throw error; // Re-throw other errors
+    }
   }
 
   // Process events in chronological order
   const allLogs = [
     ...allCreatedLogs.map(log => ({ ...log, type: 'created' })),
-    ...allMatchedLogs.map(log => ({ ...log, type: 'matched' })),
+    ...allJoinedLogs.map(log => ({ ...log, type: 'joined' })),
     ...allResolvedLogs.map(log => ({ ...log, type: 'resolved' })),
     ...allCancelledLogs.map(log => ({ ...log, type: 'cancelled' })),
   ].sort((a, b) => Number(a.blockNumber) - Number(b.blockNumber));
@@ -233,8 +244,8 @@ async function indexEvents(fromBlock: bigint, toBlock: bigint) {
         case 'created':
           await processGameCreated(log);
           break;
-        case 'matched':
-          await processGameMatched(log);
+        case 'joined':
+          await processGameJoined(log);
           break;
         case 'resolved':
           await processGameResolved(log);
@@ -263,7 +274,7 @@ async function main() {
 
   // Load last processed block
   const state = await loadState();
-  // Start from 100 blocks ago on first run (to avoid long initial sync)
+  // Start from 100 blocks ago on first run (to catch recent games)
   const fromBlock = state.lastProcessedBlock === 0n ? currentBlock - 100n : state.lastProcessedBlock + 1n;
 
   console.log(`⏮️  Last processed block: ${state.lastProcessedBlock}`);
