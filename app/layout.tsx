@@ -3,6 +3,7 @@ import { Inter } from 'next/font/google';
 import '@radix-ui/themes/styles.css';
 import './globals.css';
 import { Providers } from '@/components/Providers';
+import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { Theme } from '@radix-ui/themes';
 
 const inter = Inter({ subsets: ['latin'] });
@@ -29,7 +30,9 @@ export default function RootLayout({
           scaling="100%"
           panelBackground="solid"
         >
-          <Providers>{children}</Providers>
+          <ErrorBoundary>
+            <Providers>{children}</Providers>
+          </ErrorBoundary>
         </Theme>
       </body>
     </html>
