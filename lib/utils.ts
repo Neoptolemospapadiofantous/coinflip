@@ -141,3 +141,32 @@ export function getCoinSideLabel(side: boolean): string {
 export function getCoinSideEmoji(side: boolean): string {
   return side ? '🪙' : '👑';
 }
+
+/**
+ * Check if a pending game has timed out
+ * Games timeout after 20 minutes of no activity
+ */
+export function isGameTimedOut(createdAt: string): boolean {
+  const TIMEOUT_MS = 20 * 60 * 1000; // 20 minutes
+  const now = new Date().getTime();
+  const created = new Date(createdAt).getTime();
+  return (now - created) > TIMEOUT_MS;
+}
+
+/**
+ * Get remaining time until game timeout
+ */
+export function getTimeoutRemaining(createdAt: string): string {
+  const TIMEOUT_MS = 20 * 60 * 1000; // 20 minutes
+  const now = new Date().getTime();
+  const created = new Date(createdAt).getTime();
+  const elapsed = now - created;
+  const remaining = Math.max(0, TIMEOUT_MS - elapsed);
+
+  const minutes = Math.floor(remaining / 60000);
+  const seconds = Math.floor((remaining % 60000) / 1000);
+
+  if (remaining === 0) return 'Expired';
+  if (minutes > 0) return `${minutes}m ${seconds}s`;
+  return `${seconds}s`;
+}

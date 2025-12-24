@@ -17,6 +17,7 @@ export interface Game {
   status: 'pending' | 'matched' | 'resolved' | 'cancelled';
   winner_address: string | null;
   random_number: string | null;
+  coin_result: boolean | null; // false = heads, true = tails (replaces random_number)
   payout: string | null;
   block_number: string;
   matched_tx_hash: string | null;

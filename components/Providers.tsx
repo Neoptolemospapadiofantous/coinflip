@@ -5,6 +5,7 @@ import { WagmiProvider } from 'wagmi';
 import { RainbowKitProvider } from '@rainbow-me/rainbowkit';
 import { config } from '@/lib/wagmi';
 import { useState } from 'react';
+import { GameMonitor } from './GameMonitor';
 
 import '@rainbow-me/rainbowkit/styles.css';
 
@@ -16,6 +17,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
       <QueryClientProvider client={queryClient}>
         <RainbowKitProvider>
           {children}
+          <GameMonitor />
         </RainbowKitProvider>
       </QueryClientProvider>
     </WagmiProvider>

@@ -106,6 +106,61 @@ export function parseError(error: unknown): ParsedError {
     const revertMatch = errorMessage.match(/reverted with reason string '(.+?)'/);
     const revertReason = revertMatch ? revertMatch[1] : 'Transaction failed';
 
+    // Game-specific error messages
+    if (errorMessage.includes('Game already matched') || errorMessage.includes('AlreadyMatched')) {
+      return {
+        type: 'contract_error',
+        title: 'Game Already Matched',
+        message: 'Another player has already joined this game',
+        suggestion: 'Try joining a different game from the queue',
+      };
+    }
+
+    if (errorMessage.includes('Invalid tier') || errorMessage.includes('InvalidTier')) {
+      return {
+        type: 'contract_error',
+        title: 'Invalid Tier',
+        message: 'The selected tier is not valid',
+        suggestion: 'Choose a different tier and try again',
+      };
+    }
+
+    if (errorMessage.includes('Insufficient escrow') || errorMessage.includes('InsufficientEscrow')) {
+      return {
+        type: 'contract_error',
+        title: 'Insufficient Contract Balance',
+        message: 'The contract does not have enough funds to pay out',
+        suggestion: 'Contact support - this is a critical issue',
+      };
+    }
+
+    if (errorMessage.includes('Same choice') || errorMessage.includes('SameChoice')) {
+      return {
+        type: 'contract_error',
+        title: 'Invalid Choice',
+        message: 'You cannot choose the same side as your opponent',
+        suggestion: 'Select the opposite coin side',
+      };
+    }
+
+    if (errorMessage.includes('Not your game') || errorMessage.includes('NotYourGame')) {
+      return {
+        type: 'contract_error',
+        title: 'Not Your Game',
+        message: 'You cannot cancel a game you did not create',
+        suggestion: 'Only the creator can cancel pending games',
+      };
+    }
+
+    if (errorMessage.includes('Game not pending') || errorMessage.includes('NotPending')) {
+      return {
+        type: 'contract_error',
+        title: 'Game Not Pending',
+        message: 'This game is no longer available to join',
+        suggestion: 'The game may have been matched or cancelled',
+      };
+    }
+
     return {
       type: 'contract_error',
       title: 'Transaction Failed',
