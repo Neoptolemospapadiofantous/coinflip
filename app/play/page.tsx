@@ -44,7 +44,7 @@ export default function PlayPage() {
     if (selectedTier === null || coinChoice === null || !currentTier) return;
 
     setStep(GameStep.CREATING);
-    createGame(selectedTier, coinChoice, currentTier.amountUsd.toString());
+    createGame(selectedTier, coinChoice, currentTier.amount); // Use actual wei amount
   };
 
   const handleReset = () => {
@@ -62,7 +62,7 @@ export default function PlayPage() {
         <Section size="3">
           <Container size="2">
             <Flex direction="column" align="center" gap="6" py="9">
-              <Card className="glass" size="4">
+              <Card className="card-simple" size="4">
                 <Flex direction="column" gap="4" p="6" align="center">
                   <Heading size="6">Connect Your Wallet</Heading>
                   <Text size="3" color="gray" align="center">
@@ -84,15 +84,15 @@ export default function PlayPage() {
         <Container size="3">
           <Flex direction="column" gap="6" py="6">
             {/* Header */}
-            <Flex direction="column" gap="2" align="center">
-              <Heading size="8">Create a Game</Heading>
+            <Flex direction="column" gap="2" align="center" className="animate-fade-in">
+              <Heading size="8" className="text-gradient-rainbow">Create a Game</Heading>
               <Text size="3" color="gray">
                 Choose your bet amount, pick a side, and let's flip!
               </Text>
             </Flex>
 
             {/* Steps Indicator */}
-            <Card className="glass">
+            <Card className="card-solid border-purple-500/60 animate-slide-down">
               <Flex gap="2" p="4" justify="center" wrap="wrap">
                 <StepIndicator
                   number={1}
@@ -116,7 +116,7 @@ export default function PlayPage() {
             </Card>
 
             {/* Step Content */}
-            <Card className="glass" size="4">
+            <Card className="card-simple" size="4">
               <Flex direction="column" gap="6" p="6">
                 {/* Step 1: Select Tier */}
                 {step === GameStep.SELECT_TIER && (
@@ -201,44 +201,50 @@ export default function PlayPage() {
                 {(step === GameStep.CREATING || step === GameStep.WAITING) && (
                   <Flex direction="column" gap="4" align="center" py="6">
                     {isLoading && (
-                      <>
-                        <Loader2 className="w-16 h-16 text-cyan-400 animate-spin" />
-                        <Heading size="5">Creating Game...</Heading>
-                        <Text size="2" color="gray" align="center">
-                          Please confirm the transaction in your wallet
-                        </Text>
-                      </>
+                      <div className="animate-fade-in">
+                        <Flex direction="column" gap="4" align="center">
+                          <Loader2 className="w-16 h-16 text-cyan-400 animate-spin glow-cyan" />
+                          <Heading size="5" className="text-gradient-cyan-purple">Creating Game...</Heading>
+                          <Text size="2" color="gray" align="center">
+                            Please confirm the transaction in your wallet
+                          </Text>
+                        </Flex>
+                      </div>
                     )}
 
                     {isSuccess && (
-                      <>
-                        <CheckCircle2 className="w-16 h-16 text-green-400" />
-                        <Heading size="5">Game Created!</Heading>
-                        <Text size="2" color="gray" align="center">
-                          Waiting for an opponent to join...
-                        </Text>
-                        {txHash && (
-                          <Text size="1" color="gray">
-                            Transaction: {txHash.slice(0, 10)}...{txHash.slice(-8)}
+                      <div className="animate-slide-up">
+                        <Flex direction="column" gap="4" align="center">
+                          <CheckCircle2 className="w-16 h-16 text-green-400 glow-resolved animate-pulse-slow" />
+                          <Heading size="5" className="text-gradient-gold">Game Created!</Heading>
+                          <Text size="2" color="gray" align="center">
+                            Waiting for an opponent to join...
                           </Text>
-                        )}
-                        <Button size="3" variant="soft" onClick={handleReset}>
-                          Create Another Game
-                        </Button>
-                      </>
+                          {txHash && (
+                            <Text size="1" className="font-mono text-gray-500">
+                              TX: {txHash.slice(0, 10)}...{txHash.slice(-8)}
+                            </Text>
+                          )}
+                          <Button size="3" variant="soft" onClick={handleReset} className="glow-cyan hover:scale-105 transition-transform">
+                            Create Another Game
+                          </Button>
+                        </Flex>
+                      </div>
                     )}
 
                     {error && (
-                      <>
-                        <AlertCircle className="w-16 h-16 text-red-400" />
-                        <Heading size="5">Error Creating Game</Heading>
-                        <Text size="2" color="gray" align="center">
-                          {error.message}
-                        </Text>
-                        <Button size="3" onClick={handleReset}>
-                          Try Again
-                        </Button>
-                      </>
+                      <div className="animate-slide-up">
+                        <Flex direction="column" gap="4" align="center">
+                          <AlertCircle className="w-16 h-16 text-red-400 animate-pulse" />
+                          <Heading size="5" className="text-red-400">Error Creating Game</Heading>
+                          <Text size="2" color="gray" align="center">
+                            {error.message}
+                          </Text>
+                          <Button size="3" onClick={handleReset} className="hover:scale-105 transition-transform">
+                            Try Again
+                          </Button>
+                        </Flex>
+                      </div>
                     )}
                   </Flex>
                 )}
@@ -263,15 +269,15 @@ function StepIndicator({
   completed: boolean;
 }) {
   return (
-    <Flex align="center" gap="2">
+    <Flex align="center" gap="2" className="transition-all duration-300">
       <Flex
         align="center"
         justify="center"
-        className={`w-8 h-8 rounded-full border-2 ${
+        className={`w-8 h-8 rounded-full border-2 transition-all duration-300 ${
           completed
-            ? 'bg-cyan-500 border-cyan-500'
+            ? 'bg-gradient-to-br from-green-500 to-green-600 border-green-400 glow-resolved scale-110'
             : active
-              ? 'border-cyan-500'
+              ? 'border-cyan-500 glow-cyan scale-105 animate-pulse-slow'
               : 'border-slate-600'
         }`}
       >
@@ -283,7 +289,11 @@ function StepIndicator({
           {number}
         </Text>
       </Flex>
-      <Text size="2" weight={active ? 'bold' : 'regular'} color={active ? undefined : 'gray'}>
+      <Text
+        size="2"
+        weight={active ? 'bold' : 'regular'}
+        className={active ? 'text-cyan-400' : completed ? 'text-green-400' : 'text-gray-500'}
+      >
         {label}
       </Text>
     </Flex>

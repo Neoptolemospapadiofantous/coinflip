@@ -15,51 +15,68 @@ import {
 } from '@radix-ui/themes';
 import { Layout } from '@/components/layout/Layout';
 import Link from 'next/link';
+import { useGameStats } from '@/hooks/useGames';
+import { useTiers } from '@/hooks/useTiers';
+import { formatNumber } from '@/lib/utils';
 
 export default function Home() {
+  const { data: gameStats } = useGameStats();
+  const { data: tiers = [] } = useTiers();
   return (
     <Layout>
       <Section size="3" style={{ flex: 1 }}>
         <Container size="3">
           <Flex direction="column" align="center" gap="6" py="9">
             {/* Main Heading */}
-            <Flex direction="column" align="center" gap="4" className="text-center">
-              <Badge size="2" color="cyan" variant="soft" radius="full">
+            <Flex direction="column" align="center" gap="4" className="text-center animate-fade-in">
+              <Badge size="2" color="cyan" variant="soft" radius="full" className="glow-cyan animate-pulse-slow">
                 🎲 Provably Fair Gaming
               </Badge>
               <Heading
                 size="9"
-                className="bg-gradient-to-r from-cyan-400 via-blue-400 to-purple-400 bg-clip-text text-transparent"
+                className="text-gradient-rainbow animate-glow"
+                style={{ fontSize: '4rem', lineHeight: '1.1' }}
               >
                 Flip. Win. Repeat.
               </Heading>
               <Text size="5" color="gray" className="max-w-2xl">
-                The first provably fair coin-flip game on Polygon. Powered by Chainlink VRF for
+                The first provably fair coin-flip game on Ethereum. Powered by <span className="text-cyan-400 font-semibold">Chainlink VRF</span> for
                 verifiable randomness and instant payouts.
               </Text>
             </Flex>
 
             {/* CTA Buttons */}
-            <Flex gap="3" wrap="wrap" justify="center">
+            <Flex gap="3" wrap="wrap" justify="center" className="animate-slide-up" style={{ animationDelay: '0.2s' }}>
               <Link href="/play">
-                <Button size="4" variant="solid" className="cursor-pointer">
+                <Button size="4" variant="solid" className="cursor-pointer glow-cyan hover:scale-105 transition-transform">
                   <Dices className="w-4 h-4" />
                   Start Playing
                 </Button>
               </Link>
-              <Button size="4" variant="soft" className="cursor-pointer">
-                View Games
-              </Button>
-              <Button size="4" variant="outline" className="cursor-pointer">
+              <Link href="/queue">
+                <Button size="4" variant="soft" className="cursor-pointer hover:scale-105 transition-transform">
+                  View Games
+                </Button>
+              </Link>
+              <Button size="4" variant="outline" className="cursor-pointer hover:scale-105 transition-transform">
                 Learn More
               </Button>
             </Flex>
 
             {/* Stats */}
             <Grid columns="3" gap="4" width="100%" className="max-w-2xl mt-8">
-              <StatCard label="Total Volume" value="$1.2M" />
-              <StatCard label="Games Played" value="15,234" />
-              <StatCard label="Active Players" value="892" />
+              <StatCard
+                label="Total Volume"
+                value={gameStats?.total_payouts ? `${formatNumber(Number(gameStats.total_payouts) / 1e18)} ETH` : '...'}
+              />
+              <StatCard
+                label="Games Played"
+                value={gameStats?.total_games ? formatNumber(gameStats.total_games) : '...'}
+              />
+              <StatCard
+                label="Resolved"
+                value={gameStats?.resolved_count ? formatNumber(gameStats.resolved_count) : '...'}
+              />
             </Grid>
 
             {/* Features Grid */}
@@ -83,7 +100,7 @@ export default function Home() {
 
             {/* Tier Selection Preview */}
             <Box className="w-full max-w-4xl mt-12">
-              <Card className="glass glass-hover">
+              <Card className="card-simple card-hover">
                 <Flex direction="column" gap="4" p="5">
                   <Flex align="center" justify="between">
                     <Heading size="5">Choose Your Bet</Heading>
@@ -92,11 +109,14 @@ export default function Home() {
                     </Badge>
                   </Flex>
                   <Grid columns={{ initial: '2', md: '5' }} gap="3">
-                    <TierButton amount="$5" players={12} />
-                    <TierButton amount="$10" players={8} active />
-                    <TierButton amount="$25" players={5} />
-                    <TierButton amount="$50" players={3} />
-                    <TierButton amount="$100" players={1} />
+                    {tiers.map((tier, index) => (
+                      <TierButton
+                        key={tier.id}
+                        amount={`$${tier.amountUsd}`}
+                        players={tier.playersInQueue}
+                        active={index === 1}
+                      />
+                    ))}
                   </Grid>
                 </Flex>
               </Card>
@@ -125,12 +145,12 @@ export default function Home() {
 
 function StatCard({ label, value }: { label: string; value: string }) {
   return (
-    <Card className="glass">
+    <Card className="card-simple card-hover border-cyan-500/60 animate-slide-up">
       <Flex direction="column" gap="1" p="3" align="center">
         <Text size="1" color="gray" weight="medium">
           {label}
         </Text>
-        <Heading size="5" className="text-cyan-400">
+        <Heading size="5" className="text-gradient-cyan-purple">
           {value}
         </Heading>
       </Flex>
@@ -148,12 +168,12 @@ function FeatureCard({
   description: string;
 }) {
   return (
-    <Card className="glass glass-hover">
+    <Card className="card-interactive glow-purple">
       <Flex direction="column" gap="3" p="5">
-        <Box className="p-3 rounded-lg bg-slate-800/50 border border-slate-700/50 w-fit">
+        <Box className="p-3 rounded-lg bg-slate-800/50 border border-purple-500/30 w-fit glow-purple">
           {icon}
         </Box>
-        <Heading size="4">{title}</Heading>
+        <Heading size="4" className="text-purple-100">{title}</Heading>
         <Text size="2" color="gray">
           {description}
         </Text>
@@ -199,7 +219,7 @@ function StepCard({
   description: string;
 }) {
   return (
-    <Card className="glass glass-hover">
+    <Card className="card-simple card-hover">
       <Flex direction="column" gap="2" p="4" align="center">
         <Flex
           align="center"

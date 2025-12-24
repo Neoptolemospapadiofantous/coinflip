@@ -67,7 +67,7 @@ export default function SetupPage() {
             </Flex>
 
             {loading && !health && (
-              <Card className="glass">
+              <Card className="card-simple">
                 <Flex align="center" justify="center" gap="3" p="9">
                   <Loader2 className="w-8 h-8 text-cyan-400 animate-spin" />
                   <Text size="4">Running health checks...</Text>
@@ -78,7 +78,7 @@ export default function SetupPage() {
             {health && (
               <>
                 {/* Overall Status */}
-                <Card className={health.overall ? 'glass border-2 border-green-500' : 'glass border-2 border-red-500'}>
+                <Card className={health.overall ? 'card-simple border-2 border-green-500' : 'card-simple border-2 border-red-500'}>
                   <Flex direction="column" gap="4" p="6">
                     <Flex align="center" gap="3">
                       {health.overall ? (
@@ -101,7 +101,7 @@ export default function SetupPage() {
                 </Card>
 
                 {/* Connection Status */}
-                <Card className="glass">
+                <Card className="card-simple">
                   <Flex direction="column" gap="4" p="5">
                     <Flex align="center" gap="2">
                       <Database className="w-5 h-5 text-cyan-400" />
@@ -132,8 +132,48 @@ export default function SetupPage() {
                   </Flex>
                 </Card>
 
+                {/* Migrations Status */}
+                <Card className="card-simple">
+                  <Flex direction="column" gap="4" p="5">
+                    <Flex align="center" gap="2">
+                      <Layers className="w-5 h-5 text-cyan-400" />
+                      <Heading size="4">Migrations</Heading>
+                      <StatusBadge success={health.migrations.success} />
+                    </Flex>
+
+                    <Text size="2" color="gray">
+                      {health.migrations.message}
+                    </Text>
+
+                    {health.migrations.details?.migrations && (
+                      <Flex direction="column" gap="2">
+                        <Text size="1" weight="bold" color="gray">
+                          Executed Migrations:
+                        </Text>
+                        {health.migrations.details.migrations.map((m: any) => (
+                          <Code key={m.version} size="1">
+                            {m.filename}
+                          </Code>
+                        ))}
+                      </Flex>
+                    )}
+
+                    {!health.migrations.success && (
+                      <Callout.Root color="red">
+                        <Callout.Icon>
+                          <AlertTriangle className="w-4 h-4" />
+                        </Callout.Icon>
+                        <Callout.Text>
+                          Run migrations with <Code>pnpm migrate</Code> and execute the SQL in Supabase.
+                          See <Code>DATABASE_MIGRATIONS.md</Code> for details.
+                        </Callout.Text>
+                      </Callout.Root>
+                    )}
+                  </Flex>
+                </Card>
+
                 {/* Tables Status */}
-                <Card className="glass">
+                <Card className="card-simple">
                   <Flex direction="column" gap="4" p="5">
                     <Flex align="center" gap="2">
                       <Layers className="w-5 h-5 text-cyan-400" />
@@ -142,7 +182,7 @@ export default function SetupPage() {
 
                     <Flex direction="column" gap="3">
                       {Object.entries(health.tables).map(([name, result]) => (
-                        <Flex key={name} align="center" justify="between" p="3" className="glass rounded-lg">
+                        <Flex key={name} align="center" justify="between" p="3" className="card-simple rounded-lg">
                           <Flex align="center" gap="3">
                             <StatusIcon success={result.success} />
                             <Flex direction="column" gap="1">
@@ -164,7 +204,7 @@ export default function SetupPage() {
                     {(!health.tables.tiers.success ||
                       !health.tables.games.success ||
                       !health.tables.queue.success) && (
-                      <Callout.Root color="orange">
+                      <Callout.Root color="yellow">
                         <Callout.Icon>
                           <AlertTriangle className="w-4 h-4" />
                         </Callout.Icon>
@@ -177,14 +217,14 @@ export default function SetupPage() {
                 </Card>
 
                 {/* Data Status */}
-                <Card className="glass">
+                <Card className="card-simple">
                   <Flex direction="column" gap="4" p="5">
                     <Flex align="center" gap="2">
                       <Database className="w-5 h-5 text-cyan-400" />
                       <Heading size="4">Data Verification</Heading>
                     </Flex>
 
-                    <Flex align="center" justify="between" p="3" className="glass rounded-lg">
+                    <Flex align="center" justify="between" p="3" className="card-simple rounded-lg">
                       <Flex align="center" gap="3">
                         <StatusIcon success={health.data.tiersCount.success} />
                         <Flex direction="column" gap="1">
@@ -202,7 +242,7 @@ export default function SetupPage() {
                     </Flex>
 
                     {!health.data.tiersCount.success && (
-                      <Callout.Root color="orange">
+                      <Callout.Root color="yellow">
                         <Callout.Icon>
                           <AlertTriangle className="w-4 h-4" />
                         </Callout.Icon>
@@ -215,7 +255,7 @@ export default function SetupPage() {
                 </Card>
 
                 {/* Realtime Status */}
-                <Card className="glass">
+                <Card className="card-simple">
                   <Flex direction="column" gap="4" p="5">
                     <Flex align="center" gap="2">
                       <Activity className="w-5 h-5 text-cyan-400" />
@@ -228,7 +268,7 @@ export default function SetupPage() {
                     </Text>
 
                     {!health.realtime.success && (
-                      <Callout.Root color="orange">
+                      <Callout.Root color="yellow">
                         <Callout.Icon>
                           <AlertTriangle className="w-4 h-4" />
                         </Callout.Icon>
@@ -256,7 +296,7 @@ export default function SetupPage() {
                     </Flex>
                   </Card>
                 ) : (
-                  <Card className="glass border-2 border-orange-500/30">
+                  <Card className="glass border-2 border-yellow-400/30">
                     <Flex direction="column" gap="4" p="5">
                       <Heading size="4">📖 Setup Guide</Heading>
                       <Text size="2" color="gray">
