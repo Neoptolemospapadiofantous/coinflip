@@ -24,23 +24,32 @@ export interface Database {
     Tables: {
       games: {
         Row: {
-          id: string;
-          creator: string;
-          joiner: string | null;
+          id: number;
+          tx_hash: string;
           tier: number;
           amount: string;
+          creator_address: string;
           creator_choice: boolean;
+          joiner_address: string | null;
           joiner_choice: boolean | null;
-          result: boolean | null;
-          winner: string | null;
           status: string;
+          winner_address: string | null;
+          random_number: string | null;
+          payout: string | null;
+          block_number: number;
+          matched_tx_hash: string | null;
+          matched_block_number: number | null;
+          resolved_tx_hash: string | null;
+          resolved_block_number: number | null;
+          cancelled_tx_hash: string | null;
+          cancelled_block_number: number | null;
           created_at: string;
           matched_at: string | null;
           resolved_at: string | null;
-          tx_hash: string;
-          vrf_request_id: string | null;
+          cancelled_at: string | null;
+          updated_at: string;
         };
-        Insert: Omit<Database['public']['Tables']['games']['Row'], 'created_at'>;
+        Insert: Omit<Database['public']['Tables']['games']['Row'], 'created_at' | 'updated_at'>;
         Update: Partial<Database['public']['Tables']['games']['Row']>;
       };
       tiers: {

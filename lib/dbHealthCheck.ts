@@ -8,6 +8,7 @@ export interface HealthCheckResult {
 
 export interface DatabaseHealth {
   connection: HealthCheckResult;
+  migrations: HealthCheckResult;
   tables: {
     tiers: HealthCheckResult;
     games: HealthCheckResult;
@@ -150,38 +151,124 @@ async function checkTiersData(): Promise<HealthCheckResult> {
   }
 }
 
+// Check if migrations have been run
+async function checkMigrations(): Promise<HealthCheckResult> {
+  try {
+    // Check if _migrations table exists
+    const { data: migrationData, error: migrationError } = await supabase
+      .from('_migrations')
+      .select('*', { count: 'exact' });
+
+    if (migrationError) {
+      if (migrationError.message.includes('does not exist')) {
+        return {
+          success: false,
+          message: 'Migrations table does not exist - run migrations with: pnpm migrate',
+          details: { hint: 'Execute migrations in Supabase SQL Editor' },
+        };
+      }
+      return {
+        success: false,
+        message: `Error checking migrations: ${migrationError.message}`,
+        details: migrationError,
+      };
+    }
+
+    const executedCount = migrationData?.length || 0;
+    const expectedCount = 5; // We have 5 initial migrations
+
+    if (executedCount === 0) {
+      return {
+        success: false,
+        message: 'No migrations executed - run: pnpm migrate',
+        details: { executedCount, expectedCount },
+      };
+    }
+
+    if (executedCount < expectedCount) {
+      return {
+        success: false,
+        message: `Only ${executedCount}/${expectedCount} migrations executed`,
+        details: {
+          executedCount,
+          expectedCount,
+          executed: migrationData?.map((m: any) => m.filename) || [],
+        },
+      };
+    }
+
+    return {
+      success: true,
+      message: `All ${executedCount} migrations executed successfully`,
+      details: {
+        executedCount,
+        migrations: migrationData?.map((m: any) => ({
+          version: m.version,
+          filename: m.filename,
+          executedAt: m.executed_at,
+        })),
+      },
+    };
+  } catch (error: any) {
+    return {
+      success: false,
+      message: `Exception checking migrations: ${error.message}`,
+      details: error,
+    };
+  }
+}
+
 // Check if realtime is enabled
 async function checkRealtime(): Promise<HealthCheckResult> {
   try {
     // Create a test subscription to verify realtime works
     const channel = supabase.channel('health-check-test');
+    let isResolved = false;
 
     return new Promise((resolve) => {
       const timeout = setTimeout(() => {
-        channel.unsubscribe();
-        resolve({
-          success: false,
-          message: 'Realtime connection timeout - may not be enabled',
-        });
+        if (!isResolved) {
+          isResolved = true;
+          try {
+            channel.unsubscribe();
+          } catch (e) {
+            // Ignore unsubscribe errors
+          }
+          resolve({
+            success: false,
+            message: 'Realtime connection timeout - may not be enabled',
+          });
+        }
       }, 5000);
 
       channel
         .on('postgres_changes', { event: '*', schema: 'public', table: 'tiers' }, () => {})
         .subscribe((status) => {
-          clearTimeout(timeout);
-          channel.unsubscribe();
+          if (!isResolved) {
+            isResolved = true;
+            clearTimeout(timeout);
 
-          if (status === 'SUBSCRIBED') {
-            resolve({
-              success: true,
-              message: 'Realtime is enabled and working',
-            });
-          } else {
-            resolve({
-              success: false,
-              message: `Realtime subscription status: ${status}`,
-              details: { status },
-            });
+            // Delay unsubscribe to avoid call stack issues
+            setTimeout(() => {
+              try {
+                channel.unsubscribe();
+              } catch (e) {
+                // Ignore unsubscribe errors
+              }
+            }, 100);
+
+            if (status === 'SUBSCRIBED') {
+              resolve({
+                success: true,
+                message: 'Realtime is enabled and working',
+              });
+            } else {
+              resolve({
+                success: false,
+                message: `Realtime subscription status: ${status}`,
+                details: { status },
+              });
+            }
           }
         });
     });
@@ -201,6 +288,11 @@ export async function runDatabaseHealthCheck(): Promise<DatabaseHealth> {
   const connection = await checkSupabaseConnection();
   console.log('  Connection:', connection.success ? '✅' : '❌', connection.message);
 
+  let migrations = {
+    success: false,
+    message: 'Skipped - connection failed',
+  } as HealthCheckResult;
+
   let tablesCheck = {
     tiers: { success: false, message: 'Skipped - connection failed' } as HealthCheckResult,
     games: { success: false, message: 'Skipped - connection failed' } as HealthCheckResult,
@@ -217,8 +309,11 @@ export async function runDatabaseHealthCheck(): Promise<DatabaseHealth> {
     message: 'Skipped - connection failed',
   } as HealthCheckResult;
 
-  // Only check tables if connection succeeded
+  // Only check migrations and tables if connection succeeded
   if (connection.success) {
+    migrations = await checkMigrations();
+    console.log('  Migrations:', migrations.success ? '✅' : '❌', migrations.message);
+
     tablesCheck.tiers = await checkTable('tiers');
     console.log('  Tiers table:', tablesCheck.tiers.success ? '✅' : '❌', tablesCheck.tiers.message);
 
@@ -241,6 +336,7 @@ export async function runDatabaseHealthCheck(): Promise<DatabaseHealth> {
 
   const overall =
     connection.success &&
+    migrations.success &&
     tablesCheck.tiers.success &&
     tablesCheck.games.success &&
     tablesCheck.queue.success &&
@@ -251,6 +347,7 @@ export async function runDatabaseHealthCheck(): Promise<DatabaseHealth> {
 
   return {
     connection,
+    migrations,
     tables: tablesCheck,
     data: { tiersCount },
     realtime,

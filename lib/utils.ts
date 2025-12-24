@@ -13,32 +13,46 @@ export function formatAddress(address: string): string {
   return `${address.slice(0, 6)}...${address.slice(-4)}`;
 }
 
-// Format currency from wei to USD
+// Format ETH/MATIC from wei to readable amount
 export function formatCurrency(wei: bigint | string, decimals = 18): string {
   const value = typeof wei === 'string' ? BigInt(wei) : wei;
   const formatted = formatUnits(value, decimals);
   const num = parseFloat(formatted);
 
+  // Format with up to 4 decimal places, removing trailing zeros
+  return num.toFixed(4).replace(/\.?0+$/, '') + ' ETH';
+}
+
+// Format currency as USD (for display purposes)
+export function formatUsd(amount: number): string {
   return new Intl.NumberFormat('en-US', {
     style: 'currency',
     currency: 'USD',
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
+  }).format(amount);
+}
+
+// Format number with compact notation (1.2K, 1.2M, etc)
+export function formatNumber(num: number): string {
+  return new Intl.NumberFormat('en-US', {
+    notation: 'compact',
+    maximumFractionDigits: 1,
   }).format(num);
 }
 
-// Format currency with compact notation (1.2K, 1.2M)
+// Format ETH with compact notation (1.2K ETH, 1.2M ETH)
 export function formatCurrencyCompact(wei: bigint | string, decimals = 18): string {
   const value = typeof wei === 'string' ? BigInt(wei) : wei;
   const formatted = formatUnits(value, decimals);
   const num = parseFloat(formatted);
 
-  return new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currency: 'USD',
+  const compactNum = new Intl.NumberFormat('en-US', {
     notation: 'compact',
     maximumFractionDigits: 1,
   }).format(num);
+
+  return compactNum + ' ETH';
 }
 
 // Parse USD to wei
