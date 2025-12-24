@@ -7,16 +7,36 @@ import { formatCurrency } from '@/lib/utils';
 import { Button, Flex, Text, Grid, Badge, Card, Heading, Skeleton } from '@radix-ui/themes';
 import { Users, Lock } from 'lucide-react';
 import { parseEther } from 'viem';
+import { NetworkIndicator } from '@/components/ui/NetworkIndicator';
 
 export function TierSelector() {
   const { data: tiers, isLoading } = useTiers();
   const { selectedTier, setSelectedTier } = useGameStore();
-  const { address } = useAccount();
-  const { data: balance } = useBalance({ address });
+  const { address, isConnected } = useAccount();
+  const { data: balance, isLoading: isBalanceLoading, error: balanceError } = useBalance({
+    address,
+  });
+
+  // Debug wallet connection
+  console.log('🔗 Wallet Connection:', {
+    isConnected,
+    address,
+    hasBalance: !!balance,
+    isBalanceLoading,
+    balanceError: balanceError?.message,
+  });
 
   if (isLoading) {
     return <TierSelectorSkeleton />;
   }
+
+  // Debug balance
+  console.log('💰 User Balance:', {
+    hasBalance: !!balance,
+    balanceWei: balance?.value.toString(),
+    balanceEth: balance ? (Number(balance.value) / 1e18).toFixed(8) : '0',
+    symbol: balance?.symbol,
+  });
 
   return (
     <Flex direction="column" gap="4">
@@ -29,11 +49,51 @@ export function TierSelector() {
         )}
       </Flex>
 
+      {/* Network Indicator */}
+      <NetworkIndicator />
+
+      {/* Debug Panel - Remove after testing */}
+      {tiers && tiers.length > 0 && (
+        <Card className="card-simple border-yellow-400/50">
+          <Flex direction="column" gap="2" p="3">
+            <Text size="2" weight="bold" className="text-yellow-400">🔍 Debug Info:</Text>
+            <Flex direction="column" gap="1">
+              <Text size="1" className={isConnected ? 'text-green-400' : 'text-red-400'}>
+                Wallet Connected: {isConnected ? 'YES ✅' : 'NO ❌'}
+              </Text>
+              {address && <Text size="1" color="gray">Address: {address.slice(0, 6)}...{address.slice(-4)}</Text>}
+              <Text size="1" className={isBalanceLoading ? 'text-yellow-400' : 'text-gray-400'}>
+                Balance Loading: {isBalanceLoading ? 'YES...' : 'NO'}
+              </Text>
+              {balanceError && <Text size="1" className="text-red-400">Balance Error: {balanceError.message}</Text>}
+              <Text size="1" color="gray">Your Balance: {balance ? (Number(balance.value) / 1e18).toFixed(8) : '0'} ETH</Text>
+              <Text size="1" color="gray">Tier 0 Amount: {(Number(BigInt(tiers[0].amount)) / 1e18).toFixed(8)} ETH (${tiers[0].amountUsd})</Text>
+              <Text size="1" color="gray">Tier 0 Amount (wei): {tiers[0].amount}</Text>
+              <Text size="1" className={balance && balance.value >= BigInt(tiers[0].amount) ? 'text-green-400' : 'text-red-400'}>
+                Can Afford Tier 0: {balance && balance.value >= BigInt(tiers[0].amount) ? 'YES ✅' : 'NO ❌'}
+              </Text>
+            </Flex>
+          </Flex>
+        </Card>
+      )}
+
       <Grid columns={{ initial: '2', md: '5' }} gap="3">
         {tiers?.map((tier) => {
-          const tierAmount = parseEther(tier.amountUsd.toString());
+          const tierAmount = BigInt(tier.amount); // tier.amount is already in wei
           const canAfford = balance ? balance.value >= tierAmount : false;
           const isSelected = selectedTier === tier.id;
+
+          // Debug logging
+          if (tier.id === 0) {
+            console.log('🔍 Debug Tier 0:', {
+              tierAmountUsd: tier.amountUsd,
+              tierAmountWei: tier.amount,
+              tierAmountEth: (Number(tierAmount) / 1e18).toFixed(8),
+              userBalanceWei: balance?.value.toString(),
+              userBalanceEth: balance ? (Number(balance.value) / 1e18).toFixed(8) : '0',
+              canAfford,
+            });
+          }
 
           return (
             <Button
@@ -79,7 +139,7 @@ export function TierSelector() {
       </Grid>
 
       {selectedTier !== null && (
-        <Card className="glass">
+        <Card className="card-simple">
           <Flex direction="column" gap="2" p="3">
             <Text size="2" weight="medium">
               Selected Tier: ${tiers?.[selectedTier]?.amountUsd}

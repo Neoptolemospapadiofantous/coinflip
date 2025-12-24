@@ -14,7 +14,7 @@ export function CoinChoice() {
 
   return (
     <Flex direction="column" gap="4">
-      <Heading size="5">Choose Your Side</Heading>
+      <Heading size="5" className="text-gradient-cyan-purple">Choose Your Side</Heading>
 
       <Flex gap="4" direction={{ initial: 'column', sm: 'row' }}>
         {choices.map((choice) => {
@@ -25,17 +25,25 @@ export function CoinChoice() {
               key={choice.label}
               variant={isSelected ? 'solid' : 'soft'}
               size="4"
-              className={`cursor-pointer flex-1 transition-all ${
-                isSelected ? 'ring-2 ring-cyan-500 scale-105' : 'hover:scale-102'
+              className={`cursor-pointer flex-1 transition-all duration-300 ${
+                isSelected
+                  ? 'neon-border-cyan scale-105 animate-pulse-slow'
+                  : 'hover:scale-102 hover:border-cyan-400/30'
               }`}
               onClick={() => setCoinChoice(choice.value)}
             >
               <Flex direction="column" gap="3" align="center" py="4" className="w-full">
-                {/* Emoji */}
-                <Text className="text-6xl">{choice.emoji}</Text>
+                {/* Emoji with animation */}
+                <Text
+                  className={`text-6xl transition-transform duration-300 ${
+                    isSelected ? 'animate-flip' : ''
+                  }`}
+                >
+                  {choice.emoji}
+                </Text>
 
                 {/* Label */}
-                <Text size="5" weight="bold" className="text-white">
+                <Text size="5" weight="bold" className={isSelected ? "text-cyan-100" : "text-white"}>
                   {choice.label}
                 </Text>
 
@@ -50,10 +58,10 @@ export function CoinChoice() {
       </Flex>
 
       {coinChoice !== null && (
-        <Card className="glass">
+        <Card className="card-solid border-cyan-500/60 animate-slide-up">
           <Flex direction="column" gap="2" p="3" align="center">
-            <Text size="2" weight="medium">
-              You chose: {coinChoice ? 'Tails' : 'Heads'} {getCoinSideEmoji(coinChoice)}
+            <Text size="2" weight="medium" className="text-cyan-100">
+              You chose: <span className="text-gradient-gold font-bold">{coinChoice ? 'Tails' : 'Heads'} {getCoinSideEmoji(coinChoice)}</span>
             </Text>
             <Text size="1" color="gray">
               If the coin lands on {coinChoice ? 'Tails' : 'Heads'}, you win!
