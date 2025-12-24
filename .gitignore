@@ -5,44 +5,146 @@
 /.pnp
 .pnp.js
 .pnpm-debug.log*
+pnpm-debug.log*
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
 
 # testing
 /coverage
+coverage.json
+coverage/
+*.test.local.*
 
 # next.js
 /.next/
 /out/
 next-env.d.ts
+.next
 
 # production
 /build
+/dist
 
 # misc
 .DS_Store
 *.pem
+*.log
 
-# debug
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
+# debug logs
+logs/
+*.log
 
-# local env files
+# environment files - CRITICAL: Never commit these!
 .env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
 .env*.local
+.env*.production
+*.env.backup
 
 # vercel
 .vercel
+.vercel.json
 
 # typescript
 *.tsbuildinfo
+next-env.d.ts
+tsconfig.tsbuildinfo
 
 # IDE
-.vscode
-.idea
+.vscode/
+.idea/
 *.swp
 *.swo
 *~
+.fleet/
+.devcontainer/
 
 # OS
 .DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
 Thumbs.db
+desktop.ini
+
+# Hardhat
+cache/
+artifacts/
+typechain-types/
+deployments/*/solcInputs
+.openzeppelin/
+
+# Foundry (alternative to Hardhat)
+out/
+broadcast/
+
+# Testing & Development
+*.test.csv
+*-test-accounts.csv
+hardhat-test-accounts.csv
+test-results/
+playwright-report/
+
+# Temporary files
+*.tmp
+*.temp
+*.swp
+*.swo
+.cache/
+tmp/
+temp/
+
+# Documentation drafts (keep final docs)
+*.draft.md
+*-DRAFT.md
+
+# Backup files
+*.backup
+*.bak
+*.old
+*~
+
+# Local configuration
+.local/
+local/
+
+# Build artifacts
+*.tgz
+
+# Secrets and keys (CRITICAL!)
+secrets/
+*.key
+*.secret
+private-keys.txt
+.env.production
+.env.production.local
+.env.*.production
+*secret*
+*private*
+*.pem
+*.p12
+*.pfx
+
+# Security scan results
+security-scan.json
+audit-report.json
+vulnerability-report.*
+
+# Database
+*.sqlite
+*.sqlite3
+*.db
+
+# Images (temporary screenshots, keep intentional assets)
+screenshot*.png
+temp-*.png
+image*.png
+
+# Claude Code
+.claude/

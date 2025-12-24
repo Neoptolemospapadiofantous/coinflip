@@ -1,6 +1,7 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
+  // instrumentation.ts is now supported by default in Next.js 16
   // Turbopack configuration (Next.js 16 default)
   turbopack: {
     // Empty config to acknowledge Turbopack usage
