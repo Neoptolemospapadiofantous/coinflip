@@ -7,7 +7,12 @@
  * Run with: pnpm verify-db
  */
 
+import { config } from 'dotenv';
+import * as path from 'path';
 import { runDatabaseHealthCheck } from '../lib/dbHealthCheck';
+
+// Load environment variables from .env.local
+config({ path: path.join(process.cwd(), '.env.local') });
 
 async function main() {
   console.log('═══════════════════════════════════════════════════════════');
