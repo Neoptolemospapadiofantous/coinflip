@@ -1,27 +1,39 @@
 export enum GameStatus {
-  CREATED = 'created',
+  PENDING = 'pending',
   MATCHED = 'matched',
-  PENDING_VRF = 'pending_vrf',
   RESOLVED = 'resolved',
   CANCELLED = 'cancelled',
 }
 
 export interface Game {
-  id: string; // bigint as string
-  creator: string; // address
-  joiner: string | null; // address
+  id: string;
+  tx_hash: string;
   tier: number;
-  amount: string; // in wei
-  creatorChoice: boolean; // false = heads, true = tails
-  joinerChoice: boolean | null;
-  result: boolean | null; // VRF result
-  winner: string | null; // address
-  status: GameStatus;
-  createdAt: Date;
-  matchedAt: Date | null;
-  resolvedAt: Date | null;
-  txHash: string; // creation tx hash
-  vrfRequestId: string | null;
+  amount: string;
+  creator_address: string;
+  creator_choice: boolean;
+  joiner_address: string | null;
+  joiner_choice: boolean | null;
+  status: 'pending' | 'matched' | 'resolved' | 'cancelled';
+  winner_address: string | null;
+  random_number: string | null;
+  payout: string | null;
+  block_number: string;
+  matched_tx_hash: string | null;
+  matched_block_number: string | null;
+  resolved_tx_hash: string | null;
+  resolved_block_number: string | null;
+  cancelled_tx_hash: string | null;
+  cancelled_block_number: string | null;
+  created_at: string;
+  matched_at: string | null;
+  resolved_at: string | null;
+  cancelled_at: string | null;
+  updated_at: string;
+  // Optional fields from joins with tiers/views
+  amount_usd?: number;
+  win_amount_usd?: number;
+  time_waiting_seconds?: number;
 }
 
 export interface GameCreate {

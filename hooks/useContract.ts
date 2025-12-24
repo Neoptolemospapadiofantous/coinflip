@@ -26,7 +26,7 @@ export function useCreateGame() {
       abi: COINFLIP_ABI,
       functionName: 'createGame',
       args: [tier, choice],
-      value: parseEther(amount),
+      value: BigInt(amount), // amount is already in wei
     });
   };
 
@@ -61,7 +61,7 @@ export function useJoinGame() {
       abi: COINFLIP_ABI,
       functionName: 'joinGame',
       args: [BigInt(gameId), choice],
-      value: parseEther(amount),
+      value: BigInt(amount), // amount is already in wei
     });
   };
 
