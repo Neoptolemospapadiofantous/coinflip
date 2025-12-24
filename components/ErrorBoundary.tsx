@@ -81,26 +81,24 @@ export class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoun
                     <Callout.Icon>
                       <AlertTriangle className="w-4 h-4" />
                     </Callout.Icon>
-                    <Callout.Text>
-                      <details>
-                        <summary style={{ cursor: 'pointer', fontWeight: 'bold' }}>
-                          Error Details (Development Only)
-                        </summary>
-                        <pre style={{
-                          marginTop: '0.5rem',
-                          fontSize: '0.75rem',
-                          overflow: 'auto',
-                          maxHeight: '200px',
-                          padding: '0.5rem',
-                          background: 'rgba(0,0,0,0.3)',
-                          borderRadius: '4px'
-                        }}>
-                          {this.state.error.toString()}
-                          {'\n\n'}
-                          {this.state.errorInfo?.componentStack}
-                        </pre>
-                      </details>
-                    </Callout.Text>
+                    <details style={{ flex: 1 }}>
+                      <summary style={{ cursor: 'pointer', fontWeight: 'bold' }}>
+                        Error Details (Development Only)
+                      </summary>
+                      <pre style={{
+                        marginTop: '0.5rem',
+                        fontSize: '0.75rem',
+                        overflow: 'auto',
+                        maxHeight: '200px',
+                        padding: '0.5rem',
+                        background: 'rgba(0,0,0,0.3)',
+                        borderRadius: '4px'
+                      }}>
+                        {this.state.error.toString()}
+                        {'\n\n'}
+                        {this.state.errorInfo?.componentStack}
+                      </pre>
+                    </details>
                   </Callout.Root>
                 )}
 

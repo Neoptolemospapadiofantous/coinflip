@@ -189,20 +189,18 @@ export default function PlayPage() {
                         <Callout.Icon>
                           <Info className="w-4 h-4" />
                         </Callout.Icon>
-                        <Callout.Text>
-                          <Flex direction="column" gap="2">
-                            <Text weight="bold">What Happens Next:</Text>
-                            <Text size="2">
-                              1. Your game enters the queue<br />
-                              2. Another player joins (gets opposite side)<br />
-                              3. Chainlink VRF flips the coin (10-30 seconds)<br />
-                              4. Winner gets paid automatically!
-                            </Text>
-                            <Text size="1" style={{ fontStyle: 'italic' }}>
-                              Game expires if no one joins within 20 minutes
-                            </Text>
-                          </Flex>
-                        </Callout.Text>
+                        <Flex direction="column" gap="2" style={{ flex: 1 }}>
+                          <Text weight="bold">What Happens Next:</Text>
+                          <Text size="2">
+                            1. Your game enters the queue<br />
+                            2. Another player joins (gets opposite side)<br />
+                            3. Chainlink VRF flips the coin (10-30 seconds)<br />
+                            4. Winner gets paid automatically!
+                          </Text>
+                          <Text size="1" style={{ fontStyle: 'italic' }}>
+                            Game expires if no one joins within 20 minutes
+                          </Text>
+                        </Flex>
                       </Callout.Root>
                     </Flex>
 

@@ -157,14 +157,12 @@ export function GameSessionModal({ game, open, onClose, userAddress }: GameSessi
                   <Callout.Icon>
                     <AlertTriangle className="w-4 h-4" />
                   </Callout.Icon>
-                  <Callout.Text>
-                    <Flex direction="column" gap="1">
-                      <Text weight="bold">Waiting for complete game data...</Text>
-                      {validation.errors.map((error, i) => (
-                        <Text key={i} size="1">{error}</Text>
-                      ))}
-                    </Flex>
-                  </Callout.Text>
+                  <Flex direction="column" gap="1" style={{ flex: 1 }}>
+                    <Text weight="bold">Waiting for complete game data...</Text>
+                    {validation.errors.map((error, i) => (
+                      <Text key={i} size="1">{error}</Text>
+                    ))}
+                  </Flex>
                 </Callout.Root>
               )}
 
