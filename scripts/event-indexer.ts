@@ -32,6 +32,24 @@ const publicClient = createPublicClient({
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
 
+// Retry helper for database operations
+async function retryOperation<T>(
+  operation: () => Promise<T>,
+  maxRetries = 3,
+  delay = 1000
+): Promise<T> {
+  for (let i = 0; i < maxRetries; i++) {
+    try {
+      return await operation();
+    } catch (error) {
+      if (i === maxRetries - 1) throw error;
+      console.warn(`⚠️ Operation failed, retrying (${i + 1}/${maxRetries})...`);
+      await new Promise((resolve) => setTimeout(resolve, delay * (i + 1)));
+    }
+  }
+  throw new Error('Max retries exceeded');
+}
+
 // Event signatures (must match contract exactly!)
 const GAME_CREATED_EVENT = parseAbiItem('event GameCreated(uint256 indexed gameId, address indexed creator, uint8 tier, uint256 amount, bool choice)');
 const GAME_MATCHED_EVENT = parseAbiItem('event GameJoined(uint256 indexed gameId, address indexed joiner, uint256 totalPot)');
@@ -97,19 +115,39 @@ async function processGameJoined(log: any) {
 
   console.log(`🤝 GameJoined: ID=${gameId}, Joiner=${joiner}`);
 
-  const { error } = await supabase
-    .from('games')
-    .update({
-      joiner_address: joiner.toLowerCase(),
-      status: 'matched',
-      matched_tx_hash: txHash,
-      matched_block_number: blockNumber.toString(),
-      matched_at: new Date().toISOString(),
-    })
-    .eq('id', gameId.toString());
+  try {
+    // Fetch game to get joiner choice from contract state
+    // Note: GameJoined event doesn't include joiner's choice, so we read from contract
+    const gameData = await publicClient.readContract({
+      address: CONTRACT_ADDRESS,
+      abi: COINFLIP_ABI,
+      functionName: 'games',
+      args: [BigInt(gameId.toString())],
+    }) as any;
 
-  if (error) {
-    console.error('❌ Error updating game:', error);
+    const joinerChoice = gameData.joinerChoice;
+
+    // Update game with retry
+    await retryOperation(async () => {
+      const { error } = await supabase
+        .from('games')
+        .update({
+          joiner_address: joiner.toLowerCase(),
+          joiner_choice: joinerChoice,
+          status: 'matched',
+          matched_tx_hash: txHash,
+          matched_block_number: blockNumber.toString(),
+          matched_at: new Date().toISOString(),
+        })
+        .eq('id', gameId.toString());
+
+      if (error) throw error;
+    });
+
+    console.log(`✅ Game ${gameId} matched with joiner choice: ${joinerChoice}`);
+  } catch (error) {
+    console.error(`❌ Error processing GameJoined for game ${gameId}:`, error);
+    throw error;
   }
 }
 
@@ -119,23 +157,58 @@ async function processGameResolved(log: any) {
   const blockNumber = log.blockNumber;
   const txHash = log.transactionHash;
 
-  console.log(`🎉 GameResolved: ID=${gameId}, Winner=${winner}, Payout=${payout}`);
+  console.log(`🎉 GameResolved: ID=${gameId}, Winner=${winner}, CoinResult=${coinResult}, Payout=${payout}`);
 
-  const { error } = await supabase
-    .from('games')
-    .update({
-      winner_address: winner.toLowerCase(),
-      coin_result: coinResult,
-      payout: payout.toString(),
-      status: 'resolved',
-      resolved_tx_hash: txHash,
-      resolved_block_number: blockNumber.toString(),
-      resolved_at: new Date().toISOString(),
-    })
-    .eq('id', gameId.toString());
+  try {
+    // Fetch current game to validate
+    const { data: game, error: fetchError } = await supabase
+      .from('games')
+      .select('*')
+      .eq('id', gameId.toString())
+      .single();
 
-  if (error) {
-    console.error('❌ Error updating game:', error);
+    if (fetchError || !game) {
+      console.error(`❌ Game ${gameId} not found for resolution:`, fetchError);
+      return;
+    }
+
+    // Validate winner matches coin result
+    const winnerIsCreator = winner.toLowerCase() === game.creator_address.toLowerCase();
+    const expectedChoice = coinResult; // Winner's choice should match coin result
+    const actualWinnerChoice = winnerIsCreator ? game.creator_choice : game.joiner_choice;
+
+    if (actualWinnerChoice !== expectedChoice) {
+      console.error(`❌ CRITICAL: Winner choice mismatch for game ${gameId}!`, {
+        winner: winner.toLowerCase(),
+        coinResult,
+        winnerIsCreator,
+        actualWinnerChoice,
+        expectedChoice,
+      });
+    }
+
+    // Update game with retry (all fields atomically)
+    await retryOperation(async () => {
+      const { error } = await supabase
+        .from('games')
+        .update({
+          winner_address: winner.toLowerCase(),
+          coin_result: coinResult,
+          payout: payout.toString(),
+          status: 'resolved',
+          resolved_tx_hash: txHash,
+          resolved_block_number: blockNumber.toString(),
+          resolved_at: new Date().toISOString(),
+        })
+        .eq('id', gameId.toString());
+
+      if (error) throw error;
+    });
+
+    console.log(`✅ Game ${gameId} resolved successfully`);
+  } catch (error) {
+    console.error(`❌ Error processing GameResolved for game ${gameId}:`, error);
+    throw error; // Re-throw to be caught by main indexer loop
   }
 }
 

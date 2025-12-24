@@ -1,12 +1,13 @@
 'use client';
 
-import { Dialog, Flex, Heading, Text, Button, Card } from '@radix-ui/themes';
+import { Dialog, Flex, Heading, Text, Button, Card, Callout } from '@radix-ui/themes';
 import { useState, useEffect } from 'react';
 import { CoinFlip3D, CoinFlip2D } from './CoinFlip3D';
 import { Game } from '@/types/game';
 import { formatCurrency } from '@/lib/utils';
-import { Loader2, Users, Trophy, Zap } from 'lucide-react';
+import { Loader2, Users, Trophy, Zap, AlertTriangle } from 'lucide-react';
 import { useGameStore } from '@/store/gameStore';
+import { validateGameState } from '@/hooks/useGameSync';
 
 interface GameSessionModalProps {
   game: Game | null;
@@ -29,6 +30,9 @@ export function GameSessionModal({ game, open, onClose, userAddress }: GameSessi
   // Determine if user won
   const isWinner = game?.winner_address?.toLowerCase() === userAddress?.toLowerCase();
 
+  // Validate game state
+  const validation = game ? validateGameState(game) : { valid: false, errors: [] };
+
   // Reset state when game changes
   useEffect(() => {
     if (game) {
@@ -40,12 +44,12 @@ export function GameSessionModal({ game, open, onClose, userAddress }: GameSessi
         setIsFlipping(false);
       }
 
-      // If game is resolved, start animation
-      if (game.status === 'resolved') {
+      // If game is resolved AND state is valid, start animation
+      if (game.status === 'resolved' && validation.valid) {
         setIsFlipping(true);
       }
     }
-  }, [game?.id, game?.status]);
+  }, [game?.id, game?.status, validation.valid]);
 
   const handleFlipComplete = () => {
     setShowResult(true);
@@ -147,44 +151,65 @@ export function GameSessionModal({ game, open, onClose, userAddress }: GameSessi
           {/* Game Status: Resolved - Show Animation */}
           {game.status === 'resolved' && !showResult && (
             <Flex direction="column" gap="4">
-              {/* Coin Animation */}
-              <div className="relative">
-                {skipped ? (
-                  <Flex
-                    direction="column"
-                    align="center"
-                    justify="center"
-                    className="w-full h-96 bg-gradient-to-b from-slate-900 to-slate-950 border border-cyan-500/20 rounded-lg"
-                  >
-                    <div className="text-8xl mb-4">
-                      {result ? '🪙' : '👑'}
-                    </div>
-                    <Text size="5" weight="bold">
-                      {result ? 'Tails' : 'Heads'}
-                    </Text>
-                  </Flex>
-                ) : (
-                  <CoinFlip2D
-                    isFlipping={isFlipping}
-                    result={result}
-                    onFlipComplete={handleFlipComplete}
-                  />
-                )}
-              </div>
+              {/* State Validation Warning */}
+              {!validation.valid && (
+                <Callout.Root color="orange" size="2">
+                  <Callout.Icon>
+                    <AlertTriangle className="w-4 h-4" />
+                  </Callout.Icon>
+                  <Callout.Text>
+                    <Flex direction="column" gap="1">
+                      <Text weight="bold">Waiting for complete game data...</Text>
+                      {validation.errors.map((error, i) => (
+                        <Text key={i} size="1">{error}</Text>
+                      ))}
+                    </Flex>
+                  </Callout.Text>
+                </Callout.Root>
+              )}
 
-              {/* Skip Button */}
-              {!skipped && isFlipping && (
-                <Flex justify="center">
-                  <Button
-                    size="3"
-                    variant="soft"
-                    onClick={handleSkip}
-                    className="glow-cyan hover:scale-105 transition-transform"
-                  >
-                    <Zap className="w-4 h-4" />
-                    Skip Animation
-                  </Button>
-                </Flex>
+              {/* Coin Animation - Only show when state is valid */}
+              {validation.valid && (
+                <>
+                  <div className="relative">
+                    {skipped ? (
+                      <Flex
+                        direction="column"
+                        align="center"
+                        justify="center"
+                        className="w-full h-96 bg-gradient-to-b from-slate-900 to-slate-950 border border-cyan-500/20 rounded-lg"
+                      >
+                        <div className="text-8xl mb-4">
+                          {result ? '🪙' : '👑'}
+                        </div>
+                        <Text size="5" weight="bold">
+                          {result ? 'Tails' : 'Heads'}
+                        </Text>
+                      </Flex>
+                    ) : (
+                      <CoinFlip2D
+                        isFlipping={isFlipping}
+                        result={result}
+                        onFlipComplete={handleFlipComplete}
+                      />
+                    )}
+                  </div>
+
+                  {/* Skip Button */}
+                  {!skipped && isFlipping && (
+                    <Flex justify="center">
+                      <Button
+                        size="3"
+                        variant="soft"
+                        onClick={handleSkip}
+                        className="glow-cyan hover:scale-105 transition-transform"
+                      >
+                        <Zap className="w-4 h-4" />
+                        Skip Animation
+                      </Button>
+                    </Flex>
+                  )}
+                </>
               )}
             </Flex>
           )}

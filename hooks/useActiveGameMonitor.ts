@@ -2,7 +2,8 @@
 
 import { useEffect, useState, useRef } from 'react';
 import { useAccount } from 'wagmi';
-import { usePlayerGames, useGameSubscription } from './useGames';
+import { usePlayerGames } from './useGames';
+import { useGameSync, validateGameState } from './useGameSync';
 import { Game } from '@/types/game';
 import { useGameStore } from '@/store/gameStore';
 import { supabase } from '@/lib/supabase';
@@ -21,63 +22,54 @@ export function useActiveGameMonitor() {
   // Track which games we've already shown modals for
   const shownGamesRef = useRef<Set<string>>(new Set());
 
-  // Subscribe to real-time updates for user's games
+  // Subscribe to the active session game using game-specific channel
+  useGameSync(sessionGame?.id ?? null, (updatedGame) => {
+    console.log('🎮 Active game updated:', updatedGame.status);
+
+    // Validate state before updating
+    const validation = validateGameState(updatedGame);
+    if (!validation.valid) {
+      console.error('❌ Invalid game state:', validation.errors);
+      // Don't update UI with invalid state
+      return;
+    }
+
+    // Update session game with validated data
+    setSessionGame(updatedGame);
+    setActiveGame(updatedGame);
+  });
+
+  // Monitor all player games for new matches/resolutions
   useEffect(() => {
-    if (!address) return;
+    if (!address || !games) return;
 
-    const channel = supabase
-      .channel(`player-games:${address}`)
-      .on(
-        'postgres_changes',
-        {
-          event: 'UPDATE',
-          schema: 'public',
-          table: 'games',
-        },
-        (payload) => {
-          const game = payload.new as Game;
-          const lowerAddress = address.toLowerCase();
+    const lowerAddress = address.toLowerCase();
 
-          // Check if this game belongs to the user
-          if (
-            game.creator_address?.toLowerCase() === lowerAddress ||
-            game.joiner_address?.toLowerCase() === lowerAddress
-          ) {
-            // If game is matched or resolved, show modal
-            if (game.status === 'matched' || game.status === 'resolved') {
-              setSessionGame(game);
-              setActiveGame(game);
-              setActiveGameId(game.id);
-              setShowSessionModal(true);
+    // Find games that need modal display
+    const activeGames = games.filter((game) => {
+      const isParticipant =
+        game.creator_address?.toLowerCase() === lowerAddress ||
+        game.joiner_address?.toLowerCase() === lowerAddress;
 
-              if (game.status === 'matched') {
-                setShowMatchModal(true);
-              }
-            }
-          }
-        }
-      )
-      .subscribe();
+      const needsDisplay =
+        (game.status === 'matched' || game.status === 'resolved') &&
+        !shownGamesRef.current.has(game.id);
 
-    // Cleanup subscription on unmount
-    return () => {
-      channel.unsubscribe();
-    };
-  }, [address, setActiveGame, setActiveGameId, setShowMatchModal]);
-
-  // Initial check for existing active games
-  useEffect(() => {
-    if (!games || games.length === 0) return;
-
-    // Find games that are matched or recently resolved
-    const activeGames = games.filter((game) =>
-      (game.status === 'matched' || game.status === 'resolved') &&
-      !shownGamesRef.current.has(game.id)
-    );
+      return isParticipant && needsDisplay;
+    });
 
     if (activeGames.length > 0) {
-      // Show the most recent active game
+      // Show the most recent game
       const game = activeGames[0];
+
+      // Validate before showing
+      const validation = validateGameState(game);
+      if (!validation.valid) {
+        console.warn('⚠️ Skipping invalid game:', validation.errors);
+        return;
+      }
+
+      console.log(`📢 Showing modal for game ${game.id} (${game.status})`);
 
       // Mark as shown
       shownGamesRef.current.add(game.id);
@@ -85,28 +77,14 @@ export function useActiveGameMonitor() {
       // Update store
       setActiveGame(game);
       setActiveGameId(game.id);
-
-      // Show modal
       setSessionGame(game);
       setShowSessionModal(true);
 
-      // If game is matched, also set the match modal flag for other components
       if (game.status === 'matched') {
         setShowMatchModal(true);
       }
     }
-  }, [games, setActiveGame, setActiveGameId, setShowMatchModal]);
-
-  // Update the session game when the status changes (e.g., matched → resolved)
-  useEffect(() => {
-    if (!sessionGame || !games) return;
-
-    const updatedGame = games.find((g) => g.id === sessionGame.id);
-    if (updatedGame && updatedGame.status !== sessionGame.status) {
-      // Game status changed, update the session game
-      setSessionGame(updatedGame);
-    }
-  }, [games, sessionGame]);
+  }, [games, address, setActiveGame, setActiveGameId, setShowMatchModal]);
 
   const handleCloseModal = () => {
     setShowSessionModal(false);
