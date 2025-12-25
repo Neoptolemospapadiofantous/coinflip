@@ -91,19 +91,19 @@ async function processGameCreated(log: any) {
 
   console.log(`📝 GameCreated: ID=${gameId}, Creator=${creator}, Tier=${tier}`);
 
-  const { error } = await supabase.from('games').insert({
+  const { error } = await supabase.from('games').upsert({
     id: gameId.toString(),
-    tx_hash: txHash,
+    tx_hash: txHash.toLowerCase(),
     tier: Number(tier),
     amount: amount.toString(),
     creator_address: creator.toLowerCase(),
     creator_choice: choice,
     status: 'pending',
     block_number: blockNumber.toString(),
-  });
+  }, { onConflict: 'id', ignoreDuplicates: true });
 
   if (error) {
-    console.error('❌ Error inserting game:', error);
+    console.error('❌ Error upserting game:', error);
   }
 }
 
@@ -124,7 +124,7 @@ async function processGameJoined(log: any) {
           joiner_address: joiner.toLowerCase(),
           joiner_choice: choice,
           status: 'matched',
-          matched_tx_hash: txHash,
+          matched_tx_hash: txHash.toLowerCase(),
           matched_block_number: blockNumber.toString(),
           matched_at: new Date().toISOString(),
         })
@@ -185,7 +185,7 @@ async function processGameResolved(log: any) {
           coin_result: coinResult,
           payout: payout.toString(),
           status: 'resolved',
-          resolved_tx_hash: txHash,
+          resolved_tx_hash: txHash.toLowerCase(),
           resolved_block_number: blockNumber.toString(),
           resolved_at: new Date().toISOString(),
         })
@@ -213,7 +213,7 @@ async function processGameCancelled(log: any) {
     .from('games')
     .update({
       status: 'cancelled',
-      cancelled_tx_hash: txHash,
+      cancelled_tx_hash: txHash.toLowerCase(),
       cancelled_block_number: blockNumber.toString(),
       cancelled_at: new Date().toISOString(),
     })
