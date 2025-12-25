@@ -11,6 +11,9 @@ const GAME_TIMEOUT_MS = 20 * 60 * 1000;
 // Check interval (every 30 seconds)
 const CHECK_INTERVAL_MS = 30 * 1000;
 
+// Persist expired game IDs across component lifecycles to prevent duplicate modals
+const globalExpiredGameIds = new Set<string>();
+
 interface TimeoutInfo {
   gameId: string;
   createdAt: Date;
@@ -27,7 +30,8 @@ export function useGameTimeout() {
   const { activeGames, queueModal, removeActiveGame } = useGameStore();
 
   const [pendingTimeouts, setPendingTimeouts] = useState<TimeoutInfo[]>([]);
-  const [expiredGameIds, setExpiredGameIds] = useState<Set<string>>(new Set());
+  // Use a ref instead of state to avoid re-render loops
+  const expiredGameIdsRef = useRef<Set<string>>(globalExpiredGameIds);
   const mountedRef = useRef(true);
 
   // Get user's pending games from active games (Map -> Array)
@@ -66,8 +70,9 @@ export function useGameTimeout() {
     const now = new Date();
 
     for (const timeout of pendingTimeouts) {
-      // Skip if already notified about this game
-      if (expiredGameIds.has(timeout.gameId)) continue;
+      // Skip if already notified about this game (check both local ref and global set)
+      if (expiredGameIdsRef.current.has(timeout.gameId)) continue;
+      if (globalExpiredGameIds.has(timeout.gameId)) continue;
 
       if (now >= timeout.timeoutAt) {
         console.log(`⏰ Game ${timeout.gameId} expired - showing notification`);
@@ -75,21 +80,20 @@ export function useGameTimeout() {
         // Find the game to show in popup
         const game = userPendingGames.find((g) => g.id === timeout.gameId);
         if (game) {
-          // Mark as notified
-          setExpiredGameIds((prev) => new Set(prev).add(timeout.gameId));
+          // Mark as notified in both ref and global set (prevents duplicates across re-renders)
+          expiredGameIdsRef.current.add(timeout.gameId);
+          globalExpiredGameIds.add(timeout.gameId);
 
-          // Queue a timeout modal (user needs to manually cancel)
-          queueModal(
-            { ...game, status: 'cancelled' } as Game,
-            'timeout'
-          );
+          // Queue an expired modal (user needs to manually cancel for refund)
+          // Keep the original 'pending' status - don't fake it as cancelled
+          queueModal(game, 'expired');
 
-          // Remove from active games UI (but not cancelled on-chain yet)
-          removeActiveGame(timeout.gameId);
+          // Don't remove from active games - user still needs to cancel
+          // removeActiveGame(timeout.gameId);
         }
       }
     }
-  }, [pendingTimeouts, userPendingGames, expiredGameIds, queueModal, removeActiveGame]);
+  }, [pendingTimeouts, userPendingGames, queueModal]);
 
   // Check for expired games periodically
   useEffect(() => {
@@ -135,6 +139,6 @@ export function useGameTimeout() {
     pendingTimeouts,
     getTimeRemaining,
     formatTimeRemaining,
-    expiredGameIds,
+    expiredGameIds: expiredGameIdsRef.current,
   };
 }

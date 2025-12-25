@@ -11,7 +11,7 @@ interface ActiveGameEntry {
 
 interface ModalQueueEntry {
   game: Game;
-  type: 'matched' | 'resolved' | 'timeout';
+  type: 'matched' | 'resolved' | 'expired';
 }
 
 interface GameState {
@@ -22,8 +22,12 @@ interface GameState {
   // Multiple active games tracking
   activeGames: Map<string, ActiveGameEntry>;
 
+  // Games being cancelled (for optimistic UI)
+  cancellingGames: Set<string>;
+
   // Current focused game (for modal display)
   currentModalGame: Game | null;
+  currentModalType: 'matched' | 'resolved' | 'expired' | null;
 
   // Modal queue for results (FIFO)
   modalQueue: ModalQueueEntry[];
@@ -44,8 +48,13 @@ interface GameState {
   getActiveGamesCount: () => number;
   canCreateNewGame: () => boolean;
 
+  // Actions - Optimistic cancel
+  startCancellingGame: (gameId: string) => void;
+  finishCancellingGame: (gameId: string, success: boolean) => void;
+  isGameCancelling: (gameId: string) => boolean;
+
   // Actions - Modal queue management
-  queueModal: (game: Game, type: 'matched' | 'resolved' | 'timeout') => void;
+  queueModal: (game: Game, type: 'matched' | 'resolved' | 'expired') => void;
   showNextModal: () => void;
   closeCurrentModal: () => void;
 
@@ -64,7 +73,9 @@ export const useGameStore = create<GameState>((set, get) => ({
   selectedTier: null,
   coinChoice: null,
   activeGames: new Map(),
+  cancellingGames: new Set(),
   currentModalGame: null,
+  currentModalType: null,
   modalQueue: [],
   showGameModal: false,
 
@@ -119,6 +130,31 @@ export const useGameStore = create<GameState>((set, get) => ({
 
   canCreateNewGame: () => get().activeGames.size < MAX_CONCURRENT_GAMES,
 
+  // Optimistic cancel actions
+  startCancellingGame: (gameId) =>
+    set((state) => {
+      const newSet = new Set(state.cancellingGames);
+      newSet.add(gameId);
+      return { cancellingGames: newSet };
+    }),
+
+  finishCancellingGame: (gameId, success) =>
+    set((state) => {
+      const newSet = new Set(state.cancellingGames);
+      newSet.delete(gameId);
+
+      // If success, remove from active games
+      if (success) {
+        const newMap = new Map(state.activeGames);
+        newMap.delete(gameId);
+        return { cancellingGames: newSet, activeGames: newMap };
+      }
+
+      return { cancellingGames: newSet };
+    }),
+
+  isGameCancelling: (gameId) => get().cancellingGames.has(gameId),
+
   // Modal queue management
   queueModal: (game, type) =>
     set((state) => {
@@ -127,6 +163,15 @@ export const useGameStore = create<GameState>((set, get) => ({
         (entry) => entry.game.id === game.id && entry.type === type
       );
       if (alreadyQueued) return state;
+
+      // Don't queue if this exact game+type is already the current modal
+      if (
+        state.currentModalGame?.id === game.id &&
+        state.currentModalType === type &&
+        state.showGameModal
+      ) {
+        return state;
+      }
 
       // If currently showing this game as 'matched' and new type is 'resolved',
       // update the current modal instead of queueing
@@ -137,6 +182,7 @@ export const useGameStore = create<GameState>((set, get) => ({
       ) {
         return {
           currentModalGame: game,
+          currentModalType: type,
           // Legacy compatibility
           activeGame: game,
           showMatchModal: false,
@@ -160,6 +206,7 @@ export const useGameStore = create<GameState>((set, get) => ({
           return {
             modalQueue: newQueue,
             currentModalGame: nextEntry.game,
+            currentModalType: nextEntry.type,
             showGameModal: true,
             // Legacy compatibility
             activeGame: nextEntry.game,
@@ -177,6 +224,7 @@ export const useGameStore = create<GameState>((set, get) => ({
       if (state.modalQueue.length === 0) {
         return {
           currentModalGame: null,
+          currentModalType: null,
           showGameModal: false,
           activeGame: null,
           activeGameId: null,
@@ -191,6 +239,7 @@ export const useGameStore = create<GameState>((set, get) => ({
         return {
           modalQueue: newQueue,
           currentModalGame: nextEntry.game,
+          currentModalType: nextEntry.type,
           showGameModal: true,
           activeGame: nextEntry.game,
           activeGameId: nextEntry.game.id,
@@ -229,6 +278,7 @@ export const useGameStore = create<GameState>((set, get) => ({
       activeGame: null,
       showMatchModal: false,
       currentModalGame: null,
+      currentModalType: null,
       showGameModal: false,
     }),
 }));
