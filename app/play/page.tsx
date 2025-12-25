@@ -25,6 +25,7 @@ import { Info, Loader2, CheckCircle2, AlertCircle, Clock, Users, X, Plus, Gamepa
 import { parseError } from '@/lib/errors';
 import { Game } from '@/types/game';
 import { useQueryClient } from '@tanstack/react-query';
+import { invalidateGameQueries } from '@/lib/queryUtils';
 
 enum GameStep {
   SELECT_TIER = 'select_tier',
@@ -60,6 +61,7 @@ export default function PlayPage() {
   const isCancellingRef = useRef(false);
   const isMatchedRef = useRef(false);
   const mountedRef = useRef(true);
+  const cancelTrackingRef = useRef<(() => void) | null>(null);
 
   const currentTier = tiers?.find((t) => t.id === selectedTier);
   const activeGamesCount = getActiveGamesCount();
@@ -90,14 +92,26 @@ export default function PlayPage() {
     console.log('🎮 Game matched! Queueing modal...');
     updateActiveGame(game);
     queueModal(game, 'matched');
-  }, [updateActiveGame, queueModal]);
+    // Reset creation UI after a brief delay to show transition
+    setTimeout(() => {
+      if (mountedRef.current) {
+        cancelTrackingRef.current?.();
+        resetGameCreation();
+        setStep(GameStep.SELECT_TIER);
+      }
+    }, 500);
+  }, [updateActiveGame, queueModal, resetGameCreation]);
 
   const handleGameResolved = useCallback((game: Game) => {
     if (!mountedRef.current) return;
     console.log('🎮 Game resolved:', game.winner_address);
     updateActiveGame(game);
     queueModal(game, 'resolved');
-  }, [updateActiveGame, queueModal]);
+    // Reset creation UI immediately
+    cancelTrackingRef.current?.();
+    resetGameCreation();
+    setStep(GameStep.SELECT_TIER);
+  }, [updateActiveGame, queueModal, resetGameCreation]);
 
   const handleGameCancelled = useCallback((game: Game) => {
     if (!mountedRef.current) return;
@@ -121,6 +135,9 @@ export default function PlayPage() {
     onGameCancelled: handleGameCancelled,
   });
 
+  // Sync cancelTracking to ref for use in callbacks
+  cancelTrackingRef.current = cancelTracking;
+
   // Cleanup on unmount
   useEffect(() => {
     mountedRef.current = true;
@@ -137,11 +154,7 @@ export default function PlayPage() {
       finishCancellingGame(trackedGame.id, true);
 
       // Invalidate all game queries for real-time sync across pages
-      queryClient.invalidateQueries({ queryKey: ['games', 'pending'] });
-      queryClient.invalidateQueries({ queryKey: ['games', 'active'] });
-      queryClient.invalidateQueries({ queryKey: ['games', 'player'] });
-      queryClient.invalidateQueries({ queryKey: ['game', trackedGame.id] });
-      queryClient.invalidateQueries({ queryKey: ['game-stats'] });
+      invalidateGameQueries(queryClient, trackedGame.id);
 
       cancelTracking();
       handleReset();
@@ -215,22 +228,43 @@ export default function PlayPage() {
   };
 
   // Parse cancel error message
-  const getCancelErrorMessage = (err: Error | null): string => {
-    if (!err) return '';
+  const getCancelErrorMessage = (err: Error | null): { title: string; message: string; isMatchedError: boolean } => {
+    if (!err) return { title: '', message: '', isMatchedError: false };
     const msg = err.message.toLowerCase();
+
     if (msg.includes('user rejected') || msg.includes('user denied')) {
-      return 'Transaction cancelled by user';
+      return {
+        title: 'Transaction Cancelled',
+        message: 'You cancelled the transaction in your wallet.',
+        isMatchedError: false,
+      };
     }
     if (msg.includes('not creator') || msg.includes('unauthorized')) {
-      return 'Only the game creator can cancel';
+      return {
+        title: 'Unauthorized',
+        message: 'Only the game creator can cancel this game.',
+        isMatchedError: false,
+      };
     }
-    if (msg.includes('not pending') || msg.includes('already matched')) {
-      return 'Game cannot be cancelled (already matched or resolved)';
+    if (msg.includes('not pending') || msg.includes('already matched') || msg.includes('invalidgamestate')) {
+      return {
+        title: 'Good News!',
+        message: 'Your game was just matched with an opponent! The coin flip is starting.',
+        isMatchedError: true,
+      };
     }
-    if (msg.includes('gas')) {
-      return 'Transaction failed - game may already be matched or cancelled';
+    if (msg.includes('gas') || msg.includes('execution reverted')) {
+      return {
+        title: 'Game Already Matched',
+        message: 'Someone joined your game! The coin flip should start any moment.',
+        isMatchedError: true,
+      };
     }
-    return 'Failed to cancel game. It may have already been joined.';
+    return {
+      title: 'Cancel Failed',
+      message: 'Unable to cancel. The game may have already been joined.',
+      isMatchedError: false,
+    };
   };
 
   // Determine if cancel button should be disabled
@@ -413,8 +447,15 @@ export default function PlayPage() {
                       <Button size="4" variant="soft" onClick={() => setStep(GameStep.CHOOSE_SIDE)}>
                         Back
                       </Button>
-                      <Button size="4" className="flex-1" onClick={handleCreateGame} disabled={!canCreate || isLoading}>
-                        {isLoading ? 'Creating...' : 'Create Game'}
+                      <Button size="4" className="flex-1 glow-cyan hover:scale-105 transition-transform" onClick={handleCreateGame} disabled={!canCreate || isLoading}>
+                        {isLoading ? (
+                          <>
+                            <Loader2 className="w-4 h-4 animate-spin mr-2" />
+                            Creating...
+                          </>
+                        ) : (
+                          'Create Game'
+                        )}
                       </Button>
                     </Flex>
                   </>
@@ -589,16 +630,20 @@ export default function PlayPage() {
 
                           {/* Cancel Error */}
                           {cancelError && (
-                            <Card className="w-full max-w-sm bg-red-500/10 border border-red-500/30">
+                            <Card className={`w-full max-w-sm ${getCancelErrorMessage(cancelError).isMatchedError ? 'bg-green-500/10 border border-green-500/30' : 'bg-red-500/10 border border-red-500/30'}`}>
                               <Flex direction="column" gap="2" p="3" align="center">
                                 <Flex align="center" gap="2">
-                                  <AlertCircle className="w-4 h-4 text-red-400" />
-                                  <Text size="2" className="text-red-400" weight="bold">
-                                    Cancel Failed
+                                  {getCancelErrorMessage(cancelError).isMatchedError ? (
+                                    <CheckCircle2 className="w-4 h-4 text-green-400" />
+                                  ) : (
+                                    <AlertCircle className="w-4 h-4 text-red-400" />
+                                  )}
+                                  <Text size="2" className={getCancelErrorMessage(cancelError).isMatchedError ? 'text-green-400' : 'text-red-400'} weight="bold">
+                                    {getCancelErrorMessage(cancelError).title}
                                   </Text>
                                 </Flex>
                                 <Text size="1" color="gray" align="center">
-                                  {getCancelErrorMessage(cancelError)}
+                                  {getCancelErrorMessage(cancelError).message}
                                 </Text>
                               </Flex>
                             </Card>
