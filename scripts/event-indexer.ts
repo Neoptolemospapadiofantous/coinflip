@@ -109,31 +109,20 @@ async function processGameCreated(log: any) {
 
 // Process GameJoined event
 async function processGameJoined(log: any) {
-  const { gameId, joiner, totalPot } = log.args;
+  const { gameId, joiner, choice } = log.args; // choice is included in the event
   const blockNumber = log.blockNumber;
   const txHash = log.transactionHash;
 
-  console.log(`🤝 GameJoined: ID=${gameId}, Joiner=${joiner}`);
+  console.log(`🤝 GameJoined: ID=${gameId}, Joiner=${joiner}, Choice=${choice}`);
 
   try {
-    // Fetch game to get joiner choice from contract state
-    // Note: GameJoined event doesn't include joiner's choice, so we read from contract
-    const gameData = await publicClient.readContract({
-      address: CONTRACT_ADDRESS,
-      abi: COINFLIP_ABI,
-      functionName: 'games',
-      args: [BigInt(gameId.toString())],
-    }) as any;
-
-    const joinerChoice = gameData.joinerChoice;
-
-    // Update game with retry
+    // Update game with retry - choice is directly from the event
     await retryOperation(async () => {
       const { error } = await supabase
         .from('games')
         .update({
           joiner_address: joiner.toLowerCase(),
-          joiner_choice: joinerChoice,
+          joiner_choice: choice,
           status: 'matched',
           matched_tx_hash: txHash,
           matched_block_number: blockNumber.toString(),
@@ -144,7 +133,7 @@ async function processGameJoined(log: any) {
       if (error) throw error;
     });
 
-    console.log(`✅ Game ${gameId} matched with joiner choice: ${joinerChoice}`);
+    console.log(`✅ Game ${gameId} matched with joiner choice: ${choice}`);
   } catch (error) {
     console.error(`❌ Error processing GameJoined for game ${gameId}:`, error);
     throw error;

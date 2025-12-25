@@ -1,66 +1,70 @@
 // Sound effects using HTML5 Audio API
 // Note: Sound files would need to be added to public/sounds/ directory
+// Sounds are lazy-loaded on first play to avoid 404 errors if files don't exist
 
 class SoundManager {
   private sounds: Map<string, HTMLAudioElement> = new Map();
+  private failedSounds: Set<string> = new Set();
   private enabled: boolean = true;
 
-  constructor() {
-    // Only initialize in browser environment
-    if (typeof window !== 'undefined') {
-      this.loadSounds();
+  // Sound file paths
+  private readonly soundFiles: Record<string, string> = {
+    coinFlip: '/sounds/coin-flip.mp3',
+    win: '/sounds/win.mp3',
+    loss: '/sounds/loss.mp3',
+    click: '/sounds/click.mp3',
+    success: '/sounds/success.mp3',
+    error: '/sounds/error.mp3',
+    match: '/sounds/match.mp3',
+    countdown: '/sounds/countdown.mp3',
+  };
+
+  // Lazy load a sound on first play
+  private getOrLoadSound(name: string): HTMLAudioElement | null {
+    if (typeof window === 'undefined') return null;
+    if (this.failedSounds.has(name)) return null;
+
+    let sound = this.sounds.get(name);
+    if (sound) return sound;
+
+    const path = this.soundFiles[name];
+    if (!path) return null;
+
+    try {
+      sound = new Audio(path);
+      sound.preload = 'auto';
+
+      // Handle loading errors
+      sound.addEventListener('error', () => {
+        this.sounds.delete(name);
+        this.failedSounds.add(name);
+      });
+
+      this.sounds.set(name, sound);
+      return sound;
+    } catch {
+      this.failedSounds.add(name);
+      return null;
     }
-  }
-
-  private loadSounds() {
-    // Define sound effects
-    const soundFiles = {
-      coinFlip: '/sounds/coin-flip.mp3',
-      win: '/sounds/win.mp3',
-      loss: '/sounds/loss.mp3',
-      click: '/sounds/click.mp3',
-      success: '/sounds/success.mp3',
-      error: '/sounds/error.mp3',
-      match: '/sounds/match.mp3',
-      countdown: '/sounds/countdown.mp3',
-    };
-
-    // Preload sounds with error handling
-    Object.entries(soundFiles).forEach(([name, path]) => {
-      try {
-        const audio = new Audio(path);
-        audio.preload = 'auto';
-
-        // Handle loading errors gracefully
-        audio.addEventListener('error', () => {
-          console.warn(`Failed to load sound: ${name} from ${path}`);
-          this.sounds.delete(name); // Remove failed sound from map
-        });
-
-        this.sounds.set(name, audio);
-      } catch (err) {
-        console.warn(`Error initializing sound: ${name}`, err);
-      }
-    });
   }
 
   play(soundName: string, volume: number = 0.5) {
     if (!this.enabled) return;
 
-    const sound = this.sounds.get(soundName);
-    if (sound) {
-      try {
-        sound.volume = volume;
-        sound.currentTime = 0;
-        sound.play().catch((err) => {
-          // Silently fail if autoplay is blocked or sound unavailable
-          if (err.name !== 'NotAllowedError') {
-            console.warn(`Failed to play sound: ${soundName}`, err.message);
-          }
-        });
-      } catch (err) {
-        console.warn(`Error playing sound: ${soundName}`, err);
-      }
+    const sound = this.getOrLoadSound(soundName);
+    if (!sound) return;
+
+    try {
+      sound.volume = volume;
+      sound.currentTime = 0;
+      sound.play().catch((err) => {
+        // Silently fail if autoplay is blocked or sound unavailable
+        if (err.name !== 'NotAllowedError' && err.name !== 'NotSupportedError') {
+          // Sound file doesn't exist or failed to load - silently ignore
+        }
+      });
+    } catch {
+      // Silently ignore errors
     }
   }
 
@@ -92,6 +96,3 @@ export const playSound = {
   match: () => soundManager.play('match', 0.6),
   countdown: () => soundManager.play('countdown', 0.4),
 };
-
-// For now, we'll use beep sounds as fallback until actual sound files are added
-// You can replace these with actual sound files in public/sounds/

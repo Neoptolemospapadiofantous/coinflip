@@ -1,47 +1,225 @@
 import { create } from 'zustand';
-import { Game, GameStatus } from '@/types/game';
+import { Game } from '@/types/game';
+
+// Maximum number of concurrent games a player can have
+export const MAX_CONCURRENT_GAMES = 5;
+
+interface ActiveGameEntry {
+  game: Game;
+  addedAt: number;
+}
+
+interface ModalQueueEntry {
+  game: Game;
+  type: 'matched' | 'resolved';
+}
 
 interface GameState {
-  // Current game flow
+  // Current game creation flow
   selectedTier: number | null;
   coinChoice: boolean | null; // false = heads, true = tails
-  activeGameId: string | null;
-  activeGame: Game | null;
+
+  // Multiple active games tracking
+  activeGames: Map<string, ActiveGameEntry>;
+
+  // Current focused game (for modal display)
+  currentModalGame: Game | null;
+
+  // Modal queue for results (FIFO)
+  modalQueue: ModalQueueEntry[];
 
   // UI state
-  showMatchModal: boolean;
-  showResultModal: boolean;
-  showCoinFlipAnimation: boolean;
+  showGameModal: boolean;
 
-  // Actions
+  // Actions - Game creation
   setSelectedTier: (tier: number | null) => void;
   setCoinChoice: (choice: boolean | null) => void;
+  resetGameCreation: () => void;
+
+  // Actions - Active games management
+  addActiveGame: (game: Game) => void;
+  updateActiveGame: (game: Game) => void;
+  removeActiveGame: (gameId: string) => void;
+  getActiveGame: (gameId: string) => Game | undefined;
+  getActiveGamesCount: () => number;
+  canCreateNewGame: () => boolean;
+
+  // Actions - Modal queue management
+  queueModal: (game: Game, type: 'matched' | 'resolved') => void;
+  showNextModal: () => void;
+  closeCurrentModal: () => void;
+
+  // Legacy compatibility
+  activeGameId: string | null;
+  activeGame: Game | null;
+  showMatchModal: boolean;
   setActiveGameId: (id: string | null) => void;
   setActiveGame: (game: Game | null) => void;
   setShowMatchModal: (show: boolean) => void;
-  setShowResultModal: (show: boolean) => void;
-  setShowCoinFlipAnimation: (show: boolean) => void;
   resetGame: () => void;
 }
 
-export const useGameStore = create<GameState>((set) => ({
+export const useGameStore = create<GameState>((set, get) => ({
   // Initial state
   selectedTier: null,
   coinChoice: null,
+  activeGames: new Map(),
+  currentModalGame: null,
+  modalQueue: [],
+  showGameModal: false,
+
+  // Legacy state (for compatibility)
   activeGameId: null,
   activeGame: null,
   showMatchModal: false,
-  showResultModal: false,
-  showCoinFlipAnimation: false,
 
-  // Actions
+  // Game creation actions
   setSelectedTier: (tier) => set({ selectedTier: tier }),
   setCoinChoice: (choice) => set({ coinChoice: choice }),
+
+  resetGameCreation: () =>
+    set({
+      selectedTier: null,
+      coinChoice: null,
+    }),
+
+  // Active games management
+  addActiveGame: (game) =>
+    set((state) => {
+      const newMap = new Map(state.activeGames);
+      newMap.set(game.id, { game, addedAt: Date.now() });
+      return { activeGames: newMap };
+    }),
+
+  updateActiveGame: (game) =>
+    set((state) => {
+      const newMap = new Map(state.activeGames);
+      const existing = newMap.get(game.id);
+      if (existing) {
+        newMap.set(game.id, { ...existing, game });
+      } else {
+        newMap.set(game.id, { game, addedAt: Date.now() });
+      }
+      return { activeGames: newMap };
+    }),
+
+  removeActiveGame: (gameId) =>
+    set((state) => {
+      const newMap = new Map(state.activeGames);
+      newMap.delete(gameId);
+      return { activeGames: newMap };
+    }),
+
+  getActiveGame: (gameId) => {
+    const entry = get().activeGames.get(gameId);
+    return entry?.game;
+  },
+
+  getActiveGamesCount: () => get().activeGames.size,
+
+  canCreateNewGame: () => get().activeGames.size < MAX_CONCURRENT_GAMES,
+
+  // Modal queue management
+  queueModal: (game, type) =>
+    set((state) => {
+      // Don't queue if exact same entry already in queue
+      const alreadyQueued = state.modalQueue.some(
+        (entry) => entry.game.id === game.id && entry.type === type
+      );
+      if (alreadyQueued) return state;
+
+      // If currently showing this game as 'matched' and new type is 'resolved',
+      // update the current modal instead of queueing
+      if (
+        state.currentModalGame?.id === game.id &&
+        state.showGameModal &&
+        type === 'resolved'
+      ) {
+        return {
+          currentModalGame: game,
+          // Legacy compatibility
+          activeGame: game,
+          showMatchModal: false,
+        };
+      }
+
+      // Remove any existing 'matched' entry for this game if we're queueing 'resolved'
+      let newQueue = [...state.modalQueue];
+      if (type === 'resolved') {
+        newQueue = newQueue.filter(
+          (entry) => !(entry.game.id === game.id && entry.type === 'matched')
+        );
+      }
+
+      newQueue.push({ game, type });
+
+      // If no modal currently showing, show this one immediately
+      if (!state.showGameModal && !state.currentModalGame) {
+        const nextEntry = newQueue.shift();
+        if (nextEntry) {
+          return {
+            modalQueue: newQueue,
+            currentModalGame: nextEntry.game,
+            showGameModal: true,
+            // Legacy compatibility
+            activeGame: nextEntry.game,
+            activeGameId: nextEntry.game.id,
+            showMatchModal: nextEntry.type === 'matched',
+          };
+        }
+      }
+
+      return { modalQueue: newQueue };
+    }),
+
+  showNextModal: () =>
+    set((state) => {
+      if (state.modalQueue.length === 0) {
+        return {
+          currentModalGame: null,
+          showGameModal: false,
+          activeGame: null,
+          activeGameId: null,
+          showMatchModal: false,
+        };
+      }
+
+      const newQueue = [...state.modalQueue];
+      const nextEntry = newQueue.shift();
+
+      if (nextEntry) {
+        return {
+          modalQueue: newQueue,
+          currentModalGame: nextEntry.game,
+          showGameModal: true,
+          activeGame: nextEntry.game,
+          activeGameId: nextEntry.game.id,
+          showMatchModal: nextEntry.type === 'matched',
+        };
+      }
+
+      return state;
+    }),
+
+  closeCurrentModal: () => {
+    const state = get();
+
+    // Remove the game from active games if it's resolved or cancelled
+    if (state.currentModalGame) {
+      const game = state.currentModalGame;
+      if (game.status === 'resolved' || game.status === 'cancelled') {
+        get().removeActiveGame(game.id);
+      }
+    }
+
+    // Show next modal if any
+    get().showNextModal();
+  },
+
+  // Legacy compatibility actions
   setActiveGameId: (id) => set({ activeGameId: id }),
   setActiveGame: (game) => set({ activeGame: game }),
   setShowMatchModal: (show) => set({ showMatchModal: show }),
-  setShowResultModal: (show) => set({ showResultModal: show }),
-  setShowCoinFlipAnimation: (show) => set({ showCoinFlipAnimation: show }),
 
   resetGame: () =>
     set({
@@ -50,7 +228,15 @@ export const useGameStore = create<GameState>((set) => ({
       activeGameId: null,
       activeGame: null,
       showMatchModal: false,
-      showResultModal: false,
-      showCoinFlipAnimation: false,
+      currentModalGame: null,
+      showGameModal: false,
     }),
 }));
+
+// Helper hook to get active games as array (sorted by creation time)
+export function useActiveGamesList() {
+  const activeGames = useGameStore((state) => state.activeGames);
+  return Array.from(activeGames.values())
+    .sort((a, b) => b.addedAt - a.addedAt)
+    .map((entry) => entry.game);
+}

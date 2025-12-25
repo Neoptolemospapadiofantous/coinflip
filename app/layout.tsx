@@ -5,6 +5,7 @@ import './globals.css';
 import { Providers } from '@/components/Providers';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { Theme } from '@radix-ui/themes';
+import { ActiveGamesPanel } from '@/components/game/ActiveGamesPanel';
 
 const inter = Inter({ subsets: ['latin'] });
 
@@ -31,7 +32,10 @@ export default function RootLayout({
           panelBackground="solid"
         >
           <ErrorBoundary>
-            <Providers>{children}</Providers>
+            <Providers>
+              {children}
+              <ActiveGamesPanel />
+            </Providers>
           </ErrorBoundary>
         </Theme>
       </body>

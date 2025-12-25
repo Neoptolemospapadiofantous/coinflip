@@ -1,6 +1,14 @@
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
 import { Game } from '@/types/game';
+
+/**
+ * Game data hooks
+ *
+ * These hooks fetch data from Supabase.
+ * Real-time updates are handled centrally by useRealtimeSync (in Providers).
+ * No individual subscriptions needed - the central sync invalidates these queries automatically.
+ */
 
 // Fetch all games
 export function useGames() {
@@ -19,9 +27,9 @@ export function useGames() {
 
       return data || [];
     },
-    staleTime: 5000, // 5 seconds
-    refetchInterval: 10000, // Refetch every 10 seconds
-    retry: 2, // Retry failed requests twice
+    staleTime: 60000, // 1 minute - central sync handles freshness
+    refetchInterval: false, // Disabled - central sync invalidates when needed
+    retry: 2,
   });
 }
 
@@ -43,8 +51,8 @@ export function usePendingGames() {
 
       return data || [];
     },
-    staleTime: 3000,
-    refetchInterval: 5000, // Refresh often for queue
+    staleTime: 30000, // 30 seconds
+    refetchInterval: false, // Disabled - central sync handles updates
     retry: 2,
   });
 }
@@ -66,13 +74,14 @@ export function useActiveGames() {
 
       return data || [];
     },
-    staleTime: 3000,
-    refetchInterval: 5000,
+    staleTime: 30000, // 30 seconds
+    refetchInterval: false, // Disabled - central sync handles updates
     retry: 2,
   });
 }
 
 // Fetch games by player address
+// Real-time updates handled by central sync (useRealtimeSync)
 export function usePlayerGames(address: string | undefined) {
   return useQuery({
     queryKey: ['games', 'player', address],
@@ -95,8 +104,8 @@ export function usePlayerGames(address: string | undefined) {
       return data || [];
     },
     enabled: !!address,
-    staleTime: 5000,
-    refetchInterval: 10000,
+    staleTime: 30000, // 30 seconds
+    refetchInterval: false, // Disabled - central sync handles updates
     retry: 2,
   });
 }
@@ -122,12 +131,13 @@ export function useGame(gameId: string | null) {
       return data;
     },
     enabled: !!gameId,
-    staleTime: 3000,
-    refetchInterval: 5000, // Poll for updates
+    staleTime: 60000, // 1 minute
+    refetchInterval: false, // Disabled - useGameSync handles real-time updates
   });
 }
 
 // Fetch game statistics
+// Real-time updates handled by central sync (useRealtimeSync)
 export function useGameStats() {
   return useQuery({
     queryKey: ['game-stats'],
@@ -145,63 +155,6 @@ export function useGameStats() {
       return data;
     },
     staleTime: 30000, // 30 seconds
-    refetchInterval: 60000, // Refresh every minute
+    refetchInterval: false, // Disabled - central sync handles updates
   });
-}
-
-// Subscribe to real-time game updates
-export function useGameSubscription(gameId: string | null, callback: (game: Game) => void) {
-  const queryClient = useQueryClient();
-
-  if (!gameId) return;
-
-  const subscription = supabase
-    .channel(`game:${gameId}`)
-    .on(
-      'postgres_changes',
-      {
-        event: 'UPDATE',
-        schema: 'public',
-        table: 'games',
-        filter: `id=eq.${gameId}`,
-      },
-      (payload) => {
-        callback(payload.new as Game);
-
-        // Invalidate queries to refetch
-        queryClient.invalidateQueries({ queryKey: ['game', gameId] });
-        queryClient.invalidateQueries({ queryKey: ['games'] });
-      }
-    )
-    .subscribe();
-
-  return () => {
-    subscription.unsubscribe();
-  };
-}
-
-// Subscribe to new pending games
-export function usePendingGamesSubscription(callback: () => void) {
-  const queryClient = useQueryClient();
-
-  const subscription = supabase
-    .channel('pending-games')
-    .on(
-      'postgres_changes',
-      {
-        event: 'INSERT',
-        schema: 'public',
-        table: 'games',
-      },
-      () => {
-        callback();
-        queryClient.invalidateQueries({ queryKey: ['games', 'pending'] });
-        queryClient.invalidateQueries({ queryKey: ['games', 'active'] });
-      }
-    )
-    .subscribe();
-
-  return () => {
-    subscription.unsubscribe();
-  };
 }

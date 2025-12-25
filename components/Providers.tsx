@@ -6,6 +6,7 @@ import { RainbowKitProvider } from '@rainbow-me/rainbowkit';
 import { config } from '@/lib/wagmi';
 import { useState } from 'react';
 import { GameMonitor } from './GameMonitor';
+import { RealtimeSyncProvider } from '@/hooks/useRealtimeSync';
 
 import '@rainbow-me/rainbowkit/styles.css';
 
@@ -16,8 +17,10 @@ export function Providers({ children }: { children: React.ReactNode }) {
     <WagmiProvider config={config}>
       <QueryClientProvider client={queryClient}>
         <RainbowKitProvider>
-          {children}
-          <GameMonitor />
+          <RealtimeSyncProvider>
+            {children}
+            <GameMonitor />
+          </RealtimeSyncProvider>
         </RainbowKitProvider>
       </QueryClientProvider>
     </WagmiProvider>

@@ -1,8 +1,16 @@
-import { useWriteContract, useWaitForTransactionReceipt, useReadContract } from 'wagmi';
+import { useWriteContract, useWaitForTransactionReceipt, useReadContract, usePublicClient } from 'wagmi';
 import { COINFLIP_ABI } from '@/lib/contracts/abi';
 import { getCoinFlipAddress } from '@/lib/contracts/addresses';
 import { useChainId } from 'wagmi';
 import { parseEther } from 'viem';
+
+// Game status enum matching contract
+export enum GameStatus {
+  Open = 0,
+  Matched = 1,
+  Resolved = 2,
+  Cancelled = 3,
+}
 
 // Hook to create a game
 export function useCreateGame() {
@@ -14,6 +22,7 @@ export function useCreateGame() {
     data: hash,
     isPending: isWriting,
     error: writeError,
+    reset,
   } = useWriteContract();
 
   const { isLoading: isConfirming, isSuccess } = useWaitForTransactionReceipt({
@@ -36,6 +45,7 @@ export function useCreateGame() {
     isSuccess,
     txHash: hash,
     error: writeError,
+    reset,
   };
 }
 
@@ -49,6 +59,7 @@ export function useJoinGame() {
     data: hash,
     isPending: isWriting,
     error: writeError,
+    reset,
   } = useWriteContract();
 
   const { isLoading: isConfirming, isSuccess } = useWaitForTransactionReceipt({
@@ -68,9 +79,11 @@ export function useJoinGame() {
   return {
     joinGame,
     isLoading: isWriting || isConfirming,
+    isConfirming, // Expose confirming state separately
     isSuccess,
     txHash: hash,
     error: writeError,
+    reset,
   };
 }
 
@@ -135,6 +148,40 @@ export function useGameData(gameId: string | null) {
       refetchInterval: 5000, // Refetch every 5 seconds
     },
   });
+}
+
+// Hook to get a function that checks game status on-chain (for use in callbacks)
+export function useCheckGameStatus() {
+  const publicClient = usePublicClient();
+  const chainId = useChainId();
+  const contractAddress = getCoinFlipAddress(chainId);
+
+  return async (gameId: string): Promise<GameStatus | null> => {
+    if (!publicClient) return null;
+
+    try {
+      const result = await publicClient.readContract({
+        address: contractAddress,
+        abi: COINFLIP_ABI,
+        functionName: 'getGame',
+        args: [BigInt(gameId)],
+      }) as readonly [string, string, number, bigint, boolean, boolean, boolean, string, number];
+
+      console.log(`🔍 On-chain game ${gameId}:`, {
+        creator: result[0],
+        joiner: result[1],
+        tier: result[2],
+        amount: result[3].toString(),
+        status: result[8],
+      });
+
+      // result is a tuple, status is at index 8
+      return result[8] as GameStatus;
+    } catch (err) {
+      console.error(`❌ Error reading game ${gameId}:`, err);
+      return null;
+    }
+  };
 }
 
 // Hook to get tier amount

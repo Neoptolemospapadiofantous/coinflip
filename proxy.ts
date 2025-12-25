@@ -59,7 +59,7 @@ function getCSP() {
       style-src 'self' 'unsafe-inline' https://fonts.googleapis.com;
       font-src 'self' https://fonts.gstatic.com;
       img-src 'self' data: https: blob:;
-      connect-src 'self' https://*.supabase.co https://*.alchemy.com https://*.infura.io https://*.walletconnect.com https://*.walletconnect.org https://*.web3modal.org wss://*.walletconnect.com wss://*.walletconnect.org https://vercel.live wss://vercel.live;
+      connect-src 'self' https://*.supabase.co wss://*.supabase.co https://*.alchemy.com https://*.infura.io https://*.walletconnect.com https://*.walletconnect.org https://*.web3modal.org wss://*.walletconnect.com wss://*.walletconnect.org https://vercel.live wss://vercel.live;
       frame-src 'self';
       object-src 'none';
       base-uri 'self';
@@ -76,7 +76,7 @@ function getCSP() {
     style-src 'self' 'sha256-YOUR_INLINE_STYLE_HASH' https://fonts.googleapis.com;
     font-src 'self' https://fonts.gstatic.com;
     img-src 'self' data: https: blob:;
-    connect-src 'self' https://*.supabase.co https://*.alchemy.com https://*.infura.io https://*.walletconnect.com https://*.walletconnect.org https://*.web3modal.org wss://*.walletconnect.com wss://*.walletconnect.org;
+    connect-src 'self' https://*.supabase.co wss://*.supabase.co https://*.alchemy.com https://*.infura.io https://*.walletconnect.com https://*.walletconnect.org https://*.web3modal.org wss://*.walletconnect.com wss://*.walletconnect.org;
     frame-src 'self';
     object-src 'none';
     base-uri 'self';

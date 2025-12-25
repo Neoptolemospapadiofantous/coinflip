@@ -1,7 +1,6 @@
 'use client';
 
 import { useEffect, useState, useRef, useCallback } from 'react';
-import { useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
 import { Game } from '@/types/game';
 
@@ -17,7 +16,6 @@ interface UseCreatedGameTrackingOptions {
 interface TrackingState {
   game: Game | null;
   isSearching: boolean;
-  isSubscribed: boolean;
   error: string | null;
   elapsedSeconds: number;
 }
@@ -28,12 +26,15 @@ const POLL_INTERVAL = 2000;
 const SEARCH_TIMEOUT = 120000;
 
 /**
- * Hook to track a newly created game from transaction to completion
+ * Hook to track a newly created game from transaction to discovery
  *
  * Flow:
  * 1. After tx confirmation, polls DB to find the game by tx_hash
- * 2. Once found, establishes real-time subscription
- * 3. Triggers callbacks on status changes (matched, resolved, cancelled)
+ * 2. Once found, triggers onGameFound callback
+ * 3. Triggers immediate callbacks if game is already matched/resolved
+ *
+ * Real-time updates after discovery are handled by useRealtimeSync (central sync).
+ * This hook only handles the initial polling phase until the game is indexed.
  */
 export function useCreatedGameTracking({
   txHash,
@@ -43,32 +44,33 @@ export function useCreatedGameTracking({
   onGameResolved,
   onGameCancelled,
 }: UseCreatedGameTrackingOptions): TrackingState & { cancelTracking: () => void } {
-  const queryClient = useQueryClient();
   const [state, setState] = useState<TrackingState>({
     game: null,
     isSearching: false,
-    isSubscribed: false,
     error: null,
     elapsedSeconds: 0,
   });
 
   // Refs for lifecycle management
   const mountedRef = useRef(true);
-  const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
   const pollIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const elapsedIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const timeoutRef = useRef<NodeJS.Timeout | null>(null);
   const gameIdRef = useRef<string | null>(null);
-  const lastStatusRef = useRef<string | null>(null);
   const currentTxHashRef = useRef<string | null>(null);
+
+  // Callback refs to avoid re-running effect
+  const onGameFoundRef = useRef(onGameFound);
+  const onGameMatchedRef = useRef(onGameMatched);
+  const onGameResolvedRef = useRef(onGameResolved);
+  const onGameCancelledRef = useRef(onGameCancelled);
+  onGameFoundRef.current = onGameFound;
+  onGameMatchedRef.current = onGameMatched;
+  onGameResolvedRef.current = onGameResolved;
+  onGameCancelledRef.current = onGameCancelled;
 
   // Cleanup all resources
   const cleanup = useCallback(() => {
-    if (channelRef.current) {
-      console.log('🔌 Cleaning up game tracking subscription');
-      channelRef.current.unsubscribe();
-      channelRef.current = null;
-    }
     if (pollIntervalRef.current) {
       clearInterval(pollIntervalRef.current);
       pollIntervalRef.current = null;
@@ -87,87 +89,18 @@ export function useCreatedGameTracking({
   const cancelTracking = useCallback(() => {
     cleanup();
     gameIdRef.current = null;
-    lastStatusRef.current = null;
     currentTxHashRef.current = null;
     if (mountedRef.current) {
       setState({
         game: null,
         isSearching: false,
-        isSubscribed: false,
         error: null,
         elapsedSeconds: 0,
       });
     }
   }, [cleanup]);
 
-  // Subscribe to game updates
-  const subscribeToGame = useCallback((gameId: string, initialGame: Game) => {
-    if (channelRef.current || !mountedRef.current) return;
-
-    console.log(`🔄 Subscribing to created game ${gameId}`);
-    gameIdRef.current = gameId;
-    lastStatusRef.current = initialGame.status;
-
-    const channel = supabase
-      .channel(`created-game:${gameId}`)
-      .on(
-        'postgres_changes',
-        {
-          event: 'UPDATE',
-          schema: 'public',
-          table: 'games',
-          filter: `id=eq.${gameId}`,
-        },
-        (payload) => {
-          if (!mountedRef.current) return;
-
-          const updatedGame = payload.new as Game;
-          console.log(`✅ Created game ${gameId} updated:`, updatedGame.status);
-
-          // Update state
-          setState((prev) => ({ ...prev, game: updatedGame }));
-
-          // Trigger callbacks only on status change
-          if (updatedGame.status !== lastStatusRef.current) {
-            const prevStatus = lastStatusRef.current;
-            lastStatusRef.current = updatedGame.status;
-
-            switch (updatedGame.status) {
-              case 'matched':
-                console.log('🎮 Triggering onGameMatched callback');
-                onGameMatched?.(updatedGame);
-                break;
-              case 'resolved':
-                console.log('🎮 Triggering onGameResolved callback');
-                onGameResolved?.(updatedGame);
-                // Cleanup after resolved
-                cleanup();
-                break;
-              case 'cancelled':
-                console.log('🎮 Triggering onGameCancelled callback');
-                onGameCancelled?.(updatedGame);
-                // Cleanup after cancelled
-                cleanup();
-                break;
-            }
-          }
-
-          // Update query cache
-          queryClient.setQueryData(['game', gameId], updatedGame);
-          queryClient.invalidateQueries({ queryKey: ['games'] });
-          queryClient.invalidateQueries({ queryKey: ['games', 'player'] });
-        }
-      )
-      .subscribe((status) => {
-        if (!mountedRef.current) return;
-        console.log(`📡 Created game subscription status:`, status);
-        setState((prev) => ({ ...prev, isSubscribed: status === 'SUBSCRIBED' }));
-      });
-
-    channelRef.current = channel;
-  }, [cleanup, queryClient, onGameMatched, onGameResolved, onGameCancelled]);
-
-  // Main effect: Poll for game and subscribe
+  // Main effect: Poll for game until found
   useEffect(() => {
     // Skip if no txHash or if same txHash already being tracked
     if (!txHash || !creatorAddress) {
@@ -183,7 +116,6 @@ export function useCreatedGameTracking({
     cleanup();
     currentTxHashRef.current = txHash;
     gameIdRef.current = null;
-    lastStatusRef.current = null;
     mountedRef.current = true;
 
     console.log('🔍 Starting game tracking for tx:', txHash.slice(0, 10));
@@ -191,7 +123,6 @@ export function useCreatedGameTracking({
     setState({
       game: null,
       isSearching: true,
-      isSubscribed: false,
       error: null,
       elapsedSeconds: 0,
     });
@@ -225,12 +156,10 @@ export function useCreatedGameTracking({
 
         if (data && mountedRef.current) {
           console.log(`🎮 Found created game:`, data.id, 'status:', data.status);
+          gameIdRef.current = data.id;
 
           // Stop polling
-          if (pollIntervalRef.current) {
-            clearInterval(pollIntervalRef.current);
-            pollIntervalRef.current = null;
-          }
+          cleanup();
 
           // Update state
           setState((prev) => ({
@@ -240,22 +169,16 @@ export function useCreatedGameTracking({
           }));
 
           // Notify game found
-          onGameFound?.(data);
+          onGameFoundRef.current?.(data);
 
-          // Handle if game is already in a terminal state
+          // Trigger immediate callbacks based on current status
+          // (central sync will handle future updates)
           if (data.status === 'matched') {
-            onGameMatched?.(data);
+            onGameMatchedRef.current?.(data);
           } else if (data.status === 'resolved') {
-            onGameResolved?.(data);
-            return; // Don't subscribe to resolved games
+            onGameResolvedRef.current?.(data);
           } else if (data.status === 'cancelled') {
-            onGameCancelled?.(data);
-            return; // Don't subscribe to cancelled games
-          }
-
-          // Subscribe for future updates if game is still active
-          if (data.status === 'pending' || data.status === 'matched') {
-            subscribeToGame(data.id, data);
+            onGameCancelledRef.current?.(data);
           }
         }
       } catch (err) {
@@ -285,7 +208,7 @@ export function useCreatedGameTracking({
     return () => {
       // Don't cleanup on every re-render, only on unmount or txHash change
     };
-  }, [txHash, creatorAddress, cleanup, subscribeToGame, onGameFound, onGameMatched, onGameResolved, onGameCancelled]);
+  }, [txHash, creatorAddress, cleanup]);
 
   // Cleanup on unmount
   useEffect(() => {

@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
 import { Game } from '@/types/game';
@@ -8,81 +8,127 @@ import { Game } from '@/types/game';
 /**
  * Hook to subscribe to a specific game's updates
  * Both players subscribe to the SAME channel for consistent state
+ * Includes error handling and reconnection logic
  */
 export function useGameSync(gameId: string | null, onGameUpdate?: (game: Game) => void) {
   const queryClient = useQueryClient();
+  const [isConnected, setIsConnected] = useState(false);
+
+  // Use ref for callback to avoid subscription recreation
+  const onGameUpdateRef = useRef(onGameUpdate);
+  onGameUpdateRef.current = onGameUpdate;
+
+  // Track retry attempts
+  const retryCountRef = useRef(0);
+  const maxRetries = 3;
 
   useEffect(() => {
     if (!gameId) return;
 
-    console.log(`🔄 Subscribing to game ${gameId} updates`);
+    let channel: ReturnType<typeof supabase.channel> | null = null;
+    let retryTimeout: NodeJS.Timeout | null = null;
 
-    // Subscribe to game-specific channel (both players use the same channel)
-    const channel = supabase
-      .channel(`game:${gameId}`)
-      .on(
-        'postgres_changes',
-        {
-          event: 'UPDATE',
-          schema: 'public',
-          table: 'games',
-          filter: `id=eq.${gameId}`,
-        },
-        (payload) => {
-          const updatedGame = payload.new as Game;
+    const createSubscription = () => {
+      console.log(`🔄 Subscribing to game ${gameId} updates (attempt ${retryCountRef.current + 1})`);
 
-          console.log(`✅ Game ${gameId} updated:`, {
-            status: updatedGame.status,
-            coin_result: updatedGame.coin_result,
-            winner: updatedGame.winner_address,
-          });
+      channel = supabase
+        .channel(`game:${gameId}`)
+        .on(
+          'postgres_changes',
+          {
+            event: 'UPDATE',
+            schema: 'public',
+            table: 'games',
+            filter: `id=eq.${gameId}`,
+          },
+          (payload) => {
+            const updatedGame = payload.new as Game;
 
-          // Validate state consistency
-          if (updatedGame.status === 'resolved') {
-            if (updatedGame.coin_result === null) {
-              console.warn('⚠️ Game resolved but coin_result is null - waiting for next update');
-              return; // Don't trigger update until coin_result is available
+            console.log(`✅ Game ${gameId} updated:`, {
+              status: updatedGame.status,
+              coin_result: updatedGame.coin_result,
+              winner: updatedGame.winner_address,
+            });
+
+            // Validate state consistency
+            if (updatedGame.status === 'resolved') {
+              if (updatedGame.coin_result === null) {
+                console.warn('⚠️ Game resolved but coin_result is null - waiting for next update');
+                return;
+              }
+
+              if (!updatedGame.winner_address) {
+                console.warn('⚠️ Game resolved but no winner_address - waiting for next update');
+                return;
+              }
+
+              // Verify winner's choice matches coin result
+              const winnerIsCreator = updatedGame.winner_address.toLowerCase() === updatedGame.creator_address.toLowerCase();
+              const winnerChoice = winnerIsCreator ? updatedGame.creator_choice : updatedGame.joiner_choice;
+
+              if (winnerChoice !== updatedGame.coin_result) {
+                console.error('❌ STATE MISMATCH: Winner choice does not match coin result!', {
+                  winner: updatedGame.winner_address,
+                  winnerChoice,
+                  coinResult: updatedGame.coin_result,
+                });
+              }
             }
 
-            if (!updatedGame.winner_address) {
-              console.warn('⚠️ Game resolved but no winner_address - waiting for next update');
-              return;
-            }
+            // Update only the specific game in cache
+            queryClient.setQueryData(['game', gameId], updatedGame);
 
-            // Verify winner's choice matches coin result
-            const winnerIsCreator = updatedGame.winner_address.toLowerCase() === updatedGame.creator_address.toLowerCase();
-            const winnerChoice = winnerIsCreator ? updatedGame.creator_choice : updatedGame.joiner_choice;
-
-            if (winnerChoice !== updatedGame.coin_result) {
-              console.error('❌ STATE MISMATCH: Winner choice does not match coin result!', {
-                winner: updatedGame.winner_address,
-                winnerChoice,
-                coinResult: updatedGame.coin_result,
-              });
-            }
+            // Trigger callback via ref (stable reference)
+            onGameUpdateRef.current?.(updatedGame);
           }
+        )
+        .subscribe((status, err) => {
+          console.log(`📡 Subscription status for game ${gameId}:`, status, err ? `Error: ${err.message}` : '');
 
-          // Update query cache with new data
-          queryClient.setQueryData(['game', gameId], updatedGame);
-          queryClient.invalidateQueries({ queryKey: ['games'] });
-          queryClient.invalidateQueries({ queryKey: ['games', 'player'] });
+          if (status === 'SUBSCRIBED') {
+            setIsConnected(true);
+            retryCountRef.current = 0; // Reset retry count on success
+          } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+            setIsConnected(false);
+            console.error(`❌ Subscription error for game ${gameId}:`, status, err);
 
-          // Trigger callback
-          if (onGameUpdate) {
-            onGameUpdate(updatedGame);
+            // Attempt reconnection with exponential backoff
+            if (retryCountRef.current < maxRetries) {
+              const delay = Math.pow(2, retryCountRef.current) * 1000; // 1s, 2s, 4s
+              console.log(`🔄 Retrying subscription in ${delay}ms...`);
+              retryCountRef.current++;
+
+              if (channel) {
+                channel.unsubscribe();
+                channel = null;
+              }
+
+              retryTimeout = setTimeout(createSubscription, delay);
+            } else {
+              console.error(`❌ Max retries reached for game ${gameId} subscription`);
+            }
+          } else if (status === 'CLOSED') {
+            setIsConnected(false);
           }
-        }
-      )
-      .subscribe((status) => {
-        console.log(`📡 Subscription status for game ${gameId}:`, status);
-      });
+        });
+    };
+
+    createSubscription();
 
     // Cleanup on unmount
     return () => {
       console.log(`🔌 Unsubscribing from game ${gameId}`);
-      channel.unsubscribe();
+      if (retryTimeout) {
+        clearTimeout(retryTimeout);
+      }
+      if (channel) {
+        channel.unsubscribe();
+      }
+      setIsConnected(false);
     };
-  }, [gameId, queryClient, onGameUpdate]);
+  }, [gameId, queryClient]);
+
+  return { isConnected };
 }
 
 /**

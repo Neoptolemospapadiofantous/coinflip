@@ -1,9 +1,9 @@
 'use client';
 
-import { useEffect, useState, useRef, useCallback } from 'react';
+import { useEffect, useRef, useCallback } from 'react';
 import { useAccount } from 'wagmi';
 import { usePlayerGames } from './useGames';
-import { useGameSync, validateGameState } from './useGameSync';
+import { validateGameState } from './useGameSync';
 import { Game } from '@/types/game';
 import { useGameStore } from '@/store/gameStore';
 
@@ -18,9 +18,6 @@ interface ShownGameEntry {
   shownAt: number;
 }
 
-/**
- * Load shown games from localStorage, filtering out expired entries
- */
 function loadShownGames(): Map<string, ShownGameEntry> {
   if (typeof window === 'undefined') return new Map();
 
@@ -31,7 +28,6 @@ function loadShownGames(): Map<string, ShownGameEntry> {
     const entries: ShownGameEntry[] = JSON.parse(stored);
     const now = Date.now();
 
-    // Filter out expired entries and convert to Map
     const validEntries = entries.filter(
       (entry) => now - entry.shownAt < SHOWN_GAMES_EXPIRY
     );
@@ -43,9 +39,6 @@ function loadShownGames(): Map<string, ShownGameEntry> {
   }
 }
 
-/**
- * Save shown games to localStorage
- */
 function saveShownGames(games: Map<string, ShownGameEntry>) {
   if (typeof window === 'undefined') return;
 
@@ -59,18 +52,31 @@ function saveShownGames(games: Map<string, ShownGameEntry>) {
 
 /**
  * Hook to monitor user's active games and trigger modals for matched/resolved games
+ * Now uses modal queue system for handling multiple concurrent games
+ *
+ * IMPORTANT: This hook only monitors games from usePlayerGames query.
+ * Games created in the current session are tracked by useCreatedGameTracking.
+ * The gameStore.queueModal has built-in deduplication to prevent double-queuing.
  */
 export function useActiveGameMonitor() {
   const { address } = useAccount();
   const { data: games, isLoading } = usePlayerGames(address);
-  const { setShowMatchModal, setActiveGame, setActiveGameId } = useGameStore();
-
-  const [sessionGame, setSessionGame] = useState<Game | null>(null);
-  const [showSessionModal, setShowSessionModal] = useState(false);
+  const {
+    queueModal,
+    closeCurrentModal,
+    showGameModal,
+    currentModalGame,
+    addActiveGame,
+    updateActiveGame,
+    getActiveGame,
+  } = useGameStore();
 
   // Track which games we've already shown modals for (persisted)
   const shownGamesRef = useRef<Map<string, ShownGameEntry>>(new Map());
   const initializedRef = useRef(false);
+
+  // Track games processed this session to avoid re-processing on every query update
+  const processedGamesRef = useRef<Set<string>>(new Set());
 
   // Initialize from localStorage on mount
   useEffect(() => {
@@ -95,7 +101,6 @@ export function useActiveGameMonitor() {
   const shouldShowModal = useCallback((game: Game): boolean => {
     const entry = shownGamesRef.current.get(game.id);
 
-    // Never shown before - show it
     if (!entry) {
       return true;
     }
@@ -105,30 +110,11 @@ export function useActiveGameMonitor() {
       return true;
     }
 
-    // Already shown in current status - don't show again
     return false;
   }, []);
 
-  // Subscribe to the active session game using game-specific channel
-  useGameSync(sessionGame?.id ?? null, (updatedGame) => {
-    console.log('🎮 Active game updated:', updatedGame.status);
-
-    // Validate state before updating
-    const validation = validateGameState(updatedGame);
-    if (!validation.valid) {
-      console.error('❌ Invalid game state:', validation.errors);
-      return;
-    }
-
-    // Update session game with validated data
-    setSessionGame(updatedGame);
-    setActiveGame(updatedGame);
-
-    // If game transitioned to resolved, mark it
-    if (updatedGame.status === 'resolved') {
-      markGameAsShown(updatedGame.id, 'resolved');
-    }
-  });
+  // Real-time updates are handled centrally by useRealtimeSync (in Providers)
+  // This hook just monitors query data and triggers modals for new matches/resolutions
 
   // Monitor all player games for new matches/resolutions
   useEffect(() => {
@@ -136,66 +122,60 @@ export function useActiveGameMonitor() {
 
     const lowerAddress = address.toLowerCase();
 
-    // Find games that need modal display
-    const activeGames = games.filter((game) => {
+    // Find games that need processing
+    games.forEach((game) => {
       const isParticipant =
         game.creator_address?.toLowerCase() === lowerAddress ||
         game.joiner_address?.toLowerCase() === lowerAddress;
 
-      if (!isParticipant) return false;
+      if (!isParticipant) return;
 
-      // Only consider matched or resolved games
-      if (game.status !== 'matched' && game.status !== 'resolved') {
-        return false;
-      }
+      // Generate a unique key for this game+status combination
+      const processKey = `${game.id}:${game.status}`;
 
-      return shouldShowModal(game);
-    });
-
-    if (activeGames.length > 0) {
-      // Show the most recent game that hasn't been shown
-      const game = activeGames[0];
-
-      // Validate before showing
-      const validation = validateGameState(game);
-      if (!validation.valid) {
-        console.warn('⚠️ Skipping invalid game:', validation.errors);
+      // Skip if already processed this status for this game
+      if (processedGamesRef.current.has(processKey)) {
         return;
       }
 
-      console.log(`📢 Showing modal for game ${game.id} (${game.status})`);
-
-      // Mark as shown with current status
-      markGameAsShown(game.id, game.status);
-
-      // Update store
-      setActiveGame(game);
-      setActiveGameId(game.id);
-      setSessionGame(game);
-      setShowSessionModal(true);
-
-      if (game.status === 'matched') {
-        setShowMatchModal(true);
+      // Add active games to the store (pending or matched)
+      if (game.status === 'pending' || game.status === 'matched') {
+        // Only add if not already in store (prevents duplicate additions)
+        if (!getActiveGame(game.id)) {
+          addActiveGame(game);
+        } else {
+          // Update existing game with latest data
+          updateActiveGame(game);
+        }
       }
-    }
-  }, [games, address, setActiveGame, setActiveGameId, setShowMatchModal, shouldShowModal, markGameAsShown]);
+
+      // Queue modals for games that need display
+      if ((game.status === 'matched' || game.status === 'resolved') && shouldShowModal(game)) {
+        const validation = validateGameState(game);
+        if (!validation.valid) {
+          console.warn('⚠️ Skipping invalid game:', validation.errors);
+          return;
+        }
+
+        console.log(`📢 Queueing modal for game ${game.id} (${game.status})`);
+        processedGamesRef.current.add(processKey);
+        markGameAsShown(game.id, game.status);
+        queueModal(game, game.status === 'matched' ? 'matched' : 'resolved');
+      }
+    });
+  }, [games, address, addActiveGame, updateActiveGame, getActiveGame, queueModal, shouldShowModal, markGameAsShown]);
 
   const handleCloseModal = useCallback(() => {
-    // Make sure the game is marked as shown when closing
-    if (sessionGame) {
-      markGameAsShown(sessionGame.id, sessionGame.status);
+    // Mark the current game as shown when closing
+    if (currentModalGame) {
+      markGameAsShown(currentModalGame.id, currentModalGame.status);
     }
-
-    setShowSessionModal(false);
-    setSessionGame(null);
-    setShowMatchModal(false);
-    setActiveGame(null);
-    setActiveGameId(null);
-  }, [sessionGame, markGameAsShown, setShowMatchModal, setActiveGame, setActiveGameId]);
+    closeCurrentModal();
+  }, [currentModalGame, markGameAsShown, closeCurrentModal]);
 
   return {
-    sessionGame,
-    showSessionModal,
+    sessionGame: currentModalGame,
+    showSessionModal: showGameModal,
     handleCloseModal,
     isLoading,
   };

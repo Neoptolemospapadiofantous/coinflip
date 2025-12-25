@@ -25,74 +25,127 @@ import { Clock, Users, Loader2, TrendingUp, XCircle, AlertCircle, Wifi, WifiOff 
 import Link from 'next/link';
 import { StatusBadge } from '@/components/game/StatusBadge';
 import { useCancelGame } from '@/hooks/useContract';
-import { supabase } from '@/lib/supabase';
-import { useQueryClient } from '@tanstack/react-query';
 import { useGameStore } from '@/store/gameStore';
-import { Game } from '@/types/game';
+
+// Helper to format time ago with live updates
+function formatTimeAgo(createdAt: string, now: number): string {
+  const seconds = Math.floor((now - new Date(createdAt).getTime()) / 1000);
+  if (seconds < 60) return `${seconds}s`;
+  if (seconds < 3600) return `${Math.floor(seconds / 60)}m`;
+  return `${Math.floor(seconds / 3600)}h`;
+}
+
+// Helper to parse join game errors into user-friendly messages
+function parseJoinError(error: Error | null): { title: string; message: string } {
+  if (!error) return { title: '', message: '' };
+
+  const msg = error.message.toLowerCase();
+
+  // User rejected
+  if (msg.includes('user rejected') || msg.includes('user denied')) {
+    return {
+      title: 'Transaction Cancelled',
+      message: 'You cancelled the transaction in your wallet.',
+    };
+  }
+
+  // Game already matched (someone else joined)
+  if (msg.includes('invalidgamestate') || msg.includes('game state') || msg.includes('not open')) {
+    return {
+      title: 'Game No Longer Available',
+      message: 'This game was joined by another player. Try joining a different game.',
+    };
+  }
+
+  // Insufficient balance
+  if (msg.includes('insufficient') || msg.includes('balance')) {
+    return {
+      title: 'Insufficient Balance',
+      message: 'You don\'t have enough funds to join this game.',
+    };
+  }
+
+  // Gas estimation failed (likely game state changed)
+  if (msg.includes('gas') || msg.includes('execution reverted')) {
+    return {
+      title: 'Transaction Failed',
+      message: 'The game may have already been joined by another player.',
+    };
+  }
+
+  // Network error
+  if (msg.includes('network') || msg.includes('connection')) {
+    return {
+      title: 'Network Error',
+      message: 'Please check your connection and try again.',
+    };
+  }
+
+  // Default
+  return {
+    title: 'Failed to Join',
+    message: error.message,
+  };
+}
 
 export default function QueuePage() {
   const { isConnected, address } = useAccount();
   const { data: tiers } = useTiers();
   const { data: pendingGames, isLoading: isLoadingGames, refetch } = usePendingGames();
   const { data: gameStats, refetch: refetchStats } = useGameStats();
-  const { joinGame, isLoading, isSuccess, txHash, error } = useJoinGame();
-  const { cancelGame, isLoading: isCanceling } = useCancelGame();
+  const { joinGame, isLoading, isConfirming, isSuccess, txHash, error, reset: resetJoinState } = useJoinGame();
+  const { cancelGame, isLoading: isCanceling, isSuccess: isCancelSuccess, error: cancelError, reset: resetCancelState } = useCancelGame();
   const [selectedGame, setSelectedGame] = useState<any>(null);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isLive, setIsLive] = useState(false);
   const [joinedGameId, setJoinedGameId] = useState<string | null>(null);
-  const queryClient = useQueryClient();
-  const { setActiveGame, setActiveGameId, setShowMatchModal } = useGameStore();
+  const [cancelingGameId, setCancelingGameId] = useState<string | null>(null);
+  const [now, setNow] = useState(Date.now()); // For live time updates
+  const { addActiveGame } = useGameStore();
 
   // Refs for cleanup
   const mountedRef = useRef(true);
-  const joinedChannelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
 
   // Cleanup on unmount
   useEffect(() => {
     mountedRef.current = true;
     return () => {
       mountedRef.current = false;
-      if (joinedChannelRef.current) {
-        joinedChannelRef.current.unsubscribe();
-        joinedChannelRef.current = null;
-      }
     };
   }, []);
 
-  // Real-time subscription for queue updates
+  // Live time updates - refresh every 10 seconds
   useEffect(() => {
-    console.log('📡 Setting up queue real-time subscription...');
+    const interval = setInterval(() => {
+      if (mountedRef.current) {
+        setNow(Date.now());
+      }
+    }, 10000);
+    return () => clearInterval(interval);
+  }, []);
 
-    const channel = supabase
-      .channel('queue-updates')
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'games',
-        },
-        (payload) => {
-          if (!mountedRef.current) return;
-          console.log('🔄 Queue update received:', payload.eventType);
+  // Real-time updates are handled centrally by useRealtimeSync (in Providers)
+  // Just set isLive to true since central sync is always connected
+  useEffect(() => {
+    setIsLive(true);
+  }, []);
 
-          // Refetch pending games
-          refetch();
-          refetchStats();
-        }
-      )
-      .subscribe((status) => {
-        if (!mountedRef.current) return;
-        console.log('📡 Queue subscription status:', status);
-        setIsLive(status === 'SUBSCRIBED');
-      });
+  // Handle cancel success/error
+  useEffect(() => {
+    if (isCancelSuccess && cancelingGameId) {
+      setCancelingGameId(null);
+      resetCancelState();
+      refetch();
+    }
+  }, [isCancelSuccess, cancelingGameId, resetCancelState, refetch]);
 
-    return () => {
-      console.log('🔌 Cleaning up queue subscription');
-      channel.unsubscribe();
-    };
-  }, [refetch, refetchStats]);
+  useEffect(() => {
+    if (cancelError && cancelingGameId) {
+      setCancelingGameId(null);
+      resetCancelState();
+      refetch(); // Refresh list to get current state
+    }
+  }, [cancelError, cancelingGameId, resetCancelState, refetch]);
 
   // Separate user's games from other games
   const myPendingGames = pendingGames?.filter(
@@ -103,86 +156,63 @@ export default function QueuePage() {
   );
 
   const handleJoinClick = useCallback((game: any, tier: any) => {
+    // Reset any previous join state
+    resetJoinState();
+    setJoinedGameId(null);
     setSelectedGame({ ...game, tier });
     setIsDialogOpen(true);
-  }, []);
+  }, [resetJoinState]);
 
   const handleConfirmJoin = useCallback(() => {
     if (selectedGame) {
       const joinerChoice = !selectedGame.creator_choice;
       setJoinedGameId(selectedGame.id);
+
+      // Add game to active games store immediately for tracking
+      addActiveGame({
+        ...selectedGame,
+        joiner_choice: joinerChoice,
+        status: 'pending', // Will update to 'matched' via subscription
+      });
+
       joinGame(selectedGame.id, joinerChoice, selectedGame.tier.amount);
     }
-  }, [selectedGame, joinGame]);
+  }, [selectedGame, joinGame, addActiveGame]);
 
-  const handleCancelGame = useCallback((gameId: string) => {
-    if (confirm('Are you sure you want to cancel this game? You will be refunded.')) {
-      cancelGame(gameId);
+  const handleCancelGame = useCallback(async (gameId: string) => {
+    // Reset any previous cancel state
+    resetCancelState();
+
+    if (!confirm('Are you sure you want to cancel this game? You will be refunded.')) {
+      return;
     }
-  }, [cancelGame]);
 
-  const handleDialogClose = useCallback(() => {
+    setCancelingGameId(gameId);
+    cancelGame(gameId);
+  }, [cancelGame, resetCancelState]);
+
+  const handleDialogClose = useCallback((resetJoinedGame = true) => {
     setIsDialogOpen(false);
     setSelectedGame(null);
-    setJoinedGameId(null);
-    // Cleanup joined game subscription
-    if (joinedChannelRef.current) {
-      joinedChannelRef.current.unsubscribe();
-      joinedChannelRef.current = null;
+    if (resetJoinedGame) {
+      setJoinedGameId(null);
     }
   }, []);
 
-  // Track joined game for modal display - single subscription
+  // Auto-close dialog after successful join
+  // Modal queuing is handled by central useRealtimeSync
+  // Keep joinedGameId set to prevent re-clicking until game is removed from list
   useEffect(() => {
-    if (!isSuccess || !joinedGameId) return;
+    if (!isSuccess) return;
 
-    console.log('🎮 Setting up joined game subscription:', joinedGameId);
-
-    // Cleanup any existing subscription
-    if (joinedChannelRef.current) {
-      joinedChannelRef.current.unsubscribe();
-    }
-
-    const channel = supabase
-      .channel(`joined-game:${joinedGameId}`)
-      .on(
-        'postgres_changes',
-        {
-          event: 'UPDATE',
-          schema: 'public',
-          table: 'games',
-          filter: `id=eq.${joinedGameId}`,
-        },
-        (payload) => {
-          if (!mountedRef.current) return;
-          const updatedGame = payload.new as Game;
-          console.log('🎮 Joined game updated:', updatedGame.status);
-
-          if (updatedGame.status === 'matched' || updatedGame.status === 'resolved') {
-            setActiveGame(updatedGame);
-            setActiveGameId(updatedGame.id);
-            if (updatedGame.status === 'matched') {
-              setShowMatchModal(true);
-            }
-            handleDialogClose();
-          }
-        }
-      )
-      .subscribe();
-
-    joinedChannelRef.current = channel;
-
-    // Auto-close dialog after showing success state
     const timer = setTimeout(() => {
       if (mountedRef.current) {
-        handleDialogClose();
+        handleDialogClose(false); // Don't reset joinedGameId - let real-time sync handle it
       }
-    }, 3000);
+    }, 2000);
 
-    return () => {
-      clearTimeout(timer);
-    };
-  }, [isSuccess, joinedGameId, setActiveGame, setActiveGameId, setShowMatchModal, handleDialogClose]);
+    return () => clearTimeout(timer);
+  }, [isSuccess, handleDialogClose]);
 
   if (!isConnected) {
     return (
@@ -292,9 +322,6 @@ export default function QueuePage() {
 
                   {myPendingGames.map((game) => {
                     const tier = tiers?.find((t) => t.id === game.tier);
-                    const timeAgo = Math.floor(
-                      (Date.now() - new Date(game.created_at).getTime()) / 1000
-                    );
 
                     return (
                       <Card key={game.id} variant="surface" className="bg-yellow-500/5 border border-yellow-500/20">
@@ -315,19 +342,26 @@ export default function QueuePage() {
 
                           <Flex justify="between" align="center">
                             <Flex direction="column" gap="1">
-                              <Text size="1" color="gray">Created {timeAgo < 60 ? `${timeAgo}s` : `${Math.floor(timeAgo / 60)}m`} ago</Text>
+                              <Text size="1" color="gray">Created {formatTimeAgo(game.created_at, now)} ago</Text>
                               <Text size="1" color="gray">Your choice: {game.creator_choice ? 'Tails 🪙' : 'Heads 👑'}</Text>
                             </Flex>
-                            <Button
-                              size="2"
-                              variant="soft"
-                              color="red"
-                              onClick={() => handleCancelGame(game.id)}
-                              disabled={isCanceling}
-                            >
-                              <XCircle className="w-4 h-4" />
-                              Cancel Game
-                            </Button>
+                            {cancelingGameId === game.id ? (
+                              <Badge color="yellow" size="2">
+                                <Loader2 className="w-3 h-3 animate-spin" />
+                                Cancelling...
+                              </Badge>
+                            ) : (
+                              <Button
+                                size="2"
+                                variant="soft"
+                                color="red"
+                                onClick={() => handleCancelGame(game.id)}
+                                disabled={isCanceling}
+                              >
+                                <XCircle className="w-4 h-4" />
+                                Cancel Game
+                              </Button>
+                            )}
                           </Flex>
 
                           <Card variant="surface" className="bg-blue-500/5 border border-blue-500/20">
@@ -349,7 +383,15 @@ export default function QueuePage() {
             <Card className="card-simple" size="4">
               <Flex direction="column" gap="4" p="6">
                 <Flex align="center" justify="between">
-                  <Heading size="5">Available Games</Heading>
+                  <Flex align="center" gap="3">
+                    <Heading size="5">Available Games</Heading>
+                    <Badge size="1" color={isLive ? 'green' : 'yellow'} variant="soft">
+                      <Flex align="center" gap="1">
+                        {isLive ? <Wifi className="w-3 h-3" /> : <WifiOff className="w-3 h-3" />}
+                        {isLive ? 'Live' : 'Connecting...'}
+                      </Flex>
+                    </Badge>
+                  </Flex>
                   <Link href="/play">
                     <Button variant="soft" size="2">
                       Create New Game
@@ -390,9 +432,6 @@ export default function QueuePage() {
                     <Table.Body>
                       {otherPendingGames.map((game, index) => {
                         const tier = tiers?.find((t) => t.id === game.tier);
-                        const timeAgo = Math.floor(
-                          (Date.now() - new Date(game.created_at).getTime()) / 1000
-                        );
 
                         return (
                           <Table.Row
@@ -424,20 +463,25 @@ export default function QueuePage() {
                               <Flex align="center" gap="1">
                                 <Clock className="w-3 h-3 text-gray-500" />
                                 <Text size="2" color="gray">
-                                  {timeAgo < 60
-                                    ? `${timeAgo}s`
-                                    : `${Math.floor(timeAgo / 60)}m`}
+                                  {formatTimeAgo(game.created_at, now)}
                                 </Text>
                               </Flex>
                             </Table.Cell>
                             <Table.Cell>
-                              <Button
-                                size="2"
-                                onClick={() => handleJoinClick(game, tier!)}
-                                className="border-cyan-500/60 hover:scale-105 transition-transform"
-                              >
-                                Join Game
-                              </Button>
+                              {joinedGameId === game.id ? (
+                                <Badge color="yellow" size="2">
+                                  <Loader2 className="w-3 h-3 animate-spin" />
+                                  Joining...
+                                </Badge>
+                              ) : (
+                                <Button
+                                  size="2"
+                                  onClick={() => handleJoinClick(game, tier!)}
+                                  disabled={isLoading || isConfirming}
+                                >
+                                  Join Game
+                                </Button>
+                              )}
                             </Table.Cell>
                           </Table.Row>
                         );
@@ -452,7 +496,7 @@ export default function QueuePage() {
       </Section>
 
       {/* Join Game Dialog */}
-      <Dialog.Root open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+      <Dialog.Root open={isDialogOpen} onOpenChange={(open) => !open && handleDialogClose(true)}>
         <Dialog.Content style={{ maxWidth: 500 }}>
           <Dialog.Title>Join Game #{selectedGame?.id}</Dialog.Title>
           <Dialog.Description size="2" mb="4">
@@ -526,12 +570,28 @@ export default function QueuePage() {
               </Card>
             )}
 
-            {/* Loading State */}
-            {isLoading && (
+            {/* Waiting for wallet signature */}
+            {isLoading && !isConfirming && !txHash && (
+              <Flex direction="column" gap="3" align="center" py="4">
+                <Loader2 className="w-12 h-12 text-yellow-400 animate-spin" />
+                <Text size="2" weight="bold" className="text-yellow-400">
+                  Confirm in your wallet...
+                </Text>
+                <Text size="1" color="gray">
+                  Please approve the transaction
+                </Text>
+              </Flex>
+            )}
+
+            {/* Transaction submitted, waiting for confirmation */}
+            {isConfirming && txHash && (
               <Flex direction="column" gap="3" align="center" py="4">
                 <Loader2 className="w-12 h-12 text-cyan-400 animate-spin" />
-                <Text size="2" color="gray">
-                  Joining game...
+                <Text size="2" weight="bold" className="text-cyan-400">
+                  Confirming transaction...
+                </Text>
+                <Text size="1" color="gray" className="font-mono">
+                  TX: {txHash.slice(0, 10)}...{txHash.slice(-8)}
                 </Text>
               </Flex>
             )}
@@ -551,9 +611,31 @@ export default function QueuePage() {
             {/* Error State */}
             {error && (
               <Card variant="surface" className="bg-red-500/10 border border-red-500/20">
-                <Text size="2" color="red">
-                  Error: {error.message}
-                </Text>
+                <Flex direction="column" gap="2" p="3">
+                  <Flex align="center" gap="2">
+                    <AlertCircle className="w-4 h-4 text-red-400" />
+                    <Text size="2" weight="bold" className="text-red-400">
+                      {parseJoinError(error).title}
+                    </Text>
+                  </Flex>
+                  <Text size="2" color="gray">
+                    {parseJoinError(error).message}
+                  </Text>
+                  {parseJoinError(error).title === 'Game No Longer Available' && (
+                    <Button
+                      size="2"
+                      variant="soft"
+                      color="gray"
+                      onClick={() => {
+                        resetJoinState();
+                        refetch();
+                        setIsDialogOpen(false);
+                      }}
+                    >
+                      Back to Queue
+                    </Button>
+                  )}
+                </Flex>
               </Card>
             )}
 

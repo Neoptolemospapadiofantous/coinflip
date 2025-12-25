@@ -8,6 +8,7 @@ import { formatCurrency } from '@/lib/utils';
 import { Loader2, Users, Trophy, Zap, AlertTriangle, Clock } from 'lucide-react';
 import { useGameStore } from '@/store/gameStore';
 import { validateGameState } from '@/hooks/useGameSync';
+import { useGame } from '@/hooks/useGames';
 
 interface GameSessionModalProps {
   game: Game | null;
@@ -25,13 +26,17 @@ export function GameSessionModal({ game, open, onClose, userAddress }: GameSessi
   const [skipped, setSkipped] = useState(false);
   const [vrfElapsedSeconds, setVrfElapsedSeconds] = useState(0);
   const [vrfTimedOut, setVrfTimedOut] = useState(false);
-  const { resetGame } = useGameStore();
+  const { resetGame, updateActiveGame } = useGameStore();
+
+  // Fetch fresh game data for auto-refetch on validation errors
+  const { data: freshGame, refetch: refetchGame } = useGame(game?.id ?? null);
 
   // Refs for tracking
   const vrfTimerRef = useRef<NodeJS.Timeout | null>(null);
   const vrfStartTimeRef = useRef<number | null>(null);
   const lastGameIdRef = useRef<string | null>(null);
   const lastGameStatusRef = useRef<string | null>(null);
+  const retryCountRef = useRef(0);
 
   // Determine if user is part of this game
   const isCreator = game?.creator_address?.toLowerCase() === userAddress?.toLowerCase();
@@ -98,6 +103,36 @@ export function GameSessionModal({ game, open, onClose, userAddress }: GameSessi
       setVrfTimedOut(false);
     }
   }, [game?.id, game?.status, validation.valid]);
+
+  // Auto-refetch on validation errors (incomplete VRF data)
+  useEffect(() => {
+    if (!game || game.status !== 'resolved' || validation.valid) {
+      retryCountRef.current = 0;
+      return;
+    }
+
+    // If resolved but invalid, try to refetch after a delay (max 5 retries)
+    if (retryCountRef.current < 5) {
+      const timeout = setTimeout(() => {
+        console.log(`🔄 Auto-refetching game ${game.id} due to validation errors (attempt ${retryCountRef.current + 1})`);
+        retryCountRef.current++;
+        refetchGame();
+      }, 2000); // Retry every 2 seconds
+
+      return () => clearTimeout(timeout);
+    }
+  }, [game?.id, game?.status, validation.valid, refetchGame]);
+
+  // Update game in store when fresh data arrives
+  useEffect(() => {
+    if (freshGame && game && freshGame.id === game.id) {
+      const freshValidation = validateGameState(freshGame);
+      if (freshValidation.valid && !validation.valid) {
+        console.log('✅ Fresh game data is valid, updating store');
+        updateActiveGame(freshGame);
+      }
+    }
+  }, [freshGame, game, validation.valid, updateActiveGame]);
 
   // VRF elapsed timer
   useEffect(() => {
@@ -244,7 +279,7 @@ export function GameSessionModal({ game, open, onClose, userAddress }: GameSessi
                   <Flex direction="column" gap="2">
                     <Flex justify="between">
                       <Text size="2" color="gray">
-                        Creator: {game.creator_choice ? '🪙 Tails' : '👑 Heads'}
+                        Creator: {game.creator_choice === true ? '🪙 Tails' : game.creator_choice === false ? '👑 Heads' : '...'}
                       </Text>
                       <Text size="1" className="font-mono text-gray-500">
                         {game.creator_address?.slice(0, 6)}...{game.creator_address?.slice(-4)}
@@ -254,7 +289,7 @@ export function GameSessionModal({ game, open, onClose, userAddress }: GameSessi
 
                     <Flex justify="between">
                       <Text size="2" color="gray">
-                        Joiner: {game.joiner_choice ? '🪙 Tails' : '👑 Heads'}
+                        Joiner: {game.joiner_choice === true ? '🪙 Tails' : game.joiner_choice === false ? '👑 Heads' : '...'}
                       </Text>
                       <Text size="1" className="font-mono text-gray-500">
                         {game.joiner_address?.slice(0, 6)}...{game.joiner_address?.slice(-4)}

@@ -17,11 +17,11 @@ import {
 import { Layout } from '@/components/layout/Layout';
 import { TierSelector } from '@/components/game/TierSelector';
 import { CoinChoice } from '@/components/game/CoinChoice';
-import { useGameStore } from '@/store/gameStore';
+import { useGameStore, MAX_CONCURRENT_GAMES, useActiveGamesList } from '@/store/gameStore';
 import { useCreateGame, useCancelGame } from '@/hooks/useContract';
 import { useTiers } from '@/hooks/useTiers';
 import { useCreatedGameTracking } from '@/hooks/useCreatedGameTracking';
-import { Info, Loader2, CheckCircle2, AlertCircle, Clock, Users, X } from 'lucide-react';
+import { Info, Loader2, CheckCircle2, AlertCircle, Clock, Users, X, Plus, Gamepad2 } from 'lucide-react';
 import { parseError } from '@/lib/errors';
 import { Game } from '@/types/game';
 
@@ -36,10 +36,20 @@ enum GameStep {
 export default function PlayPage() {
   const { isConnected, address } = useAccount();
   const [step, setStep] = useState<GameStep>(GameStep.SELECT_TIER);
-  const { selectedTier, coinChoice, resetGame, setActiveGame, setActiveGameId, setShowMatchModal } = useGameStore();
-  const { createGame, isLoading, isSuccess, txHash, error } = useCreateGame();
+  const {
+    selectedTier,
+    coinChoice,
+    resetGameCreation,
+    addActiveGame,
+    updateActiveGame,
+    queueModal,
+    getActiveGamesCount,
+    canCreateNewGame,
+  } = useGameStore();
+  const { createGame, isLoading, isSuccess, txHash, error, reset: resetCreateGame } = useCreateGame();
   const { cancelGame, isLoading: isCancelling, error: cancelError, isSuccess: cancelSuccess, reset: resetCancelState } = useCancelGame();
   const { data: tiers } = useTiers();
+  const activeGames = useActiveGamesList();
 
   // Refs for race condition prevention
   const isCancellingRef = useRef(false);
@@ -47,43 +57,47 @@ export default function PlayPage() {
   const mountedRef = useRef(true);
 
   const currentTier = tiers?.find((t) => t.id === selectedTier);
+  const activeGamesCount = getActiveGamesCount();
+  const canCreate = canCreateNewGame();
 
-  // Stable reset function
+  // Stable reset function - only resets the creation form, not active games
   const handleReset = useCallback(() => {
     if (!mountedRef.current) return;
-    resetGame();
+    resetGameCreation();
     setStep(GameStep.SELECT_TIER);
     isCancellingRef.current = false;
     isMatchedRef.current = false;
     resetCancelState();
-  }, [resetGame, resetCancelState]);
+    resetCreateGame?.();
+  }, [resetGameCreation, resetCancelState, resetCreateGame]);
 
   // Track the created game in real-time
   const handleGameFound = useCallback((game: Game) => {
     if (!mountedRef.current) return;
     console.log('🎮 Game found in database:', game.id);
-  }, []);
+    // Add to active games
+    addActiveGame(game);
+  }, [addActiveGame]);
 
   const handleGameMatched = useCallback((game: Game) => {
     if (!mountedRef.current) return;
-    // Prevent cancel from executing if game is already matched
     isMatchedRef.current = true;
-    console.log('🎮 Game matched! Showing modal...');
-    setActiveGame(game);
-    setActiveGameId(game.id);
-    setShowMatchModal(true);
-  }, [setActiveGame, setActiveGameId, setShowMatchModal]);
+    console.log('🎮 Game matched! Queueing modal...');
+    updateActiveGame(game);
+    queueModal(game, 'matched');
+  }, [updateActiveGame, queueModal]);
 
   const handleGameResolved = useCallback((game: Game) => {
     if (!mountedRef.current) return;
     console.log('🎮 Game resolved:', game.winner_address);
-    setActiveGame(game);
-    setActiveGameId(game.id);
-  }, [setActiveGame, setActiveGameId]);
+    updateActiveGame(game);
+    queueModal(game, 'resolved');
+  }, [updateActiveGame, queueModal]);
 
-  const handleGameCancelled = useCallback(() => {
+  const handleGameCancelled = useCallback((game: Game) => {
     if (!mountedRef.current) return;
     console.log('🎮 Game cancelled');
+    // Game will be removed when modal closes
     handleReset();
   }, [handleReset]);
 
@@ -131,16 +145,19 @@ export default function PlayPage() {
 
   const handleCreateGame = useCallback(() => {
     if (selectedTier === null || coinChoice === null || !currentTier) return;
+    if (!canCreate) {
+      console.warn('Cannot create game - at max concurrent games');
+      return;
+    }
     setStep(GameStep.CREATING);
     isMatchedRef.current = false;
     isCancellingRef.current = false;
     createGame(selectedTier, coinChoice, currentTier.amount);
-  }, [selectedTier, coinChoice, currentTier, createGame]);
+  }, [selectedTier, coinChoice, currentTier, createGame, canCreate]);
 
   const handleCancelGame = useCallback(() => {
     if (!trackedGame?.id) return;
 
-    // Prevent cancel if already cancelling or game is matched
     if (isCancellingRef.current) {
       console.warn('Cancel already in progress');
       return;
@@ -154,7 +171,7 @@ export default function PlayPage() {
     cancelGame(trackedGame.id);
   }, [trackedGame, cancelGame]);
 
-  const handleGoBack = useCallback(() => {
+  const handleCreateAnother = useCallback(() => {
     cancelTracking();
     handleReset();
   }, [cancelTracking, handleReset]);
@@ -193,6 +210,9 @@ export default function PlayPage() {
   const canProceedToChooseSide = selectedTier !== null;
   const canProceedToConfirm = selectedTier !== null && coinChoice !== null;
 
+  // Count pending games (waiting for opponent)
+  const pendingGamesCount = activeGames.filter((g) => g.status === 'pending').length;
+
   if (!isConnected) {
     return (
       <Layout>
@@ -223,10 +243,30 @@ export default function PlayPage() {
             {/* Header */}
             <Flex direction="column" gap="2" align="center" className="animate-fade-in">
               <Heading size="8" className="text-gradient-rainbow">Create a Game</Heading>
-              <Text size="3" color="gray">
-                Choose your bet amount, pick a side, and let's flip!
-              </Text>
+              <Flex align="center" gap="3">
+                <Text size="3" color="gray">
+                  Choose your bet amount, pick a side, and let's flip!
+                </Text>
+                {activeGamesCount > 0 && (
+                  <Badge size="2" color="cyan" variant="soft">
+                    <Gamepad2 className="w-3 h-3 mr-1" />
+                    {activeGamesCount} Active
+                  </Badge>
+                )}
+              </Flex>
             </Flex>
+
+            {/* Max games warning */}
+            {!canCreate && (
+              <Callout.Root color="orange" size="2">
+                <Callout.Icon>
+                  <AlertCircle className="w-4 h-4" />
+                </Callout.Icon>
+                <Text>
+                  You have {MAX_CONCURRENT_GAMES} active games. Wait for one to complete before creating another.
+                </Text>
+              </Callout.Root>
+            )}
 
             {/* Steps Indicator */}
             <Card className="card-solid border-purple-500/60 animate-slide-down">
@@ -261,7 +301,7 @@ export default function PlayPage() {
                     <TierSelector />
                     <Button
                       size="4"
-                      disabled={!canProceedToChooseSide}
+                      disabled={!canProceedToChooseSide || !canCreate}
                       onClick={() => setStep(GameStep.CHOOSE_SIDE)}
                     >
                       Next: Choose Your Side
@@ -333,7 +373,7 @@ export default function PlayPage() {
                             4. Winner gets paid automatically!
                           </Text>
                           <Text size="1" style={{ fontStyle: 'italic' }}>
-                            Game expires if no one joins within 20 minutes
+                            You can create up to {MAX_CONCURRENT_GAMES} games at once!
                           </Text>
                         </Flex>
                       </Callout.Root>
@@ -343,7 +383,7 @@ export default function PlayPage() {
                       <Button size="4" variant="soft" onClick={() => setStep(GameStep.CHOOSE_SIDE)}>
                         Back
                       </Button>
-                      <Button size="4" className="flex-1" onClick={handleCreateGame}>
+                      <Button size="4" className="flex-1" onClick={handleCreateGame} disabled={!canCreate}>
                         Create Game
                       </Button>
                     </Flex>
@@ -449,13 +489,16 @@ export default function PlayPage() {
                               )}
                               Cancel Game
                             </Button>
-                            <Button
-                              size="3"
-                              variant="soft"
-                              onClick={handleGoBack}
-                            >
-                              Create Another
-                            </Button>
+                            {canCreate && (
+                              <Button
+                                size="3"
+                                onClick={handleCreateAnother}
+                                className="glow-cyan"
+                              >
+                                <Plus className="w-4 h-4 mr-2" />
+                                Create Another
+                              </Button>
+                            )}
                           </Flex>
 
                           {/* Cancel Error */}
@@ -477,8 +520,18 @@ export default function PlayPage() {
 
                           {/* Info */}
                           <Text size="1" color="gray" align="center" style={{ maxWidth: '300px' }}>
-                            Your game is live! When someone joins, the coin flip happens automatically.
+                            {canCreate
+                              ? "Your game is live! Create more games while waiting, or wait for an opponent."
+                              : "Your game is live! When someone joins, the coin flip happens automatically."}
                           </Text>
+
+                          {/* Active Games Count */}
+                          {pendingGamesCount > 1 && (
+                            <Badge size="2" color="purple" variant="soft">
+                              <Gamepad2 className="w-3 h-3 mr-1" />
+                              {pendingGamesCount} games waiting for opponents
+                            </Badge>
+                          )}
                         </Flex>
                       </div>
                     )}
@@ -492,11 +545,17 @@ export default function PlayPage() {
                           <Text size="2" color="gray" align="center">
                             Opening game session...
                           </Text>
+                          {canCreate && (
+                            <Button size="3" onClick={handleCreateAnother} className="mt-4">
+                              <Plus className="w-4 h-4 mr-2" />
+                              Create Another Game
+                            </Button>
+                          )}
                         </Flex>
                       </div>
                     )}
 
-                    {/* Game resolved - should show modal, but fallback display */}
+                    {/* Game resolved - show brief transition */}
                     {isSuccess && trackedGame && trackedGame.status === 'resolved' && (
                       <div className="animate-slide-up">
                         <Flex direction="column" gap="4" align="center">
@@ -505,7 +564,8 @@ export default function PlayPage() {
                           <Text size="2" color="gray" align="center">
                             Check the result in the game modal.
                           </Text>
-                          <Button size="3" onClick={handleGoBack}>
+                          <Button size="3" onClick={handleCreateAnother}>
+                            <Plus className="w-4 h-4 mr-2" />
                             Create New Game
                           </Button>
                         </Flex>
@@ -529,7 +589,7 @@ export default function PlayPage() {
                               </Text>
                             )}
                           </Flex>
-                          <Button size="3" onClick={handleGoBack} className="hover:scale-105 transition-transform">
+                          <Button size="3" onClick={handleCreateAnother} className="hover:scale-105 transition-transform">
                             Try Again
                           </Button>
                         </Flex>

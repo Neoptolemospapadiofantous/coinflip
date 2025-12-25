@@ -144,8 +144,7 @@ pnpm migrations:show   # View migration files
 ### 4. Next.js 16 Migration ✅
 
 #### Updates Applied
-- ✅ Renamed `middleware.ts` → `proxy.ts` (Next.js 16+ convention)
-- ✅ Renamed function `middleware()` → `proxy()`
+- ✅ Using `proxy.ts` with `proxy()` export (Next.js 16+ convention)
 - ✅ Removed deprecated `instrumentationHook` flag
 - ✅ Fixed Turbopack compatibility
 
