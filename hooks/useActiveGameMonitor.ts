@@ -56,7 +56,11 @@ function saveShownGames(games: Map<string, ShownGameEntry>) {
  *
  * IMPORTANT: This hook only monitors games from usePlayerGames query.
  * Games created in the current session are tracked by useCreatedGameTracking.
- * The gameStore.queueModal has built-in deduplication to prevent double-queuing.
+ *
+ * Deduplication happens at 3 levels (defense in depth):
+ * 1. localStorage (shownGamesRef) - Prevents showing same modal after page refresh
+ * 2. processedGamesRef - Prevents re-processing on query updates within a session
+ * 3. gameStore.queueModal - Final safety net with built-in duplicate check
  */
 export function useActiveGameMonitor() {
   const { address } = useAccount();

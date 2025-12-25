@@ -7,8 +7,8 @@ import { useGameStore } from '@/store/gameStore';
 import { Game } from '@/types/game';
 import { useAccount } from 'wagmi';
 
-// Fallback polling interval when websocket fails (30 seconds)
-const FALLBACK_POLL_INTERVAL = 30000;
+// Fallback polling with exponential backoff
+const FALLBACK_POLL_INTERVALS = [5000, 10000, 20000, 30000]; // 5s, 10s, 20s, 30s max
 
 /**
  * Centralized real-time sync manager
@@ -22,8 +22,21 @@ const FALLBACK_POLL_INTERVAL = 30000;
  * Components don't need their own subscriptions - they just read from
  * React Query or Zustand and get automatic updates.
  */
-// Global connection state for debugging
-let globalConnectionStatus = 'disconnected';
+// Global connection state for components to access
+let globalConnectionStatus: 'disconnected' | 'connecting' | 'SUBSCRIBED' | 'CHANNEL_ERROR' | 'TIMED_OUT' | 'CLOSED' = 'disconnected';
+let globalListeners: Array<() => void> = [];
+
+// Subscribe to connection status changes
+export function subscribeToConnectionStatus(callback: () => void) {
+  globalListeners.push(callback);
+  return () => {
+    globalListeners = globalListeners.filter((l) => l !== callback);
+  };
+}
+
+function notifyListeners() {
+  globalListeners.forEach((l) => l());
+}
 
 export function useRealtimeSync() {
   const queryClient = useQueryClient();
@@ -36,6 +49,7 @@ export function useRealtimeSync() {
   const addressRef = useRef(address);
   const actionsRef = useRef({ updateActiveGame, addActiveGame, removeActiveGame, queueModal });
   const fallbackIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const fallbackRetryCountRef = useRef(0);
 
   // Keep refs updated
   queryClientRef.current = queryClient;
@@ -177,22 +191,41 @@ export function useRealtimeSync() {
       )
       .subscribe((status, err) => {
         console.log('📡 [RealtimeSync] Connection status:', status, err ? `Error: ${err.message}` : '');
-        globalConnectionStatus = status;
+        globalConnectionStatus = status as typeof globalConnectionStatus;
+        notifyListeners();
 
         if (status === 'SUBSCRIBED') {
           setIsConnected(true);
           // Clear fallback polling when connected
           if (fallbackIntervalRef.current) {
-            clearInterval(fallbackIntervalRef.current);
+            clearTimeout(fallbackIntervalRef.current);
             fallbackIntervalRef.current = null;
           }
+          fallbackRetryCountRef.current = 0; // Reset backoff
           console.log('✅ [RealtimeSync] WebSocket connected - real-time updates active');
         } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
           setIsConnected(false);
           console.warn('⚠️ [RealtimeSync] WebSocket disconnected - starting fallback polling');
-          // Start fallback polling when disconnected
+
+          // Start fallback polling with exponential backoff
+          const startFallbackPolling = () => {
+            if (fallbackIntervalRef.current) {
+              clearTimeout(fallbackIntervalRef.current);
+            }
+
+            fallbackPoll();
+
+            // Get next interval with backoff
+            const intervalIndex = Math.min(fallbackRetryCountRef.current, FALLBACK_POLL_INTERVALS.length - 1);
+            const nextInterval = FALLBACK_POLL_INTERVALS[intervalIndex];
+            fallbackRetryCountRef.current++;
+
+            console.log(`🔄 [RealtimeSync] Next poll in ${nextInterval / 1000}s`);
+            fallbackIntervalRef.current = setTimeout(startFallbackPolling, nextInterval);
+          };
+
           if (!fallbackIntervalRef.current) {
-            fallbackIntervalRef.current = setInterval(fallbackPoll, FALLBACK_POLL_INTERVAL);
+            startFallbackPolling();
           }
         }
       });
@@ -205,19 +238,44 @@ export function useRealtimeSync() {
       console.log('🔌 [RealtimeSync] Cleaning up...');
       channel.unsubscribe();
       if (fallbackIntervalRef.current) {
-        clearInterval(fallbackIntervalRef.current);
+        clearTimeout(fallbackIntervalRef.current);
         fallbackIntervalRef.current = null;
       }
       globalConnectionStatus = 'disconnected';
+      notifyListeners();
     };
   }, []); // Empty dependency array - subscription lives for component lifetime
 
   return isConnected;
 }
 
-// Export for debugging
+// Export for debugging and components
 export function getRealtimeStatus() {
   return globalConnectionStatus;
+}
+
+// Hook to get current connection status with automatic re-render on changes
+export function useConnectionStatus() {
+  const [status, setStatus] = useState(globalConnectionStatus);
+
+  useEffect(() => {
+    // Initial sync
+    setStatus(globalConnectionStatus);
+
+    // Subscribe to changes
+    const unsubscribe = subscribeToConnectionStatus(() => {
+      setStatus(globalConnectionStatus);
+    });
+
+    return unsubscribe;
+  }, []);
+
+  return {
+    status,
+    isConnected: status === 'SUBSCRIBED',
+    isConnecting: status === 'connecting',
+    isDisconnected: status === 'disconnected' || status === 'CLOSED' || status === 'CHANNEL_ERROR' || status === 'TIMED_OUT',
+  };
 }
 
 /**

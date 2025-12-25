@@ -27,6 +27,8 @@ import { StatusBadge } from '@/components/game/StatusBadge';
 import { useCancelGame } from '@/hooks/useContract';
 import { useGameStore } from '@/store/gameStore';
 import { useGameTimeout } from '@/hooks/useGameTimeout';
+import { useConnectionStatus } from '@/hooks/useRealtimeSync';
+import { useQueryClient } from '@tanstack/react-query';
 
 // Contract timeout in milliseconds (100 blocks @ ~12 sec/block = ~20 minutes)
 const CONTRACT_TIMEOUT_MS = 20 * 60 * 1000;
@@ -45,12 +47,19 @@ function getTimeUntilCancel(createdAt: string, now: number): number {
   return Math.max(0, CONTRACT_TIMEOUT_MS - elapsed);
 }
 
-// Format milliseconds as mm:ss
+// Format milliseconds as short duration (e.g., "3m" or "19m 48s")
 function formatCancelCountdown(ms: number): string {
   const totalSeconds = Math.ceil(ms / 1000);
   const minutes = Math.floor(totalSeconds / 60);
   const seconds = totalSeconds % 60;
-  return `${minutes}:${seconds.toString().padStart(2, '0')}`;
+
+  if (minutes === 0) {
+    return `${seconds}s`;
+  }
+  if (seconds === 0) {
+    return `${minutes}m`;
+  }
+  return `${minutes}m ${seconds}s`;
 }
 
 // Helper to format time ago with live updates
@@ -122,13 +131,14 @@ export default function QueuePage() {
   const { joinGame, isLoading, isConfirming, isSuccess, txHash, error, reset: resetJoinState } = useJoinGame();
   const { cancelGame, isLoading: isCanceling, isSuccess: isCancelSuccess, error: cancelError, reset: resetCancelState } = useCancelGame();
   const { formatTimeRemaining } = useGameTimeout();
+  const { isConnected: isLive, isConnecting } = useConnectionStatus();
   const [selectedGame, setSelectedGame] = useState<any>(null);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
-  const [isLive, setIsLive] = useState(false);
   const [joinedGameId, setJoinedGameId] = useState<string | null>(null);
   const [cancelingGameId, setCancelingGameId] = useState<string | null>(null);
   const [now, setNow] = useState(Date.now()); // For live time updates
-  const { addActiveGame } = useGameStore();
+  const { addActiveGame, startCancellingGame, finishCancellingGame, isGameCancelling, cancellingGames } = useGameStore();
+  const queryClient = useQueryClient();
 
   // Refs for cleanup
   const mountedRef = useRef(true);
@@ -152,34 +162,62 @@ export default function QueuePage() {
   }, []);
 
   // Real-time updates are handled centrally by useRealtimeSync (in Providers)
-  // Just set isLive to true since central sync is always connected
+  // Connection status is now managed by useConnectionStatus hook
+
+  // Handle join success - invalidate queries to remove joined game from list
   useEffect(() => {
-    setIsLive(true);
-  }, []);
+    if (isSuccess && joinedGameId) {
+      // Immediately invalidate queries for real-time sync
+      queryClient.invalidateQueries({ queryKey: ['games', 'pending'] });
+      queryClient.invalidateQueries({ queryKey: ['games', 'active'] });
+      queryClient.invalidateQueries({ queryKey: ['games', 'player'] });
+      queryClient.invalidateQueries({ queryKey: ['game', joinedGameId] });
+
+      // Optimistically remove from pending games cache
+      queryClient.setQueryData(['games', 'pending'], (old: any[] | undefined) =>
+        old?.filter(g => g.id !== joinedGameId) || []
+      );
+    }
+  }, [isSuccess, joinedGameId, queryClient]);
 
   // Handle cancel success/error
   useEffect(() => {
     if (isCancelSuccess && cancelingGameId) {
+      finishCancellingGame(cancelingGameId, true);
+
+      // Immediately invalidate all game queries for real-time sync
+      queryClient.invalidateQueries({ queryKey: ['games', 'pending'] });
+      queryClient.invalidateQueries({ queryKey: ['games', 'active'] });
+      queryClient.invalidateQueries({ queryKey: ['games', 'player'] });
+      queryClient.invalidateQueries({ queryKey: ['game', cancelingGameId] });
+      queryClient.invalidateQueries({ queryKey: ['game-stats'] });
+
+      // Optimistically remove from pending games cache
+      queryClient.setQueryData(['games', 'pending'], (old: any[] | undefined) =>
+        old?.filter(g => g.id !== cancelingGameId) || []
+      );
+
       setCancelingGameId(null);
       resetCancelState();
-      refetch();
     }
-  }, [isCancelSuccess, cancelingGameId, resetCancelState, refetch]);
+  }, [isCancelSuccess, cancelingGameId, resetCancelState, finishCancellingGame, queryClient]);
 
   useEffect(() => {
     if (cancelError && cancelingGameId) {
+      finishCancellingGame(cancelingGameId, false);
       setCancelingGameId(null);
       resetCancelState();
-      refetch(); // Refresh list to get current state
+      // Refresh list to get current state after error
+      queryClient.invalidateQueries({ queryKey: ['games', 'pending'] });
     }
-  }, [cancelError, cancelingGameId, resetCancelState, refetch]);
+  }, [cancelError, cancelingGameId, resetCancelState, finishCancellingGame, queryClient]);
 
-  // Separate user's games from other games
+  // Separate user's games from other games, excluding games being cancelled
   const myPendingGames = pendingGames?.filter(
-    (game) => game.creator_address.toLowerCase() === address?.toLowerCase()
+    (game) => game.creator_address.toLowerCase() === address?.toLowerCase() && !isGameCancelling(game.id)
   );
   const otherPendingGames = pendingGames?.filter(
-    (game) => game.creator_address.toLowerCase() !== address?.toLowerCase()
+    (game) => game.creator_address.toLowerCase() !== address?.toLowerCase() && !isGameCancelling(game.id)
   );
 
   const handleJoinClick = useCallback((game: any, tier: any) => {
@@ -207,6 +245,11 @@ export default function QueuePage() {
   }, [selectedGame, joinGame, addActiveGame]);
 
   const handleCancelGame = useCallback(async (gameId: string) => {
+    // Check if already cancelling
+    if (isGameCancelling(gameId) || cancelingGameId === gameId) {
+      return;
+    }
+
     // Reset any previous cancel state
     resetCancelState();
 
@@ -215,8 +258,10 @@ export default function QueuePage() {
     }
 
     setCancelingGameId(gameId);
+    // Optimistic UI update
+    startCancellingGame(gameId);
     cancelGame(gameId);
-  }, [cancelGame, resetCancelState]);
+  }, [cancelGame, resetCancelState, startCancellingGame, isGameCancelling, cancelingGameId]);
 
   const handleDialogClose = useCallback((resetJoinedGame = true) => {
     setIsDialogOpen(false);
@@ -281,10 +326,15 @@ export default function QueuePage() {
                       <Wifi className="w-3 h-3 text-green-400" />
                       <Text size="1" className="text-green-400">Live</Text>
                     </>
+                  ) : isConnecting ? (
+                    <>
+                      <Loader2 className="w-3 h-3 text-yellow-400 animate-spin" />
+                      <Text size="1" className="text-yellow-400">Connecting...</Text>
+                    </>
                   ) : (
                     <>
-                      <WifiOff className="w-3 h-3 text-gray-500" />
-                      <Text size="1" color="gray">Connecting...</Text>
+                      <WifiOff className="w-3 h-3 text-red-400" />
+                      <Text size="1" className="text-red-400">Offline</Text>
                     </>
                   )}
                 </Flex>
@@ -396,7 +446,7 @@ export default function QueuePage() {
                             ) : (
                               <Badge color="gray" size="2">
                                 <Clock className="w-3 h-3" />
-                                Cancel in {formatCancelCountdown(getTimeUntilCancel(game.created_at, now))}
+                                Refund in {formatCancelCountdown(getTimeUntilCancel(game.created_at, now))}
                               </Badge>
                             )}
                           </Flex>
@@ -422,10 +472,10 @@ export default function QueuePage() {
                 <Flex align="center" justify="between">
                   <Flex align="center" gap="3">
                     <Heading size="5">Available Games</Heading>
-                    <Badge size="1" color={isLive ? 'green' : 'yellow'} variant="soft">
+                    <Badge size="1" color={isLive ? 'green' : isConnecting ? 'yellow' : 'red'} variant="soft">
                       <Flex align="center" gap="1">
-                        {isLive ? <Wifi className="w-3 h-3" /> : <WifiOff className="w-3 h-3" />}
-                        {isLive ? 'Live' : 'Connecting...'}
+                        {isLive ? <Wifi className="w-3 h-3" /> : isConnecting ? <Loader2 className="w-3 h-3 animate-spin" /> : <WifiOff className="w-3 h-3" />}
+                        {isLive ? 'Live' : isConnecting ? 'Connecting...' : 'Offline'}
                       </Flex>
                     </Badge>
                   </Flex>

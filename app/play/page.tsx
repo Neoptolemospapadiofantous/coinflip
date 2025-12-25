@@ -24,6 +24,7 @@ import { useCreatedGameTracking } from '@/hooks/useCreatedGameTracking';
 import { Info, Loader2, CheckCircle2, AlertCircle, Clock, Users, X, Plus, Gamepad2 } from 'lucide-react';
 import { parseError } from '@/lib/errors';
 import { Game } from '@/types/game';
+import { useQueryClient } from '@tanstack/react-query';
 
 enum GameStep {
   SELECT_TIER = 'select_tier',
@@ -45,11 +46,15 @@ export default function PlayPage() {
     queueModal,
     getActiveGamesCount,
     canCreateNewGame,
+    startCancellingGame,
+    finishCancellingGame,
+    isGameCancelling,
   } = useGameStore();
   const { createGame, isLoading, isSuccess, txHash, error, reset: resetCreateGame } = useCreateGame();
   const { cancelGame, isLoading: isCancelling, error: cancelError, isSuccess: cancelSuccess, reset: resetCancelState } = useCancelGame();
   const { data: tiers } = useTiers();
   const activeGames = useActiveGamesList();
+  const queryClient = useQueryClient();
 
   // Refs for race condition prevention
   const isCancellingRef = useRef(false);
@@ -104,7 +109,7 @@ export default function PlayPage() {
   const {
     game: trackedGame,
     isSearching,
-    isSubscribed,
+    phase: trackingPhase,
     elapsedSeconds,
     cancelTracking,
   } = useCreatedGameTracking({
@@ -125,14 +130,32 @@ export default function PlayPage() {
     };
   }, [cancelTracking]);
 
-  // Handle cancel success
+  // Handle cancel success/failure
   useEffect(() => {
-    if (cancelSuccess && mountedRef.current) {
+    if (cancelSuccess && mountedRef.current && trackedGame?.id) {
       console.log('🎮 Game cancelled successfully');
+      finishCancellingGame(trackedGame.id, true);
+
+      // Invalidate all game queries for real-time sync across pages
+      queryClient.invalidateQueries({ queryKey: ['games', 'pending'] });
+      queryClient.invalidateQueries({ queryKey: ['games', 'active'] });
+      queryClient.invalidateQueries({ queryKey: ['games', 'player'] });
+      queryClient.invalidateQueries({ queryKey: ['game', trackedGame.id] });
+      queryClient.invalidateQueries({ queryKey: ['game-stats'] });
+
       cancelTracking();
       handleReset();
     }
-  }, [cancelSuccess, cancelTracking, handleReset]);
+  }, [cancelSuccess, cancelTracking, handleReset, finishCancellingGame, trackedGame?.id, queryClient]);
+
+  // Handle cancel error - revert optimistic update
+  useEffect(() => {
+    if (cancelError && mountedRef.current && trackedGame?.id) {
+      console.log('🎮 Game cancel failed, reverting');
+      finishCancellingGame(trackedGame.id, false);
+      isCancellingRef.current = false;
+    }
+  }, [cancelError, finishCancellingGame, trackedGame?.id]);
 
   // Reset matched ref when tracked game changes
   useEffect(() => {
@@ -158,7 +181,7 @@ export default function PlayPage() {
   const handleCancelGame = useCallback(() => {
     if (!trackedGame?.id) return;
 
-    if (isCancellingRef.current) {
+    if (isCancellingRef.current || isGameCancelling(trackedGame.id)) {
       console.warn('Cancel already in progress');
       return;
     }
@@ -167,9 +190,16 @@ export default function PlayPage() {
       return;
     }
 
+    // Confirmation dialog
+    if (!confirm('Cancel this game and get your bet refunded?')) {
+      return;
+    }
+
     isCancellingRef.current = true;
+    // Optimistic UI update - mark as cancelling immediately
+    startCancellingGame(trackedGame.id);
     cancelGame(trackedGame.id);
-  }, [trackedGame, cancelGame]);
+  }, [trackedGame, cancelGame, startCancellingGame, isGameCancelling]);
 
   const handleCreateAnother = useCallback(() => {
     cancelTracking();
@@ -383,8 +413,8 @@ export default function PlayPage() {
                       <Button size="4" variant="soft" onClick={() => setStep(GameStep.CHOOSE_SIDE)}>
                         Back
                       </Button>
-                      <Button size="4" className="flex-1" onClick={handleCreateGame} disabled={!canCreate}>
-                        Create Game
+                      <Button size="4" className="flex-1" onClick={handleCreateGame} disabled={!canCreate || isLoading}>
+                        {isLoading ? 'Creating...' : 'Create Game'}
                       </Button>
                     </Flex>
                   </>
@@ -393,7 +423,62 @@ export default function PlayPage() {
                 {/* Step 4: Creating/Waiting */}
                 {(step === GameStep.CREATING || step === GameStep.WAITING) && (
                   <Flex direction="column" gap="4" align="center" py="6">
-                    {/* Phase 1: Wallet confirmation */}
+                    {/* Creation Progress Steps */}
+                    {!trackedGame && (
+                      <Card className="w-full max-w-md card-simple mb-4">
+                        <Flex direction="column" gap="3" p="4">
+                          {/* Step 1: Wallet */}
+                          <Flex align="center" gap="3">
+                            <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
+                              isSuccess ? 'bg-green-500/20 text-green-400' : isLoading ? 'bg-cyan-500/20 text-cyan-400' : 'bg-gray-500/20 text-gray-400'
+                            }`}>
+                              {isSuccess ? <CheckCircle2 className="w-5 h-5" /> : isLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : '1'}
+                            </div>
+                            <Flex direction="column">
+                              <Text size="2" weight="bold" className={isSuccess ? 'text-green-400' : isLoading ? 'text-cyan-400' : 'text-gray-400'}>
+                                Confirm in Wallet
+                              </Text>
+                              {isLoading && <Text size="1" color="gray">Waiting for signature...</Text>}
+                              {isSuccess && <Text size="1" className="text-green-400">Signed</Text>}
+                            </Flex>
+                          </Flex>
+
+                          {/* Step 2: Blockchain */}
+                          <Flex align="center" gap="3">
+                            <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
+                              isSuccess && !isSearching ? 'bg-green-500/20 text-green-400' : isSuccess && isSearching ? 'bg-yellow-500/20 text-yellow-400' : 'bg-gray-500/20 text-gray-400'
+                            }`}>
+                              {isSuccess && !isSearching ? <CheckCircle2 className="w-5 h-5" /> : isSuccess && isSearching ? <Loader2 className="w-5 h-5 animate-spin" /> : '2'}
+                            </div>
+                            <Flex direction="column">
+                              <Text size="2" weight="bold" className={isSuccess ? (isSearching ? 'text-yellow-400' : 'text-green-400') : 'text-gray-400'}>
+                                Broadcasting to Blockchain
+                              </Text>
+                              {isSuccess && isSearching && <Text size="1" color="gray">Confirming transaction...</Text>}
+                              {isSuccess && !isSearching && <Text size="1" className="text-green-400">Confirmed</Text>}
+                            </Flex>
+                          </Flex>
+
+                          {/* Step 3: Indexing */}
+                          <Flex align="center" gap="3">
+                            <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
+                              trackedGame ? 'bg-green-500/20 text-green-400' : isSuccess && isSearching ? 'bg-cyan-500/20 text-cyan-400' : 'bg-gray-500/20 text-gray-400'
+                            }`}>
+                              {trackedGame ? <CheckCircle2 className="w-5 h-5" /> : isSuccess && isSearching ? <Loader2 className="w-5 h-5 animate-spin" /> : '3'}
+                            </div>
+                            <Flex direction="column">
+                              <Text size="2" weight="bold" className={trackedGame ? 'text-green-400' : isSuccess && isSearching ? 'text-cyan-400' : 'text-gray-400'}>
+                                Syncing to Database
+                              </Text>
+                              {isSuccess && isSearching && !trackedGame && <Text size="1" color="gray">Almost there...</Text>}
+                              {trackedGame && <Text size="1" className="text-green-400">Synced</Text>}
+                            </Flex>
+                          </Flex>
+                        </Flex>
+                      </Card>
+                    )}
+
+                    {/* Main content based on phase */}
                     {isLoading && (
                       <div className="animate-fade-in">
                         <Flex direction="column" gap="4" align="center">
@@ -406,14 +491,13 @@ export default function PlayPage() {
                       </div>
                     )}
 
-                    {/* Phase 2: Transaction confirmed, waiting for indexing */}
                     {isSuccess && isSearching && !trackedGame && (
                       <div className="animate-fade-in">
                         <Flex direction="column" gap="4" align="center">
                           <Loader2 className="w-16 h-16 text-yellow-400 animate-spin" />
                           <Heading size="5" className="text-gradient-gold">Transaction Confirmed!</Heading>
                           <Text size="2" color="gray" align="center">
-                            Waiting for blockchain confirmation...
+                            Syncing game to database...
                           </Text>
                           {txHash && (
                             <Text size="1" className="font-mono text-gray-500">
@@ -467,9 +551,11 @@ export default function PlayPage() {
 
                           {/* Real-time Status */}
                           <Flex align="center" gap="2">
-                            <div className={`w-2 h-2 rounded-full ${isSubscribed ? 'bg-green-400' : 'bg-yellow-400'} animate-pulse`} />
+                            <div className={`w-2 h-2 rounded-full ${trackingPhase === 'waiting_event' || trackingPhase === 'waiting_indexer' ? 'bg-green-400' : 'bg-yellow-400'} animate-pulse`} />
                             <Text size="1" color="gray">
-                              {isSubscribed ? 'Live updates active' : 'Connecting...'}
+                              {trackingPhase === 'waiting_event' ? 'Listening for event...' :
+                               trackingPhase === 'waiting_indexer' ? 'Syncing to database...' :
+                               trackingPhase === 'found' ? 'Game found!' : 'Connecting...'}
                             </Text>
                           </Flex>
 

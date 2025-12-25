@@ -1,8 +1,11 @@
 'use client';
 
 import { useEffect, useState, useRef, useCallback } from 'react';
+import { useWatchContractEvent, useChainId } from 'wagmi';
 import { supabase } from '@/lib/supabase';
 import { Game } from '@/types/game';
+import { COINFLIP_ABI } from '@/lib/contracts/abi';
+import { getCoinFlipAddress } from '@/lib/contracts/addresses';
 
 interface UseCreatedGameTrackingOptions {
   txHash: string | undefined;
@@ -18,23 +21,22 @@ interface TrackingState {
   isSearching: boolean;
   error: string | null;
   elapsedSeconds: number;
+  phase: 'waiting_event' | 'waiting_indexer' | 'found' | 'timeout';
 }
 
-// Polling interval in ms
-const POLL_INTERVAL = 2000;
-// Timeout for finding game in ms (2 minutes)
-const SEARCH_TIMEOUT = 120000;
+// Fallback polling interval in ms (faster since event should arrive first)
+const POLL_INTERVAL = 1000;
+// Timeout for finding game in ms (30 seconds - much shorter since we have events)
+const SEARCH_TIMEOUT = 30000;
 
 /**
  * Hook to track a newly created game from transaction to discovery
  *
- * Flow:
- * 1. After tx confirmation, polls DB to find the game by tx_hash
- * 2. Once found, triggers onGameFound callback
- * 3. Triggers immediate callbacks if game is already matched/resolved
- *
- * Real-time updates after discovery are handled by useRealtimeSync (central sync).
- * This hook only handles the initial polling phase until the game is indexed.
+ * Improved Flow:
+ * 1. Listen for GameCreated contract event matching creator address
+ * 2. When event arrives, immediately poll DB for the game
+ * 3. Fallback polling runs in parallel as backup
+ * 4. Much faster discovery since we don't wait for polling interval
  */
 export function useCreatedGameTracking({
   txHash,
@@ -44,11 +46,15 @@ export function useCreatedGameTracking({
   onGameResolved,
   onGameCancelled,
 }: UseCreatedGameTrackingOptions): TrackingState & { cancelTracking: () => void } {
+  const chainId = useChainId();
+  const contractAddress = getCoinFlipAddress(chainId);
+
   const [state, setState] = useState<TrackingState>({
     game: null,
     isSearching: false,
     error: null,
     elapsedSeconds: 0,
+    phase: 'waiting_event',
   });
 
   // Refs for lifecycle management
@@ -58,6 +64,7 @@ export function useCreatedGameTracking({
   const timeoutRef = useRef<NodeJS.Timeout | null>(null);
   const gameIdRef = useRef<string | null>(null);
   const currentTxHashRef = useRef<string | null>(null);
+  const eventReceivedRef = useRef(false);
 
   // Callback refs to avoid re-running effect
   const onGameFoundRef = useRef(onGameFound);
@@ -90,17 +97,123 @@ export function useCreatedGameTracking({
     cleanup();
     gameIdRef.current = null;
     currentTxHashRef.current = null;
+    eventReceivedRef.current = false;
     if (mountedRef.current) {
       setState({
         game: null,
         isSearching: false,
         error: null,
         elapsedSeconds: 0,
+        phase: 'waiting_event',
       });
     }
   }, [cleanup]);
 
-  // Main effect: Poll for game until found
+  // Function to fetch game from DB
+  const fetchGameFromDB = useCallback(async (searchTxHash: string): Promise<Game | null> => {
+    try {
+      const { data, error } = await supabase
+        .from('games')
+        .select('*')
+        .eq('tx_hash', searchTxHash.toLowerCase())
+        .maybeSingle();
+
+      if (error) {
+        console.error('Error fetching game:', error);
+        return null;
+      }
+
+      return data;
+    } catch (err) {
+      console.error('Error in fetchGameFromDB:', err);
+      return null;
+    }
+  }, []);
+
+  // Handle game found
+  const handleGameFound = useCallback((game: Game) => {
+    if (!mountedRef.current || gameIdRef.current) return;
+
+    console.log(`🎮 Found created game:`, game.id, 'status:', game.status);
+    gameIdRef.current = game.id;
+
+    // Stop polling
+    cleanup();
+
+    // Update state
+    setState((prev) => ({
+      ...prev,
+      game,
+      isSearching: false,
+      phase: 'found',
+    }));
+
+    // Notify game found
+    onGameFoundRef.current?.(game);
+
+    // Trigger immediate callbacks based on current status
+    if (game.status === 'matched') {
+      onGameMatchedRef.current?.(game);
+    } else if (game.status === 'resolved') {
+      onGameResolvedRef.current?.(game);
+    } else if (game.status === 'cancelled') {
+      onGameCancelledRef.current?.(game);
+    }
+  }, [cleanup]);
+
+  // Watch for GameCreated events from the contract
+  useWatchContractEvent({
+    address: contractAddress,
+    abi: COINFLIP_ABI,
+    eventName: 'GameCreated',
+    enabled: !!txHash && !!creatorAddress && !gameIdRef.current,
+    onLogs: async (logs) => {
+      if (!txHash || !creatorAddress || gameIdRef.current) return;
+
+      for (const log of logs) {
+        // Check if this event matches our transaction
+        if (log.transactionHash?.toLowerCase() === txHash.toLowerCase()) {
+          console.log('📡 GameCreated event received for tx:', txHash.slice(0, 10));
+          eventReceivedRef.current = true;
+
+          // Update phase
+          if (mountedRef.current) {
+            setState((prev) => ({
+              ...prev,
+              phase: 'waiting_indexer',
+            }));
+          }
+
+          // Immediately try to fetch from DB (indexer may have already processed it)
+          const game = await fetchGameFromDB(txHash);
+          if (game) {
+            handleGameFound(game);
+            return;
+          }
+
+          // If not in DB yet, poll more aggressively for a few seconds
+          let retries = 0;
+          const maxRetries = 10;
+          const retryInterval = setInterval(async () => {
+            if (gameIdRef.current || retries >= maxRetries) {
+              clearInterval(retryInterval);
+              return;
+            }
+            retries++;
+            const retryGame = await fetchGameFromDB(txHash);
+            if (retryGame) {
+              clearInterval(retryInterval);
+              handleGameFound(retryGame);
+            }
+          }, 500);
+
+          return;
+        }
+      }
+    },
+  });
+
+  // Main effect: Start tracking when txHash is provided
   useEffect(() => {
     // Skip if no txHash or if same txHash already being tracked
     if (!txHash || !creatorAddress) {
@@ -116,6 +229,7 @@ export function useCreatedGameTracking({
     cleanup();
     currentTxHashRef.current = txHash;
     gameIdRef.current = null;
+    eventReceivedRef.current = false;
     mountedRef.current = true;
 
     console.log('🔍 Starting game tracking for tx:', txHash.slice(0, 10));
@@ -125,6 +239,7 @@ export function useCreatedGameTracking({
       isSearching: true,
       error: null,
       elapsedSeconds: 0,
+      phase: 'waiting_event',
     });
 
     const startTime = Date.now();
@@ -138,51 +253,13 @@ export function useCreatedGameTracking({
       }));
     }, 1000);
 
-    // Poll for game
+    // Fallback polling (in case event is missed)
     const pollForGame = async () => {
       if (!mountedRef.current || gameIdRef.current) return;
 
-      try {
-        const { data, error } = await supabase
-          .from('games')
-          .select('*')
-          .eq('tx_hash', txHash.toLowerCase())
-          .maybeSingle();
-
-        if (error) {
-          console.error('Error polling for game:', error);
-          return;
-        }
-
-        if (data && mountedRef.current) {
-          console.log(`🎮 Found created game:`, data.id, 'status:', data.status);
-          gameIdRef.current = data.id;
-
-          // Stop polling
-          cleanup();
-
-          // Update state
-          setState((prev) => ({
-            ...prev,
-            game: data,
-            isSearching: false,
-          }));
-
-          // Notify game found
-          onGameFoundRef.current?.(data);
-
-          // Trigger immediate callbacks based on current status
-          // (central sync will handle future updates)
-          if (data.status === 'matched') {
-            onGameMatchedRef.current?.(data);
-          } else if (data.status === 'resolved') {
-            onGameResolvedRef.current?.(data);
-          } else if (data.status === 'cancelled') {
-            onGameCancelledRef.current?.(data);
-          }
-        }
-      } catch (err) {
-        console.error('Error in game poll:', err);
+      const game = await fetchGameFromDB(txHash);
+      if (game && mountedRef.current) {
+        handleGameFound(game);
       }
     };
 
@@ -199,7 +276,10 @@ export function useCreatedGameTracking({
         setState((prev) => ({
           ...prev,
           isSearching: false,
-          error: 'Timeout waiting for game to be indexed. Please check your transaction.',
+          phase: 'timeout',
+          error: eventReceivedRef.current
+            ? 'Game event received but database sync is slow. Please refresh.'
+            : 'Timeout waiting for game. Please check your transaction.',
         }));
         cleanup();
       }
@@ -208,7 +288,7 @@ export function useCreatedGameTracking({
     return () => {
       // Don't cleanup on every re-render, only on unmount or txHash change
     };
-  }, [txHash, creatorAddress, cleanup]);
+  }, [txHash, creatorAddress, cleanup, fetchGameFromDB, handleGameFound]);
 
   // Cleanup on unmount
   useEffect(() => {
