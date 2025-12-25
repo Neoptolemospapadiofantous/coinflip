@@ -28,6 +28,31 @@ import { useCancelGame } from '@/hooks/useContract';
 import { useGameStore } from '@/store/gameStore';
 import { useGameTimeout } from '@/hooks/useGameTimeout';
 
+// Contract timeout in milliseconds (100 blocks @ ~12 sec/block = ~20 minutes)
+const CONTRACT_TIMEOUT_MS = 20 * 60 * 1000;
+
+// Helper to check if a game can be cancelled (20 minutes passed)
+function canCancelGame(createdAt: string, now: number): boolean {
+  const created = new Date(createdAt).getTime();
+  const elapsed = now - created;
+  return elapsed >= CONTRACT_TIMEOUT_MS;
+}
+
+// Helper to get time remaining until cancel is allowed
+function getTimeUntilCancel(createdAt: string, now: number): number {
+  const created = new Date(createdAt).getTime();
+  const elapsed = now - created;
+  return Math.max(0, CONTRACT_TIMEOUT_MS - elapsed);
+}
+
+// Format milliseconds as mm:ss
+function formatCancelCountdown(ms: number): string {
+  const totalSeconds = Math.ceil(ms / 1000);
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  return `${minutes}:${seconds.toString().padStart(2, '0')}`;
+}
+
 // Helper to format time ago with live updates
 function formatTimeAgo(createdAt: string, now: number): string {
   const seconds = Math.floor((now - new Date(createdAt).getTime()) / 1000);
@@ -116,13 +141,13 @@ export default function QueuePage() {
     };
   }, []);
 
-  // Live time updates - refresh every 10 seconds
+  // Live time updates - refresh every second for accurate cancel countdown
   useEffect(() => {
     const interval = setInterval(() => {
       if (mountedRef.current) {
         setNow(Date.now());
       }
-    }, 10000);
+    }, 1000);
     return () => clearInterval(interval);
   }, []);
 
@@ -357,7 +382,7 @@ export default function QueuePage() {
                                 <Loader2 className="w-3 h-3 animate-spin" />
                                 Cancelling...
                               </Badge>
-                            ) : (
+                            ) : canCancelGame(game.created_at, now) ? (
                               <Button
                                 size="2"
                                 variant="soft"
@@ -368,13 +393,18 @@ export default function QueuePage() {
                                 <XCircle className="w-4 h-4" />
                                 Cancel Game
                               </Button>
+                            ) : (
+                              <Badge color="gray" size="2">
+                                <Clock className="w-3 h-3" />
+                                Cancel in {formatCancelCountdown(getTimeUntilCancel(game.created_at, now))}
+                              </Badge>
                             )}
                           </Flex>
 
                           <Card variant="surface" className="bg-blue-500/5 border border-blue-500/20">
                             <Flex direction="column" gap="1" p="2">
                               <Text size="1" color="blue">
-                                💡 Your game is visible to other players. You'll be notified when it expires (20 min) - cancel to get your refund.
+                                💡 Your game is visible to other players. The smart contract requires 20 minutes (~100 blocks) before you can cancel for a refund.
                               </Text>
                             </Flex>
                           </Card>
