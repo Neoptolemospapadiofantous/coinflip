@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useCallback, useState, useMemo } from 'react';
+import { useEffect, useRef, useCallback, useMemo } from 'react';
 import { useAccount } from 'wagmi';
 import { useGameStore } from '@/store/gameStore';
 import { Game } from '@/types/game';
@@ -12,7 +12,19 @@ const GAME_TIMEOUT_MS = 20 * 60 * 1000;
 const CHECK_INTERVAL_MS = 30 * 1000;
 
 // Persist expired game IDs across component lifecycles to prevent duplicate modals
+// Limit size to prevent memory leak - oldest entries removed when over limit
+const MAX_EXPIRED_CACHE_SIZE = 50;
 const globalExpiredGameIds = new Set<string>();
+
+function addToExpiredCache(gameId: string) {
+  // If cache is full, remove oldest entries (first ones added)
+  if (globalExpiredGameIds.size >= MAX_EXPIRED_CACHE_SIZE) {
+    const iterator = globalExpiredGameIds.values();
+    const oldest = iterator.next().value;
+    if (oldest) globalExpiredGameIds.delete(oldest);
+  }
+  globalExpiredGameIds.add(gameId);
+}
 
 interface TimeoutInfo {
   gameId: string;
@@ -29,7 +41,6 @@ export function useGameTimeout() {
   const { address } = useAccount();
   const { activeGames, queueModal, removeActiveGame } = useGameStore();
 
-  const [pendingTimeouts, setPendingTimeouts] = useState<TimeoutInfo[]>([]);
   // Use a ref instead of state to avoid re-render loops
   const expiredGameIdsRef = useRef<Set<string>>(globalExpiredGameIds);
   const mountedRef = useRef(true);
@@ -49,9 +60,9 @@ export function useGameTimeout() {
     return games;
   }, [activeGames, address]);
 
-  // Update pending timeouts when user pending games change
-  useEffect(() => {
-    const timeouts: TimeoutInfo[] = userPendingGames.map((game) => {
+  // Calculate pending timeouts from user pending games (pure transformation, use useMemo)
+  const pendingTimeouts = useMemo(() => {
+    return userPendingGames.map((game) => {
       const createdAt = new Date(game.created_at);
       const timeoutAt = new Date(createdAt.getTime() + GAME_TIMEOUT_MS);
       return {
@@ -60,7 +71,6 @@ export function useGameTimeout() {
         timeoutAt,
       };
     });
-    setPendingTimeouts(timeouts);
   }, [userPendingGames]);
 
   // Check for expired games and show notification (no auto-cancel)
@@ -82,7 +92,7 @@ export function useGameTimeout() {
         if (game) {
           // Mark as notified in both ref and global set (prevents duplicates across re-renders)
           expiredGameIdsRef.current.add(timeout.gameId);
-          globalExpiredGameIds.add(timeout.gameId);
+          addToExpiredCache(timeout.gameId);
 
           // Queue an expired modal (user needs to manually cancel for refund)
           // Keep the original 'pending' status - don't fake it as cancelled

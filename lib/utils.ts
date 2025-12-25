@@ -1,6 +1,6 @@
 import { type ClassValue, clsx } from 'clsx';
 import { twMerge } from 'tailwind-merge';
-import { formatUnits, parseUnits } from 'viem';
+import { formatUnits } from 'viem';
 
 // Tailwind utility
 export function cn(...inputs: ClassValue[]) {
@@ -45,25 +45,6 @@ export function formatNumber(num: number): string {
     notation: 'compact',
     maximumFractionDigits: 1,
   }).format(num);
-}
-
-// Format ETH with compact notation (1.2K ETH, 1.2M ETH)
-export function formatCurrencyCompact(wei: bigint | string, decimals = 18): string {
-  const value = typeof wei === 'string' ? BigInt(wei) : wei;
-  const formatted = formatUnits(value, decimals);
-  const num = parseFloat(formatted);
-
-  const compactNum = new Intl.NumberFormat('en-US', {
-    notation: 'compact',
-    maximumFractionDigits: 1,
-  }).format(num);
-
-  return compactNum + ' ETH';
-}
-
-// Parse USD to wei
-export function parseCurrency(usd: number, decimals = 18): bigint {
-  return parseUnits(usd.toString(), decimals);
 }
 
 // Format date/time
