@@ -30,6 +30,9 @@ contract CoinFlip is ReentrancyGuard, Pausable, Ownable {
     /// @notice Blocks before game can be cancelled (timeout)
     uint256 public constant TIMEOUT_BLOCKS = 100;
 
+    /// @notice Blocks before LOCKED game can be refunded if VRF fails (~3 hours on Sepolia)
+    uint256 public constant VRF_TIMEOUT_BLOCKS = 1000;
+
     /// @notice VRF callback gas limit
     uint32 public constant VRF_CALLBACK_GAS_LIMIT = 100000;
 
@@ -144,6 +147,20 @@ contract CoinFlip is ReentrancyGuard, Pausable, Ownable {
         uint256 refundAmount
     );
 
+    event VrfTimeoutClaimed(
+        uint256 indexed gameId,
+        address indexed playerA,
+        address indexed playerB,
+        uint256 refundAmount
+    );
+
+    event EmergencyRefund(
+        uint256 indexed gameId,
+        address indexed playerA,
+        address indexed playerB,
+        uint256 totalRefund
+    );
+
     event TierUpdated(
         uint8 indexed tierId,
         uint256 amount,
@@ -172,6 +189,8 @@ contract CoinFlip is ReentrancyGuard, Pausable, Ownable {
     error CannotJoinOwnGame();
     error NotGameCreator();
     error TimeoutNotReached();
+    error VrfTimeoutNotReached();
+    error NotGameParticipant();
     error TransferFailed();
     error NoFeesToWithdraw();
     error InvalidFeeRecipient();
@@ -322,6 +341,42 @@ contract CoinFlip is ReentrancyGuard, Pausable, Ownable {
         emit GameCancelled(gameId, game.playerA, refundAmount);
     }
 
+    /**
+     * @notice Claim refund for a LOCKED game where VRF failed to respond
+     * @dev Either player can call this after VRF_TIMEOUT_BLOCKS have passed
+     * @param gameId The game ID to claim refund for
+     */
+    function claimVrfTimeout(uint256 gameId)
+        external
+        nonReentrant
+    {
+        Game storage game = games[gameId];
+
+        // Validations
+        if (game.state == GameState.NONE) revert GameDoesNotExist();
+        if (game.state != GameState.LOCKED) revert InvalidGameState();
+        if (msg.sender != game.playerA && msg.sender != game.playerB) {
+            revert NotGameParticipant();
+        }
+        if (block.number < game.createdBlock + VRF_TIMEOUT_BLOCKS) {
+            revert VrfTimeoutNotReached();
+        }
+
+        // Update state
+        game.state = GameState.CANCELLED;
+
+        // Refund both players
+        uint256 refundAmount = tiers[game.tier].amount;
+
+        (bool successA, ) = game.playerA.call{value: refundAmount}("");
+        if (!successA) revert TransferFailed();
+
+        (bool successB, ) = game.playerB.call{value: refundAmount}("");
+        if (!successB) revert TransferFailed();
+
+        emit VrfTimeoutClaimed(gameId, game.playerA, game.playerB, refundAmount);
+    }
+
     // =============================================================
     //                    ADMIN FUNCTIONS
     // =============================================================
@@ -385,6 +440,46 @@ contract CoinFlip is ReentrancyGuard, Pausable, Ownable {
         if (!success) revert TransferFailed();
 
         emit FeesWithdrawn(feeRecipient, amount);
+    }
+
+    /**
+     * @notice Emergency refund for stuck games (admin only)
+     * @dev Can only be called when contract is paused, for games in OPEN or LOCKED state
+     * @param gameId The game ID to refund
+     */
+    function emergencyRefund(uint256 gameId)
+        external
+        onlyOwner
+        whenPaused
+        nonReentrant
+    {
+        Game storage game = games[gameId];
+
+        // Can only refund OPEN or LOCKED games
+        if (game.state == GameState.NONE) revert GameDoesNotExist();
+        if (game.state == GameState.RESOLVED || game.state == GameState.CANCELLED) {
+            revert InvalidGameState();
+        }
+
+        uint256 refundAmount = tiers[game.tier].amount;
+        uint256 totalRefund = 0;
+
+        // Update state first (prevent reentrancy)
+        game.state = GameState.CANCELLED;
+
+        // Refund player A
+        if (game.playerA != address(0)) {
+            (bool successA, ) = game.playerA.call{value: refundAmount}("");
+            if (successA) totalRefund += refundAmount;
+        }
+
+        // Refund player B (only if game was LOCKED)
+        if (game.playerB != address(0)) {
+            (bool successB, ) = game.playerB.call{value: refundAmount}("");
+            if (successB) totalRefund += refundAmount;
+        }
+
+        emit EmergencyRefund(gameId, game.playerA, game.playerB, totalRefund);
     }
 
     /**
@@ -459,6 +554,40 @@ contract CoinFlip is ReentrancyGuard, Pausable, Ownable {
         Game storage game = games[gameId];
         return game.state == GameState.OPEN &&
                block.number >= game.createdBlock + TIMEOUT_BLOCKS;
+    }
+
+    /**
+     * @notice Check if a LOCKED game can claim VRF timeout refund
+     * @param gameId The game ID
+     * @return True if VRF timeout can be claimed
+     */
+    function canClaimVrfTimeout(uint256 gameId)
+        external
+        view
+        returns (bool)
+    {
+        Game storage game = games[gameId];
+        return game.state == GameState.LOCKED &&
+               block.number >= game.createdBlock + VRF_TIMEOUT_BLOCKS;
+    }
+
+    /**
+     * @notice Get blocks remaining until VRF timeout can be claimed
+     * @param gameId The game ID
+     * @return Blocks remaining (0 if can claim now or game not LOCKED)
+     */
+    function getVrfTimeoutBlocksRemaining(uint256 gameId)
+        external
+        view
+        returns (uint256)
+    {
+        Game storage game = games[gameId];
+        if (game.state != GameState.LOCKED) return 0;
+
+        uint256 timeoutBlock = game.createdBlock + VRF_TIMEOUT_BLOCKS;
+        if (block.number >= timeoutBlock) return 0;
+
+        return timeoutBlock - block.number;
     }
 
     // =============================================================

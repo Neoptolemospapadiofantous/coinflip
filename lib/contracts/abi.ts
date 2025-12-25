@@ -1,9 +1,10 @@
 // CoinFlip Contract ABI
-// This will be replaced with the actual ABI after smart contract deployment
-// Based on doc/01_smart_contract_architecture.md
+// Updated to match the actual deployed contract
 
 export const COINFLIP_ABI = [
-  // Events
+  // =============================================================
+  //                          EVENTS
+  // =============================================================
   {
     type: 'event',
     name: 'GameCreated',
@@ -21,7 +22,7 @@ export const COINFLIP_ABI = [
     inputs: [
       { name: 'gameId', type: 'uint256', indexed: true },
       { name: 'joiner', type: 'address', indexed: true },
-      { name: 'choice', type: 'bool', indexed: false },
+      { name: 'totalPot', type: 'uint256', indexed: false },
     ],
   },
   {
@@ -29,9 +30,10 @@ export const COINFLIP_ABI = [
     name: 'GameResolved',
     inputs: [
       { name: 'gameId', type: 'uint256', indexed: true },
-      { name: 'result', type: 'bool', indexed: false },
       { name: 'winner', type: 'address', indexed: true },
-      { name: 'amount', type: 'uint256', indexed: false },
+      { name: 'loser', type: 'address', indexed: true },
+      { name: 'coinResult', type: 'bool', indexed: false },
+      { name: 'payout', type: 'uint256', indexed: false },
     ],
   },
   {
@@ -40,43 +42,211 @@ export const COINFLIP_ABI = [
     inputs: [
       { name: 'gameId', type: 'uint256', indexed: true },
       { name: 'creator', type: 'address', indexed: true },
+      { name: 'refundAmount', type: 'uint256', indexed: false },
+    ],
+  },
+  {
+    type: 'event',
+    name: 'VrfTimeoutClaimed',
+    inputs: [
+      { name: 'gameId', type: 'uint256', indexed: true },
+      { name: 'playerA', type: 'address', indexed: true },
+      { name: 'playerB', type: 'address', indexed: true },
+      { name: 'refundAmount', type: 'uint256', indexed: false },
+    ],
+  },
+  {
+    type: 'event',
+    name: 'EmergencyRefund',
+    inputs: [
+      { name: 'gameId', type: 'uint256', indexed: true },
+      { name: 'playerA', type: 'address', indexed: true },
+      { name: 'playerB', type: 'address', indexed: true },
+      { name: 'totalRefund', type: 'uint256', indexed: false },
+    ],
+  },
+  {
+    type: 'event',
+    name: 'TierUpdated',
+    inputs: [
+      { name: 'tierId', type: 'uint8', indexed: true },
+      { name: 'amount', type: 'uint256', indexed: false },
+      { name: 'enabled', type: 'bool', indexed: false },
+    ],
+  },
+  {
+    type: 'event',
+    name: 'FeesWithdrawn',
+    inputs: [
+      { name: 'recipient', type: 'address', indexed: true },
+      { name: 'amount', type: 'uint256', indexed: false },
+    ],
+  },
+  {
+    type: 'event',
+    name: 'FeeRecipientUpdated',
+    inputs: [
+      { name: 'oldRecipient', type: 'address', indexed: true },
+      { name: 'newRecipient', type: 'address', indexed: true },
     ],
   },
 
-  // Read Functions
+  // =============================================================
+  //                       READ FUNCTIONS
+  // =============================================================
+
+  // Get game info - returns Game struct
+  // struct Game { playerA, playerB, tier, choiceA, state, createdBlock, vrfRequestId, coinResult, winner }
   {
     type: 'function',
     name: 'getGame',
     stateMutability: 'view',
     inputs: [{ name: 'gameId', type: 'uint256' }],
     outputs: [
-      { name: 'creator', type: 'address' },
-      { name: 'joiner', type: 'address' },
-      { name: 'tier', type: 'uint8' },
-      { name: 'amount', type: 'uint256' },
-      { name: 'creatorChoice', type: 'bool' },
-      { name: 'joinerChoice', type: 'bool' },
-      { name: 'result', type: 'bool' },
-      { name: 'winner', type: 'address' },
-      { name: 'status', type: 'uint8' },
+      {
+        name: '',
+        type: 'tuple',
+        components: [
+          { name: 'playerA', type: 'address' },
+          { name: 'playerB', type: 'address' },
+          { name: 'tier', type: 'uint8' },
+          { name: 'choiceA', type: 'bool' },
+          { name: 'state', type: 'uint8' },
+          { name: 'createdBlock', type: 'uint256' },
+          { name: 'vrfRequestId', type: 'uint256' },
+          { name: 'coinResult', type: 'bool' },
+          { name: 'winner', type: 'address' },
+        ],
+      },
     ],
   },
+
+  // Get tier info - returns Tier struct
   {
     type: 'function',
-    name: 'getTierAmount',
+    name: 'getTier',
     stateMutability: 'view',
-    inputs: [{ name: 'tier', type: 'uint8' }],
-    outputs: [{ name: 'amount', type: 'uint256' }],
-  },
-  {
-    type: 'function',
-    name: 'getActiveGamesCount',
-    stateMutability: 'view',
-    inputs: [],
-    outputs: [{ name: 'count', type: 'uint256' }],
+    inputs: [{ name: 'tierId', type: 'uint8' }],
+    outputs: [
+      {
+        name: '',
+        type: 'tuple',
+        components: [
+          { name: 'amount', type: 'uint256' },
+          { name: 'enabled', type: 'bool' },
+          { name: 'totalGames', type: 'uint256' },
+          { name: 'totalVolume', type: 'uint256' },
+        ],
+      },
+    ],
   },
 
-  // Write Functions
+  // Calculate payout for a tier
+  {
+    type: 'function',
+    name: 'calculatePayout',
+    stateMutability: 'view',
+    inputs: [{ name: 'tierId', type: 'uint8' }],
+    outputs: [{ name: '', type: 'uint256' }],
+  },
+
+  // Check if game can be cancelled
+  {
+    type: 'function',
+    name: 'canCancelGame',
+    stateMutability: 'view',
+    inputs: [{ name: 'gameId', type: 'uint256' }],
+    outputs: [{ name: '', type: 'bool' }],
+  },
+
+  // Check if VRF timeout can be claimed
+  {
+    type: 'function',
+    name: 'canClaimVrfTimeout',
+    stateMutability: 'view',
+    inputs: [{ name: 'gameId', type: 'uint256' }],
+    outputs: [{ name: '', type: 'bool' }],
+  },
+
+  // Get blocks remaining until VRF timeout
+  {
+    type: 'function',
+    name: 'getVrfTimeoutBlocksRemaining',
+    stateMutability: 'view',
+    inputs: [{ name: 'gameId', type: 'uint256' }],
+    outputs: [{ name: '', type: 'uint256' }],
+  },
+
+  // Constants
+  {
+    type: 'function',
+    name: 'TIMEOUT_BLOCKS',
+    stateMutability: 'view',
+    inputs: [],
+    outputs: [{ name: '', type: 'uint256' }],
+  },
+  {
+    type: 'function',
+    name: 'VRF_TIMEOUT_BLOCKS',
+    stateMutability: 'view',
+    inputs: [],
+    outputs: [{ name: '', type: 'uint256' }],
+  },
+  {
+    type: 'function',
+    name: 'FEE_BASIS_POINTS',
+    stateMutability: 'view',
+    inputs: [],
+    outputs: [{ name: '', type: 'uint16' }],
+  },
+  {
+    type: 'function',
+    name: 'nextGameId',
+    stateMutability: 'view',
+    inputs: [],
+    outputs: [{ name: '', type: 'uint256' }],
+  },
+  {
+    type: 'function',
+    name: 'collectedFees',
+    stateMutability: 'view',
+    inputs: [],
+    outputs: [{ name: '', type: 'uint256' }],
+  },
+  {
+    type: 'function',
+    name: 'activeTierCount',
+    stateMutability: 'view',
+    inputs: [],
+    outputs: [{ name: '', type: 'uint8' }],
+  },
+  {
+    type: 'function',
+    name: 'feeRecipient',
+    stateMutability: 'view',
+    inputs: [],
+    outputs: [{ name: '', type: 'address' }],
+  },
+  {
+    type: 'function',
+    name: 'paused',
+    stateMutability: 'view',
+    inputs: [],
+    outputs: [{ name: '', type: 'bool' }],
+  },
+  {
+    type: 'function',
+    name: 'owner',
+    stateMutability: 'view',
+    inputs: [],
+    outputs: [{ name: '', type: 'address' }],
+  },
+
+  // =============================================================
+  //                      WRITE FUNCTIONS
+  // =============================================================
+
+  // Create a new game
   {
     type: 'function',
     name: 'createGame',
@@ -87,6 +257,8 @@ export const COINFLIP_ABI = [
     ],
     outputs: [{ name: 'gameId', type: 'uint256' }],
   },
+
+  // Join an existing game
   {
     type: 'function',
     name: 'joinGame',
@@ -97,6 +269,8 @@ export const COINFLIP_ABI = [
     ],
     outputs: [],
   },
+
+  // Cancel a game (after timeout)
   {
     type: 'function',
     name: 'cancelGame',
@@ -105,7 +279,51 @@ export const COINFLIP_ABI = [
     outputs: [],
   },
 
-  // Admin Functions
+  // Claim VRF timeout refund
+  {
+    type: 'function',
+    name: 'claimVrfTimeout',
+    stateMutability: 'nonpayable',
+    inputs: [{ name: 'gameId', type: 'uint256' }],
+    outputs: [],
+  },
+
+  // =============================================================
+  //                      ADMIN FUNCTIONS
+  // =============================================================
+
+  {
+    type: 'function',
+    name: 'setTier',
+    stateMutability: 'nonpayable',
+    inputs: [
+      { name: 'tierId', type: 'uint8' },
+      { name: 'amount', type: 'uint256' },
+      { name: 'enabled', type: 'bool' },
+    ],
+    outputs: [],
+  },
+  {
+    type: 'function',
+    name: 'setFeeRecipient',
+    stateMutability: 'nonpayable',
+    inputs: [{ name: 'newRecipient', type: 'address' }],
+    outputs: [],
+  },
+  {
+    type: 'function',
+    name: 'withdrawFees',
+    stateMutability: 'nonpayable',
+    inputs: [],
+    outputs: [],
+  },
+  {
+    type: 'function',
+    name: 'emergencyRefund',
+    stateMutability: 'nonpayable',
+    inputs: [{ name: 'gameId', type: 'uint256' }],
+    outputs: [],
+  },
   {
     type: 'function',
     name: 'pause',
@@ -120,7 +338,33 @@ export const COINFLIP_ABI = [
     inputs: [],
     outputs: [],
   },
+
+  // =============================================================
+  //                         ERRORS
+  // =============================================================
+  { type: 'error', name: 'InvalidTier', inputs: [] },
+  { type: 'error', name: 'TierDisabled', inputs: [] },
+  { type: 'error', name: 'IncorrectBetAmount', inputs: [] },
+  { type: 'error', name: 'GameDoesNotExist', inputs: [] },
+  { type: 'error', name: 'InvalidGameState', inputs: [] },
+  { type: 'error', name: 'CannotJoinOwnGame', inputs: [] },
+  { type: 'error', name: 'NotGameCreator', inputs: [] },
+  { type: 'error', name: 'TimeoutNotReached', inputs: [] },
+  { type: 'error', name: 'VrfTimeoutNotReached', inputs: [] },
+  { type: 'error', name: 'NotGameParticipant', inputs: [] },
+  { type: 'error', name: 'TransferFailed', inputs: [] },
+  { type: 'error', name: 'NoFeesToWithdraw', inputs: [] },
+  { type: 'error', name: 'InvalidFeeRecipient', inputs: [] },
 ] as const;
+
+// Game state enum matching contract
+export enum GameState {
+  NONE = 0,      // Game doesn't exist
+  OPEN = 1,      // Waiting for opponent
+  LOCKED = 2,    // Both players joined, awaiting VRF
+  RESOLVED = 3,  // Game finished, winner paid
+  CANCELLED = 4, // Game cancelled, refunded
+}
 
 // Tier amounts in USD (will be converted to wei)
 export const TIER_AMOUNTS_USD = {
@@ -133,6 +377,10 @@ export const TIER_AMOUNTS_USD = {
 
 // Fee percentage (5%)
 export const FEE_PERCENTAGE = 5;
+
+// Timeout blocks
+export const TIMEOUT_BLOCKS = 100; // ~20 min on Sepolia
+export const VRF_TIMEOUT_BLOCKS = 1000; // ~3 hours on Sepolia
 
 // Calculate win amount after fee
 export function calculateWinAmount(betAmount: number): number {

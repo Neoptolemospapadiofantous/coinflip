@@ -1,15 +1,25 @@
 import { useWriteContract, useWaitForTransactionReceipt, useReadContract, usePublicClient } from 'wagmi';
-import { COINFLIP_ABI } from '@/lib/contracts/abi';
+import { COINFLIP_ABI, GameState } from '@/lib/contracts/abi';
 import { getCoinFlipAddress } from '@/lib/contracts/addresses';
 import { useChainId } from 'wagmi';
-import { parseEther } from 'viem';
 
-// Game status enum matching contract
-export enum GameStatus {
-  Open = 0,
-  Matched = 1,
-  Resolved = 2,
-  Cancelled = 3,
+// Re-export GameState for backwards compatibility
+export { GameState };
+
+// Legacy alias
+export const GameStatus = GameState;
+
+// Type for the game struct returned by getGame
+export interface OnChainGame {
+  playerA: string;
+  playerB: string;
+  tier: number;
+  choiceA: boolean;
+  state: number;
+  createdBlock: bigint;
+  vrfRequestId: bigint;
+  coinResult: boolean;
+  winner: string;
 }
 
 // Hook to create a game
@@ -133,7 +143,48 @@ export function useCancelGame() {
   };
 }
 
-// Hook to read game data
+// Hook to claim VRF timeout refund
+export function useClaimVrfTimeout() {
+  const chainId = useChainId();
+  const contractAddress = getCoinFlipAddress(chainId);
+
+  const {
+    writeContract,
+    data: hash,
+    isPending: isWriting,
+    error: writeError,
+    reset,
+  } = useWriteContract();
+
+  const { isLoading: isConfirming, isSuccess } = useWaitForTransactionReceipt({
+    hash,
+  });
+
+  const claimVrfTimeout = (gameId: string | number | bigint) => {
+    reset();
+    const gameIdStr = String(gameId).replace(/^#/, '');
+
+    console.log('Claiming VRF timeout for game:', gameIdStr);
+
+    writeContract({
+      address: contractAddress,
+      abi: COINFLIP_ABI,
+      functionName: 'claimVrfTimeout',
+      args: [BigInt(gameIdStr)],
+    });
+  };
+
+  return {
+    claimVrfTimeout,
+    isLoading: isWriting || isConfirming,
+    isSuccess,
+    txHash: hash,
+    error: writeError,
+    reset,
+  };
+}
+
+// Hook to read game data from contract
 export function useGameData(gameId: string | null) {
   const chainId = useChainId();
   const contractAddress = getCoinFlipAddress(chainId);
@@ -150,13 +201,47 @@ export function useGameData(gameId: string | null) {
   });
 }
 
+// Hook to check if VRF timeout can be claimed
+export function useCanClaimVrfTimeout(gameId: string | null) {
+  const chainId = useChainId();
+  const contractAddress = getCoinFlipAddress(chainId);
+
+  return useReadContract({
+    address: contractAddress,
+    abi: COINFLIP_ABI,
+    functionName: 'canClaimVrfTimeout',
+    args: gameId ? [BigInt(gameId)] : undefined,
+    query: {
+      enabled: !!gameId,
+      refetchInterval: 10000, // Check every 10 seconds
+    },
+  });
+}
+
+// Hook to get VRF timeout blocks remaining
+export function useVrfTimeoutBlocksRemaining(gameId: string | null) {
+  const chainId = useChainId();
+  const contractAddress = getCoinFlipAddress(chainId);
+
+  return useReadContract({
+    address: contractAddress,
+    abi: COINFLIP_ABI,
+    functionName: 'getVrfTimeoutBlocksRemaining',
+    args: gameId ? [BigInt(gameId)] : undefined,
+    query: {
+      enabled: !!gameId,
+      refetchInterval: 10000,
+    },
+  });
+}
+
 // Hook to get a function that checks game status on-chain (for use in callbacks)
 export function useCheckGameStatus() {
   const publicClient = usePublicClient();
   const chainId = useChainId();
   const contractAddress = getCoinFlipAddress(chainId);
 
-  return async (gameId: string): Promise<GameStatus | null> => {
+  return async (gameId: string): Promise<GameState | null> => {
     if (!publicClient) return null;
 
     try {
@@ -165,18 +250,17 @@ export function useCheckGameStatus() {
         abi: COINFLIP_ABI,
         functionName: 'getGame',
         args: [BigInt(gameId)],
-      }) as readonly [string, string, number, bigint, boolean, boolean, boolean, string, number];
+      }) as OnChainGame;
 
       console.log(`🔍 On-chain game ${gameId}:`, {
-        creator: result[0],
-        joiner: result[1],
-        tier: result[2],
-        amount: result[3].toString(),
-        status: result[8],
+        playerA: result.playerA,
+        playerB: result.playerB,
+        tier: result.tier,
+        state: result.state,
+        createdBlock: result.createdBlock.toString(),
       });
 
-      // result is a tuple, status is at index 8
-      return result[8] as GameStatus;
+      return result.state as GameState;
     } catch (err) {
       console.error(`❌ Error reading game ${gameId}:`, err);
       return null;
@@ -184,18 +268,35 @@ export function useCheckGameStatus() {
   };
 }
 
-// Hook to get tier amount
-export function useTierAmount(tier: number | null) {
+// Hook to get tier info
+export function useTierInfo(tier: number | null) {
   const chainId = useChainId();
   const contractAddress = getCoinFlipAddress(chainId);
 
   return useReadContract({
     address: contractAddress,
     abi: COINFLIP_ABI,
-    functionName: 'getTierAmount',
+    functionName: 'getTier',
     args: tier !== null ? [tier] : undefined,
     query: {
       enabled: tier !== null,
+    },
+  });
+}
+
+// Hook to check if game can be cancelled
+export function useCanCancelGame(gameId: string | null) {
+  const chainId = useChainId();
+  const contractAddress = getCoinFlipAddress(chainId);
+
+  return useReadContract({
+    address: contractAddress,
+    abi: COINFLIP_ABI,
+    functionName: 'canCancelGame',
+    args: gameId ? [BigInt(gameId)] : undefined,
+    query: {
+      enabled: !!gameId,
+      refetchInterval: 10000,
     },
   });
 }
