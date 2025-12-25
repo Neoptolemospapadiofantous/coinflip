@@ -95,6 +95,11 @@ export function useCreatedGameTracking({
   // Cancel tracking and reset state
   const cancelTracking = useCallback(() => {
     cleanup();
+    // Cleanup subscription
+    if (subscriptionRef.current) {
+      supabase.removeChannel(subscriptionRef.current);
+      subscriptionRef.current = null;
+    }
     gameIdRef.current = null;
     currentTxHashRef.current = null;
     eventReceivedRef.current = false;
@@ -130,6 +135,9 @@ export function useCreatedGameTracking({
     }
   }, []);
 
+  // Ref for subscription cleanup
+  const subscriptionRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
+
   // Handle game found
   const handleGameFound = useCallback((game: Game) => {
     if (!mountedRef.current || gameIdRef.current) return;
@@ -158,6 +166,43 @@ export function useCreatedGameTracking({
       onGameResolvedRef.current?.(game);
     } else if (game.status === 'cancelled') {
       onGameCancelledRef.current?.(game);
+    }
+
+    // If game is still pending, subscribe to status changes
+    if (game.status === 'pending') {
+      console.log(`📡 Subscribing to status changes for game ${game.id}`);
+      subscriptionRef.current = supabase
+        .channel(`game-tracking-${game.id}`)
+        .on(
+          'postgres_changes',
+          {
+            event: 'UPDATE',
+            schema: 'public',
+            table: 'games',
+            filter: `id=eq.${game.id}`,
+          },
+          (payload) => {
+            if (!mountedRef.current) return;
+            const updatedGame = payload.new as Game;
+            console.log(`📡 Game ${game.id} status changed to:`, updatedGame.status);
+
+            // Update local state
+            setState((prev) => ({
+              ...prev,
+              game: updatedGame,
+            }));
+
+            // Trigger callbacks
+            if (updatedGame.status === 'matched') {
+              onGameMatchedRef.current?.(updatedGame);
+            } else if (updatedGame.status === 'resolved') {
+              onGameResolvedRef.current?.(updatedGame);
+            } else if (updatedGame.status === 'cancelled') {
+              onGameCancelledRef.current?.(updatedGame);
+            }
+          }
+        )
+        .subscribe();
     }
   }, [cleanup]);
 
@@ -296,6 +341,11 @@ export function useCreatedGameTracking({
     return () => {
       mountedRef.current = false;
       cleanup();
+      // Cleanup subscription
+      if (subscriptionRef.current) {
+        supabase.removeChannel(subscriptionRef.current);
+        subscriptionRef.current = null;
+      }
     };
   }, [cleanup]);
 

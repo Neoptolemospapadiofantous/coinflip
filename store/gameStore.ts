@@ -25,6 +25,9 @@ interface GameState {
   // Games being cancelled (for optimistic UI)
   cancellingGames: Set<string>;
 
+  // Games being joined (for optimistic UI)
+  joiningGames: Set<string>;
+
   // Current focused game (for modal display)
   currentModalGame: Game | null;
   currentModalType: 'matched' | 'resolved' | 'expired' | null;
@@ -53,6 +56,11 @@ interface GameState {
   finishCancellingGame: (gameId: string, success: boolean) => void;
   isGameCancelling: (gameId: string) => boolean;
 
+  // Actions - Optimistic join
+  startJoiningGame: (gameId: string) => void;
+  finishJoiningGame: (gameId: string, success: boolean) => void;
+  isGameJoining: (gameId: string) => boolean;
+
   // Actions - Modal queue management
   queueModal: (game: Game, type: 'matched' | 'resolved' | 'expired') => void;
   showNextModal: () => void;
@@ -74,6 +82,7 @@ export const useGameStore = create<GameState>((set, get) => ({
   coinChoice: null,
   activeGames: new Map(),
   cancellingGames: new Set(),
+  joiningGames: new Set(),
   currentModalGame: null,
   currentModalType: null,
   modalQueue: [],
@@ -154,6 +163,23 @@ export const useGameStore = create<GameState>((set, get) => ({
     }),
 
   isGameCancelling: (gameId) => get().cancellingGames.has(gameId),
+
+  // Optimistic join actions
+  startJoiningGame: (gameId) =>
+    set((state) => {
+      const newSet = new Set(state.joiningGames);
+      newSet.add(gameId);
+      return { joiningGames: newSet };
+    }),
+
+  finishJoiningGame: (gameId, success) =>
+    set((state) => {
+      const newSet = new Set(state.joiningGames);
+      newSet.delete(gameId);
+      return { joiningGames: newSet };
+    }),
+
+  isGameJoining: (gameId) => get().joiningGames.has(gameId),
 
   // Modal queue management
   queueModal: (game, type) =>
