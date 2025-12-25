@@ -4,6 +4,7 @@ import { useActiveGameMonitor } from '@/hooks/useActiveGameMonitor';
 import { useGameTimeout } from '@/hooks/useGameTimeout';
 import { GameSessionModal } from './game/GameSessionModal';
 import { useAccount } from 'wagmi';
+import { useGameStore } from '@/store/gameStore';
 
 /**
  * Global game monitor component
@@ -13,6 +14,7 @@ import { useAccount } from 'wagmi';
 export function GameMonitor() {
   const { address } = useAccount();
   const { sessionGame, showSessionModal, handleCloseModal } = useActiveGameMonitor();
+  const currentModalType = useGameStore((state) => state.currentModalType);
 
   // Show notification for games that haven't been matched after 20 minutes
   useGameTimeout();
@@ -23,6 +25,7 @@ export function GameMonitor() {
       open={showSessionModal}
       onClose={handleCloseModal}
       userAddress={address}
+      modalType={currentModalType}
     />
   );
 }

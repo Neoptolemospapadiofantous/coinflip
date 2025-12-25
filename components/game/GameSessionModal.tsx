@@ -2,6 +2,7 @@
 
 import { Dialog, Flex, Heading, Text, Button, Card, Callout } from '@radix-ui/themes';
 import { useState, useEffect, useRef } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { CoinFlip3D, CoinFlip2D } from './CoinFlip3D';
 import { Game } from '@/types/game';
 import { formatCurrency } from '@/lib/utils';
@@ -9,24 +10,34 @@ import { Loader2, Users, Trophy, Zap, AlertTriangle, Clock, XCircle } from 'luci
 import { useGameStore } from '@/store/gameStore';
 import { validateGameState } from '@/hooks/useGameSync';
 import { useGame } from '@/hooks/useGames';
+import { useCancelGame } from '@/hooks/useContract';
 
 interface GameSessionModalProps {
   game: Game | null;
   open: boolean;
   onClose: () => void;
   userAddress?: string;
+  modalType?: 'matched' | 'resolved' | 'expired' | null;
 }
 
 // VRF timeout in seconds (2 minutes)
 const VRF_TIMEOUT_SECONDS = 120;
+// Max retries for fetching complete game data
+const MAX_DATA_RETRIES = 10;
 
-export function GameSessionModal({ game, open, onClose, userAddress }: GameSessionModalProps) {
+export function GameSessionModal({ game, open, onClose, userAddress, modalType }: GameSessionModalProps) {
   const [isFlipping, setIsFlipping] = useState(false);
   const [showResult, setShowResult] = useState(false);
   const [skipped, setSkipped] = useState(false);
   const [vrfElapsedSeconds, setVrfElapsedSeconds] = useState(0);
   const [vrfTimedOut, setVrfTimedOut] = useState(false);
-  const { resetGame, updateActiveGame } = useGameStore();
+  const [dataRetryExhausted, setDataRetryExhausted] = useState(false);
+  const [cancelStatus, setCancelStatus] = useState<'idle' | 'cancelling' | 'success' | 'error'>('idle');
+  const { resetGame, updateActiveGame, removeActiveGame, startCancellingGame, finishCancellingGame } = useGameStore();
+  const queryClient = useQueryClient();
+
+  // Cancel game hook
+  const { cancelGame, isLoading: isCancelling, isSuccess: cancelSuccess, error: cancelError, reset: resetCancel } = useCancelGame();
 
   // Fetch fresh game data for auto-refetch on validation errors
   const { data: freshGame, refetch: refetchGame } = useGame(game?.id ?? null);
@@ -108,18 +119,22 @@ export function GameSessionModal({ game, open, onClose, userAddress }: GameSessi
   useEffect(() => {
     if (!game || game.status !== 'resolved' || validation.valid) {
       retryCountRef.current = 0;
+      setDataRetryExhausted(false);
       return;
     }
 
-    // If resolved but invalid, try to refetch after a delay (max 5 retries)
-    if (retryCountRef.current < 5) {
+    // If resolved but invalid, try to refetch aggressively (max retries)
+    if (retryCountRef.current < MAX_DATA_RETRIES) {
       const timeout = setTimeout(() => {
-        console.log(`🔄 Auto-refetching game ${game.id} due to validation errors (attempt ${retryCountRef.current + 1})`);
+        console.log(`🔄 Auto-refetching game ${game.id} due to validation errors (attempt ${retryCountRef.current + 1}/${MAX_DATA_RETRIES})`);
         retryCountRef.current++;
         refetchGame();
-      }, 2000); // Retry every 2 seconds
+      }, 1000); // Retry every 1 second (more aggressive)
 
       return () => clearTimeout(timeout);
+    } else {
+      // Exhausted retries
+      setDataRetryExhausted(true);
     }
   }, [game?.id, game?.status, validation.valid, refetchGame]);
 
@@ -163,6 +178,54 @@ export function GameSessionModal({ game, open, onClose, userAddress }: GameSessi
     };
   }, []);
 
+  // Track cancel status
+  useEffect(() => {
+    if (cancelSuccess) {
+      setCancelStatus('success');
+      // Complete the cancellation in store
+      if (game?.id) {
+        finishCancellingGame(game.id, true);
+        removeActiveGame(game.id);
+
+        // Immediately invalidate all game queries to update the UI everywhere
+        queryClient.invalidateQueries({ queryKey: ['games', 'pending'] });
+        queryClient.invalidateQueries({ queryKey: ['games', 'active'] });
+        queryClient.invalidateQueries({ queryKey: ['games', 'player'] });
+        queryClient.invalidateQueries({ queryKey: ['game', game.id] });
+        queryClient.invalidateQueries({ queryKey: ['game-stats'] });
+
+        // Also remove from pending games cache immediately (optimistic)
+        queryClient.setQueryData(['games', 'pending'], (old: Game[] | undefined) =>
+          old?.filter(g => g.id !== game.id) || []
+        );
+      }
+    } else if (cancelError) {
+      setCancelStatus('error');
+      // Cancel failed, revert optimistic update
+      if (game?.id) {
+        finishCancellingGame(game.id, false);
+      }
+    } else if (isCancelling) {
+      setCancelStatus('cancelling');
+    }
+  }, [cancelSuccess, cancelError, isCancelling, game?.id, removeActiveGame, finishCancellingGame, queryClient]);
+
+  // Reset cancel status when modal closes or game changes
+  useEffect(() => {
+    if (!open || !game) {
+      setCancelStatus('idle');
+      resetCancel();
+    }
+  }, [open, game?.id, resetCancel]);
+
+  const handleCancelGame = async () => {
+    if (!game?.id) return;
+    setCancelStatus('cancelling');
+    // Start optimistic update
+    startCancellingGame(game.id);
+    await cancelGame(game.id);
+  };
+
   const handleFlipComplete = () => {
     setShowResult(true);
   };
@@ -203,11 +266,13 @@ export function GameSessionModal({ game, open, onClose, userAddress }: GameSessi
         <Dialog.Title>
           <Flex direction="column" gap="2" align="center">
             <Heading size="7" className="text-gradient-rainbow">
-              {game.status === 'matched' && !vrfTimedOut && 'Game Matched!'}
-              {game.status === 'matched' && vrfTimedOut && 'VRF Taking Longer Than Expected'}
-              {game.status === 'resolved' && !showResult && 'Flipping Coin...'}
-              {game.status === 'resolved' && showResult && (isWinner ? 'You Won!' : 'Better Luck Next Time')}
-              {game.status === 'cancelled' && 'Game Expired'}
+              {modalType === 'expired' && 'Game Expired - Action Required'}
+              {modalType !== 'expired' && game.status === 'matched' && !vrfTimedOut && 'Game Matched!'}
+              {modalType !== 'expired' && game.status === 'matched' && vrfTimedOut && 'VRF Taking Longer Than Expected'}
+              {modalType !== 'expired' && game.status === 'resolved' && !validation.valid && !showResult && 'Finalizing...'}
+              {modalType !== 'expired' && game.status === 'resolved' && validation.valid && !showResult && 'Flipping Coin...'}
+              {modalType !== 'expired' && game.status === 'resolved' && showResult && (isWinner ? 'You Won!' : 'Better Luck Next Time')}
+              {modalType !== 'expired' && game.status === 'cancelled' && 'Game Cancelled'}
             </Heading>
             <Text size="2" color="gray">
               Game #{game.id}
@@ -316,66 +381,97 @@ export function GameSessionModal({ game, open, onClose, userAddress }: GameSessi
             </Flex>
           )}
 
-          {/* Game Status: Resolved - Show Animation */}
-          {game.status === 'resolved' && !showResult && (
-            <Flex direction="column" gap="4">
-              {/* State Validation Warning */}
-              {!validation.valid && (
-                <Callout.Root color="orange" size="2">
-                  <Callout.Icon>
-                    <AlertTriangle className="w-4 h-4" />
-                  </Callout.Icon>
-                  <Flex direction="column" gap="1" style={{ flex: 1 }}>
-                    <Text weight="bold">Waiting for complete game data...</Text>
-                    {validation.errors.map((error, i) => (
-                      <Text key={i} size="1">{error}</Text>
-                    ))}
-                  </Flex>
-                </Callout.Root>
-              )}
-
-              {/* Coin Animation - Only show when state is valid */}
-              {validation.valid && (
+          {/* Game Status: Resolved but waiting for complete data - Show loading */}
+          {game.status === 'resolved' && !validation.valid && !showResult && (
+            <Flex direction="column" gap="5" align="center" py="6">
+              {!dataRetryExhausted ? (
                 <>
-                  <div className="relative">
-                    {skipped ? (
-                      <Flex
-                        direction="column"
-                        align="center"
-                        justify="center"
-                        className="w-full h-96 bg-gradient-to-b from-slate-900 to-slate-950 border border-cyan-500/20 rounded-lg"
-                      >
-                        <div className="text-8xl mb-4">
-                          {result ? '🪙' : '👑'}
-                        </div>
-                        <Text size="5" weight="bold">
-                          {result ? 'Tails' : 'Heads'}
-                        </Text>
-                      </Flex>
-                    ) : (
-                      <CoinFlip2D
-                        isFlipping={isFlipping}
-                        result={result}
-                        onFlipComplete={handleFlipComplete}
-                      />
-                    )}
-                  </div>
+                  <Loader2 className="w-20 h-20 text-green-400 animate-spin glow-cyan" />
 
-                  {/* Skip Button */}
-                  {!skipped && isFlipping && (
-                    <Flex justify="center">
-                      <Button
-                        size="3"
-                        variant="soft"
-                        onClick={handleSkip}
-                        className="glow-cyan hover:scale-105 transition-transform"
-                      >
-                        <Zap className="w-4 h-4" />
-                        Skip Animation
-                      </Button>
-                    </Flex>
-                  )}
+                  <Flex direction="column" gap="2" align="center">
+                    <Heading size="5" className="text-gradient-cyan-purple">
+                      Finalizing Result...
+                    </Heading>
+                    <Text size="3" color="gray" align="center">
+                      Syncing game data from blockchain
+                    </Text>
+                  </Flex>
+
+                  <Text size="1" color="gray" align="center">
+                    This usually takes just a few seconds
+                  </Text>
                 </>
+              ) : (
+                <>
+                  <AlertTriangle className="w-20 h-20 text-yellow-400" />
+
+                  <Flex direction="column" gap="2" align="center">
+                    <Heading size="5" className="text-yellow-400">
+                      Data Sync Issue
+                    </Heading>
+                    <Text size="3" color="gray" align="center">
+                      Unable to fetch complete game data. The game has resolved on-chain.
+                    </Text>
+                  </Flex>
+
+                  <Button
+                    size="3"
+                    variant="soft"
+                    onClick={() => {
+                      retryCountRef.current = 0;
+                      setDataRetryExhausted(false);
+                      refetchGame();
+                    }}
+                    className="glow-cyan"
+                  >
+                    Retry
+                  </Button>
+                </>
+              )}
+            </Flex>
+          )}
+
+          {/* Game Status: Resolved - Show Animation */}
+          {game.status === 'resolved' && validation.valid && !showResult && (
+            <Flex direction="column" gap="4">
+              {/* Coin Animation */}
+              <div className="relative">
+                {skipped ? (
+                  <Flex
+                    direction="column"
+                    align="center"
+                    justify="center"
+                    className="w-full h-96 bg-gradient-to-b from-slate-900 to-slate-950 border border-cyan-500/20 rounded-lg"
+                  >
+                    <div className="text-8xl mb-4">
+                      {result ? '🪙' : '👑'}
+                    </div>
+                    <Text size="5" weight="bold">
+                      {result ? 'Tails' : 'Heads'}
+                    </Text>
+                  </Flex>
+                ) : (
+                  <CoinFlip2D
+                    isFlipping={isFlipping}
+                    result={result}
+                    onFlipComplete={handleFlipComplete}
+                  />
+                )}
+              </div>
+
+              {/* Skip Button */}
+              {!skipped && isFlipping && (
+                <Flex justify="center">
+                  <Button
+                    size="3"
+                    variant="soft"
+                    onClick={handleSkip}
+                    className="glow-cyan hover:scale-105 transition-transform"
+                  >
+                    <Zap className="w-4 h-4" />
+                    Skip Animation
+                  </Button>
+                </Flex>
               )}
             </Flex>
           )}
@@ -471,17 +567,134 @@ export function GameSessionModal({ game, open, onClose, userAddress }: GameSessi
             </Flex>
           )}
 
-          {/* Game Status: Cancelled (Timeout) */}
-          {game.status === 'cancelled' && (
+          {/* Game Expired - User needs to manually cancel for refund */}
+          {modalType === 'expired' && game.status === 'pending' && (
             <Flex direction="column" gap="5" align="center" py="6">
-              <XCircle className="w-20 h-20 text-yellow-400" />
+              {cancelStatus === 'success' ? (
+                <>
+                  <XCircle className="w-20 h-20 text-green-400" />
+                  <Flex direction="column" gap="2" align="center">
+                    <Heading size="5" className="text-green-400">
+                      Game Cancelled
+                    </Heading>
+                    <Text size="3" color="gray" align="center">
+                      Your bet of {formatCurrency(BigInt(game.amount))} has been refunded to your wallet.
+                    </Text>
+                  </Flex>
+                  <Button
+                    size="3"
+                    onClick={handleClose}
+                    className="w-full glow-cyan hover:scale-105 transition-transform"
+                  >
+                    Close
+                  </Button>
+                </>
+              ) : (
+                <>
+                  <Clock className="w-20 h-20 text-yellow-400" />
+
+                  <Flex direction="column" gap="2" align="center">
+                    <Heading size="5" className="text-yellow-400">
+                      No Opponent Found
+                    </Heading>
+                    <Text size="3" color="gray" align="center">
+                      Your game has been waiting for 20 minutes without being matched.
+                    </Text>
+                  </Flex>
+
+                  <Card className="card-simple w-full">
+                    <Flex direction="column" gap="3" p="4">
+                      <Flex justify="between" align="center">
+                        <Text size="2" color="gray">Game ID:</Text>
+                        <Text size="2" weight="bold">#{game.id}</Text>
+                      </Flex>
+
+                      <Flex justify="between" align="center">
+                        <Text size="2" color="gray">Your Bet:</Text>
+                        <Text size="2" weight="bold">{formatCurrency(BigInt(game.amount))}</Text>
+                      </Flex>
+
+                      {cancelStatus === 'error' && (
+                        <Flex
+                          className="bg-red-500/10 rounded-lg p-3 border border-red-500/30"
+                          direction="column"
+                          gap="2"
+                        >
+                          <Text size="2" className="text-red-400" weight="bold">
+                            Cancel Failed
+                          </Text>
+                          <Text size="2" className="text-red-200">
+                            {cancelError?.message || 'Unable to cancel. Please try again.'}
+                          </Text>
+                        </Flex>
+                      )}
+
+                      {cancelStatus !== 'error' && (
+                        <Flex
+                          className="bg-green-500/10 rounded-lg p-3 border border-green-500/30"
+                          direction="column"
+                          gap="2"
+                        >
+                          <Text size="2" className="text-green-400" weight="bold">
+                            Good News: You Can Get a Full Refund
+                          </Text>
+                          <Text size="2" className="text-green-200">
+                            Cancel the game now to receive your {formatCurrency(BigInt(game.amount))} back.
+                          </Text>
+                        </Flex>
+                      )}
+                    </Flex>
+                  </Card>
+
+                  <Flex gap="3" style={{ width: '100%' }}>
+                    <Button
+                      size="3"
+                      variant="soft"
+                      onClick={handleClose}
+                      className="flex-1"
+                      disabled={cancelStatus === 'cancelling'}
+                    >
+                      Keep Waiting
+                    </Button>
+                    <Button
+                      size="3"
+                      color="green"
+                      onClick={handleCancelGame}
+                      disabled={cancelStatus === 'cancelling'}
+                      className="flex-1 glow-cyan hover:scale-105 transition-transform"
+                    >
+                      {cancelStatus === 'cancelling' ? (
+                        <>
+                          <Loader2 className="w-4 h-4 animate-spin mr-2" />
+                          Cancelling...
+                        </>
+                      ) : cancelStatus === 'error' ? (
+                        'Try Again'
+                      ) : (
+                        'Cancel & Get Refund'
+                      )}
+                    </Button>
+                  </Flex>
+
+                  <Text size="1" color="gray" align="center">
+                    The game will remain open until you cancel it or someone joins.
+                  </Text>
+                </>
+              )}
+            </Flex>
+          )}
+
+          {/* Game Status: Cancelled (already cancelled on-chain) */}
+          {modalType !== 'expired' && game.status === 'cancelled' && (
+            <Flex direction="column" gap="5" align="center" py="6">
+              <XCircle className="w-20 h-20 text-green-400" />
 
               <Flex direction="column" gap="2" align="center">
-                <Heading size="5" className="text-yellow-400">
-                  Game Expired
+                <Heading size="5" className="text-green-400">
+                  Game Cancelled
                 </Heading>
                 <Text size="3" color="gray" align="center">
-                  No one joined your game within 20 minutes.
+                  Your bet has been refunded to your wallet.
                 </Text>
               </Flex>
 
@@ -493,45 +706,19 @@ export function GameSessionModal({ game, open, onClose, userAddress }: GameSessi
                   </Flex>
 
                   <Flex justify="between" align="center">
-                    <Text size="2" color="gray">Bet Amount:</Text>
-                    <Text size="2" weight="bold">{formatCurrency(BigInt(game.amount))}</Text>
-                  </Flex>
-
-                  <Flex
-                    className="bg-yellow-500/10 rounded-lg p-3 border border-yellow-500/30"
-                    direction="column"
-                    gap="2"
-                  >
-                    <Text size="2" className="text-yellow-400" weight="bold">
-                      Action Required
-                    </Text>
-                    <Text size="2" className="text-yellow-200">
-                      Go to the Queue page and click "Cancel Game" to get your refund.
-                    </Text>
+                    <Text size="2" color="gray">Refund Amount:</Text>
+                    <Text size="2" weight="bold" className="text-green-400">{formatCurrency(BigInt(game.amount))}</Text>
                   </Flex>
                 </Flex>
               </Card>
 
-              <Flex gap="3" style={{ width: '100%' }}>
-                <Button
-                  size="3"
-                  variant="soft"
-                  onClick={handleClose}
-                  className="flex-1"
-                >
-                  Close
-                </Button>
-                <Button
-                  size="3"
-                  onClick={() => {
-                    handleClose();
-                    window.location.href = '/queue';
-                  }}
-                  className="flex-1 glow-cyan hover:scale-105 transition-transform"
-                >
-                  Go to Queue
-                </Button>
-              </Flex>
+              <Button
+                size="3"
+                onClick={handleClose}
+                className="w-full glow-cyan hover:scale-105 transition-transform"
+              >
+                Close
+              </Button>
             </Flex>
           )}
 
