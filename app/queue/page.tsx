@@ -26,6 +26,7 @@ import Link from 'next/link';
 import { StatusBadge } from '@/components/game/StatusBadge';
 import { useCancelGame } from '@/hooks/useContract';
 import { useGameStore } from '@/store/gameStore';
+import { useGameTimeout } from '@/hooks/useGameTimeout';
 
 // Helper to format time ago with live updates
 function formatTimeAgo(createdAt: string, now: number): string {
@@ -95,6 +96,7 @@ export default function QueuePage() {
   const { data: gameStats, refetch: refetchStats } = useGameStats();
   const { joinGame, isLoading, isConfirming, isSuccess, txHash, error, reset: resetJoinState } = useJoinGame();
   const { cancelGame, isLoading: isCanceling, isSuccess: isCancelSuccess, error: cancelError, reset: resetCancelState } = useCancelGame();
+  const { formatTimeRemaining } = useGameTimeout();
   const [selectedGame, setSelectedGame] = useState<any>(null);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isLive, setIsLive] = useState(false);
@@ -342,7 +344,12 @@ export default function QueuePage() {
 
                           <Flex justify="between" align="center">
                             <Flex direction="column" gap="1">
-                              <Text size="1" color="gray">Created {formatTimeAgo(game.created_at, now)} ago</Text>
+                              <Flex align="center" gap="2">
+                                <Clock className="w-3 h-3 text-yellow-400" />
+                                <Text size="1" className="text-yellow-400" weight="bold">
+                                  Expires in: {formatTimeRemaining(game.id)}
+                                </Text>
+                              </Flex>
                               <Text size="1" color="gray">Your choice: {game.creator_choice ? 'Tails 🪙' : 'Heads 👑'}</Text>
                             </Flex>
                             {cancelingGameId === game.id ? (
@@ -367,7 +374,7 @@ export default function QueuePage() {
                           <Card variant="surface" className="bg-blue-500/5 border border-blue-500/20">
                             <Flex direction="column" gap="1" p="2">
                               <Text size="1" color="blue">
-                                💡 Your game is visible to other players. You can navigate away and come back - it will stay active until someone joins or it times out (~20 minutes).
+                                💡 Your game is visible to other players. It will auto-cancel after 15 minutes if no one joins.
                               </Text>
                             </Flex>
                           </Card>

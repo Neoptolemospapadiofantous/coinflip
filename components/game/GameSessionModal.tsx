@@ -5,7 +5,7 @@ import { useState, useEffect, useRef } from 'react';
 import { CoinFlip3D, CoinFlip2D } from './CoinFlip3D';
 import { Game } from '@/types/game';
 import { formatCurrency } from '@/lib/utils';
-import { Loader2, Users, Trophy, Zap, AlertTriangle, Clock } from 'lucide-react';
+import { Loader2, Users, Trophy, Zap, AlertTriangle, Clock, XCircle } from 'lucide-react';
 import { useGameStore } from '@/store/gameStore';
 import { validateGameState } from '@/hooks/useGameSync';
 import { useGame } from '@/hooks/useGames';
@@ -207,6 +207,7 @@ export function GameSessionModal({ game, open, onClose, userAddress }: GameSessi
               {game.status === 'matched' && vrfTimedOut && 'VRF Taking Longer Than Expected'}
               {game.status === 'resolved' && !showResult && 'Flipping Coin...'}
               {game.status === 'resolved' && showResult && (isWinner ? 'You Won!' : 'Better Luck Next Time')}
+              {game.status === 'cancelled' && 'Game Expired'}
             </Heading>
             <Text size="2" color="gray">
               Game #{game.id}
@@ -470,8 +471,70 @@ export function GameSessionModal({ game, open, onClose, userAddress }: GameSessi
             </Flex>
           )}
 
+          {/* Game Status: Cancelled (Timeout) */}
+          {game.status === 'cancelled' && (
+            <Flex direction="column" gap="5" align="center" py="6">
+              <XCircle className="w-20 h-20 text-yellow-400" />
+
+              <Flex direction="column" gap="2" align="center">
+                <Heading size="5" className="text-yellow-400">
+                  Game Cancelled
+                </Heading>
+                <Text size="3" color="gray" align="center">
+                  This game was automatically cancelled after 15 minutes
+                  without finding a match.
+                </Text>
+              </Flex>
+
+              <Card className="card-simple w-full">
+                <Flex direction="column" gap="3" p="4">
+                  <Flex justify="between" align="center">
+                    <Text size="2" color="gray">Game ID:</Text>
+                    <Text size="2" weight="bold">#{game.id}</Text>
+                  </Flex>
+
+                  <Flex justify="between" align="center">
+                    <Text size="2" color="gray">Bet Amount:</Text>
+                    <Text size="2" weight="bold">{formatCurrency(BigInt(game.amount))}</Text>
+                  </Flex>
+
+                  <Flex
+                    className="bg-green-500/10 rounded-lg p-3 border border-green-500/30"
+                    align="center"
+                    gap="2"
+                  >
+                    <Text size="2" className="text-green-400">
+                      Your funds have been refunded to your wallet
+                    </Text>
+                  </Flex>
+                </Flex>
+              </Card>
+
+              <Flex gap="3" style={{ width: '100%' }}>
+                <Button
+                  size="3"
+                  variant="soft"
+                  onClick={handleClose}
+                  className="flex-1"
+                >
+                  Close
+                </Button>
+                <Button
+                  size="3"
+                  onClick={() => {
+                    handleClose();
+                    window.location.href = '/play';
+                  }}
+                  className="flex-1 glow-cyan hover:scale-105 transition-transform"
+                >
+                  Create New Game
+                </Button>
+              </Flex>
+            </Flex>
+          )}
+
           {/* Not a participant warning */}
-          {!isParticipant && (
+          {!isParticipant && game.status !== 'cancelled' && (
             <Card className="card-simple">
               <Flex p="4" align="center" gap="2">
                 <Text size="2" color="gray">

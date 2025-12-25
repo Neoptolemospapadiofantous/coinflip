@@ -11,7 +11,7 @@ interface ActiveGameEntry {
 
 interface ModalQueueEntry {
   game: Game;
-  type: 'matched' | 'resolved';
+  type: 'matched' | 'resolved' | 'timeout';
 }
 
 interface GameState {
@@ -45,7 +45,7 @@ interface GameState {
   canCreateNewGame: () => boolean;
 
   // Actions - Modal queue management
-  queueModal: (game: Game, type: 'matched' | 'resolved') => void;
+  queueModal: (game: Game, type: 'matched' | 'resolved' | 'timeout') => void;
   showNextModal: () => void;
   closeCurrentModal: () => void;
 
