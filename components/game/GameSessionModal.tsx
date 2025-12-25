@@ -481,7 +481,7 @@ export function GameSessionModal({ game, open, onClose, userAddress }: GameSessi
                   Game Expired
                 </Heading>
                 <Text size="3" color="gray" align="center">
-                  No one joined your game within 15 minutes.
+                  No one joined your game within 20 minutes.
                 </Text>
               </Flex>
 

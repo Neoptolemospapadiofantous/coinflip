@@ -8,13 +8,13 @@ import { useAccount } from 'wagmi';
 /**
  * Global game monitor component
  * Displays game session modal when user's games are matched or resolved
- * Also handles auto-cancellation of games that timeout (15 minutes)
+ * Also handles timeout notifications for games (20 minutes - matches contract TIMEOUT_BLOCKS)
  */
 export function GameMonitor() {
   const { address } = useAccount();
   const { sessionGame, showSessionModal, handleCloseModal } = useActiveGameMonitor();
 
-  // Auto-cancel games that haven't been matched after 15 minutes
+  // Show notification for games that haven't been matched after 20 minutes
   useGameTimeout();
 
   return (

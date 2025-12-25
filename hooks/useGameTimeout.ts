@@ -5,8 +5,9 @@ import { useAccount } from 'wagmi';
 import { useGameStore } from '@/store/gameStore';
 import { Game } from '@/types/game';
 
-// Game timeout in milliseconds (15 minutes)
-const GAME_TIMEOUT_MS = 15 * 60 * 1000;
+// Game timeout in milliseconds (20 minutes - matches contract TIMEOUT_BLOCKS = 100)
+// On Sepolia: ~12 sec/block × 100 blocks = ~20 minutes
+const GAME_TIMEOUT_MS = 20 * 60 * 1000;
 // Check interval (every 30 seconds)
 const CHECK_INTERVAL_MS = 30 * 1000;
 
@@ -17,7 +18,8 @@ interface TimeoutInfo {
 }
 
 /**
- * Hook to monitor games that haven't been matched after 15 minutes
+ * Hook to monitor games that haven't been matched after 20 minutes
+ * (matches contract TIMEOUT_BLOCKS = 100 blocks @ ~12 sec/block on Sepolia)
  * Shows a popup notification when a game expires (user must manually cancel)
  */
 export function useGameTimeout() {
