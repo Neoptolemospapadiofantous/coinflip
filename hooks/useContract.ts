@@ -1,7 +1,16 @@
-import { useWriteContract, useWaitForTransactionReceipt, useReadContract, usePublicClient } from 'wagmi';
+import { useWaitForTransactionReceipt, useReadContract, usePublicClient, useChainId, useWalletClient } from 'wagmi';
 import { COINFLIP_ABI, GameState } from '@/lib/contracts/abi';
 import { getCoinFlipAddress } from '@/lib/contracts/addresses';
-import { useChainId } from 'wagmi';
+import { encodeFunctionData } from 'viem';
+import { useState } from 'react';
+
+// Static gas limits - safe values that work on Sepolia
+const GAS_CAPS = {
+  createGame: BigInt(300_000),
+  joinGame: BigInt(500_000),
+  cancelGame: BigInt(200_000),
+  claimVrfTimeout: BigInt(200_000),
+};
 
 // Re-export GameState for backwards compatibility
 export { GameState };
@@ -22,31 +31,59 @@ export interface OnChainGame {
   winner: string;
 }
 
-// Hook to create a game
+// Hook to create a game - uses wallet client directly for full gas control
 export function useCreateGame() {
   const chainId = useChainId();
   const contractAddress = getCoinFlipAddress(chainId);
+  const { data: walletClient } = useWalletClient();
 
-  const {
-    writeContract,
-    data: hash,
-    isPending: isWriting,
-    error: writeError,
-    reset,
-  } = useWriteContract();
+  const [hash, setHash] = useState<`0x${string}` | undefined>();
+  const [isWriting, setIsWriting] = useState(false);
+  const [writeError, setWriteError] = useState<Error | null>(null);
 
   const { isLoading: isConfirming, isSuccess } = useWaitForTransactionReceipt({
     hash,
   });
 
-  const createGame = (tier: number, choice: boolean, amount: string) => {
-    writeContract({
-      address: contractAddress,
-      abi: COINFLIP_ABI,
-      functionName: 'createGame',
-      args: [tier, choice],
-      value: BigInt(amount), // amount is already in wei
-    });
+  const reset = () => {
+    setHash(undefined);
+    setWriteError(null);
+    setIsWriting(false);
+  };
+
+  const createGame = async (tier: number, choice: boolean, amount: string) => {
+    if (!walletClient) {
+      setWriteError(new Error('Wallet not connected'));
+      return;
+    }
+
+    setIsWriting(true);
+    setWriteError(null);
+
+    try {
+      const txData = encodeFunctionData({
+        abi: COINFLIP_ABI,
+        functionName: 'createGame',
+        args: [tier, choice],
+      });
+
+      console.log(`🚀 Sending createGame tx with gas=${GAS_CAPS.createGame}`);
+
+      const txHash = await walletClient.sendTransaction({
+        to: contractAddress,
+        data: txData,
+        value: BigInt(amount),
+        gas: GAS_CAPS.createGame,
+      });
+
+      console.log(`✅ Transaction sent: ${txHash}`);
+      setHash(txHash);
+    } catch (err) {
+      console.error('❌ Transaction failed:', err);
+      setWriteError(err as Error);
+    } finally {
+      setIsWriting(false);
+    }
   };
 
   return {
@@ -59,37 +96,65 @@ export function useCreateGame() {
   };
 }
 
-// Hook to join a game
+// Hook to join a game - uses wallet client directly for full gas control
 export function useJoinGame() {
   const chainId = useChainId();
   const contractAddress = getCoinFlipAddress(chainId);
+  const { data: walletClient } = useWalletClient();
 
-  const {
-    writeContract,
-    data: hash,
-    isPending: isWriting,
-    error: writeError,
-    reset,
-  } = useWriteContract();
+  const [hash, setHash] = useState<`0x${string}` | undefined>();
+  const [isWriting, setIsWriting] = useState(false);
+  const [writeError, setWriteError] = useState<Error | null>(null);
 
   const { isLoading: isConfirming, isSuccess } = useWaitForTransactionReceipt({
     hash,
   });
 
-  const joinGame = (gameId: string, choice: boolean, amount: string) => {
-    writeContract({
-      address: contractAddress,
-      abi: COINFLIP_ABI,
-      functionName: 'joinGame',
-      args: [BigInt(gameId), choice],
-      value: BigInt(amount), // amount is already in wei
-    });
+  const reset = () => {
+    setHash(undefined);
+    setWriteError(null);
+    setIsWriting(false);
+  };
+
+  const joinGame = async (gameId: string, choice: boolean, amount: string) => {
+    if (!walletClient) {
+      setWriteError(new Error('Wallet not connected'));
+      return;
+    }
+
+    setIsWriting(true);
+    setWriteError(null);
+
+    try {
+      const txData = encodeFunctionData({
+        abi: COINFLIP_ABI,
+        functionName: 'joinGame',
+        args: [BigInt(gameId), choice],
+      });
+
+      console.log(`🚀 Sending joinGame tx with gas=${GAS_CAPS.joinGame}`);
+
+      const txHash = await walletClient.sendTransaction({
+        to: contractAddress,
+        data: txData,
+        value: BigInt(amount),
+        gas: GAS_CAPS.joinGame,
+      });
+
+      console.log(`✅ Transaction sent: ${txHash}`);
+      setHash(txHash);
+    } catch (err) {
+      console.error('❌ Transaction failed:', err);
+      setWriteError(err as Error);
+    } finally {
+      setIsWriting(false);
+    }
   };
 
   return {
     joinGame,
     isLoading: isWriting || isConfirming,
-    isConfirming, // Expose confirming state separately
+    isConfirming,
     isSuccess,
     txHash: hash,
     error: writeError,
@@ -97,81 +162,144 @@ export function useJoinGame() {
   };
 }
 
-// Hook to cancel a game
+// Cooldown between cancel operations (5 seconds)
+const CANCEL_COOLDOWN_MS = 5000;
+
+// Hook to cancel a game - uses wallet client directly for full gas control
 export function useCancelGame() {
   const chainId = useChainId();
   const contractAddress = getCoinFlipAddress(chainId);
+  const { data: walletClient } = useWalletClient();
 
-  const {
-    writeContract,
-    data: hash,
-    isPending: isWriting,
-    error: writeError,
-    reset,
-  } = useWriteContract();
+  const [hash, setHash] = useState<`0x${string}` | undefined>();
+  const [isWriting, setIsWriting] = useState(false);
+  const [writeError, setWriteError] = useState<Error | null>(null);
+  const [isCooldown, setIsCooldown] = useState(false);
 
   const { isLoading: isConfirming, isSuccess } = useWaitForTransactionReceipt({
     hash,
   });
 
-  const cancelGame = (gameId: string | number | bigint) => {
-    // Reset any previous errors
+  const reset = () => {
+    setHash(undefined);
+    setWriteError(null);
+    setIsWriting(false);
+  };
+
+  const cancelGame = async (gameId: string | number | bigint) => {
+    if (!walletClient) {
+      setWriteError(new Error('Wallet not connected'));
+      return;
+    }
+
+    if (isCooldown) {
+      console.log('⏳ Cancel cooldown active, please wait...');
+      return;
+    }
+
     reset();
+    setIsWriting(true);
+    setIsCooldown(true);
 
-    // Convert to string and parse the game ID, handling both numeric strings and potential prefixes
-    const gameIdStr = String(gameId).replace(/^#/, ''); // Remove # prefix if present
+    // Start cooldown timer
+    setTimeout(() => {
+      setIsCooldown(false);
+    }, CANCEL_COOLDOWN_MS);
 
-    console.log('Cancelling game:', gameIdStr);
+    try {
+      const gameIdStr = String(gameId).replace(/^#/, '');
+      const gameIdBigInt = BigInt(gameIdStr);
 
-    // Let wagmi handle gas estimation dynamically
-    // If estimation fails (tx would revert), the error will be caught and displayed
-    writeContract({
-      address: contractAddress,
-      abi: COINFLIP_ABI,
-      functionName: 'cancelGame',
-      args: [BigInt(gameIdStr)],
-    });
+      const txData = encodeFunctionData({
+        abi: COINFLIP_ABI,
+        functionName: 'cancelGame',
+        args: [gameIdBigInt],
+      });
+
+      console.log(`🚀 Sending cancelGame tx for game ${gameIdStr} with gas=${GAS_CAPS.cancelGame}`);
+
+      const txHash = await walletClient.sendTransaction({
+        to: contractAddress,
+        data: txData,
+        gas: GAS_CAPS.cancelGame,
+      });
+
+      console.log(`✅ Transaction sent: ${txHash}`);
+      setHash(txHash);
+    } catch (err) {
+      console.error('❌ Transaction failed:', err);
+      setWriteError(err as Error);
+    } finally {
+      setIsWriting(false);
+    }
   };
 
   return {
     cancelGame,
-    isLoading: isWriting || isConfirming,
+    isLoading: isWriting || isConfirming || isCooldown,
     isSuccess,
     txHash: hash,
     error: writeError,
     reset,
+    isCooldown,
   };
 }
 
-// Hook to claim VRF timeout refund
+// Hook to claim VRF timeout refund - uses wallet client directly for full gas control
 export function useClaimVrfTimeout() {
   const chainId = useChainId();
   const contractAddress = getCoinFlipAddress(chainId);
+  const { data: walletClient } = useWalletClient();
 
-  const {
-    writeContract,
-    data: hash,
-    isPending: isWriting,
-    error: writeError,
-    reset,
-  } = useWriteContract();
+  const [hash, setHash] = useState<`0x${string}` | undefined>();
+  const [isWriting, setIsWriting] = useState(false);
+  const [writeError, setWriteError] = useState<Error | null>(null);
 
   const { isLoading: isConfirming, isSuccess } = useWaitForTransactionReceipt({
     hash,
   });
 
-  const claimVrfTimeout = (gameId: string | number | bigint) => {
+  const reset = () => {
+    setHash(undefined);
+    setWriteError(null);
+    setIsWriting(false);
+  };
+
+  const claimVrfTimeout = async (gameId: string | number | bigint) => {
+    if (!walletClient) {
+      setWriteError(new Error('Wallet not connected'));
+      return;
+    }
+
     reset();
-    const gameIdStr = String(gameId).replace(/^#/, '');
+    setIsWriting(true);
 
-    console.log('Claiming VRF timeout for game:', gameIdStr);
+    try {
+      const gameIdStr = String(gameId).replace(/^#/, '');
+      const gameIdBigInt = BigInt(gameIdStr);
 
-    writeContract({
-      address: contractAddress,
-      abi: COINFLIP_ABI,
-      functionName: 'claimVrfTimeout',
-      args: [BigInt(gameIdStr)],
-    });
+      const txData = encodeFunctionData({
+        abi: COINFLIP_ABI,
+        functionName: 'claimVrfTimeout',
+        args: [gameIdBigInt],
+      });
+
+      console.log(`🚀 Sending claimVrfTimeout tx for game ${gameIdStr} with gas=${GAS_CAPS.claimVrfTimeout}`);
+
+      const txHash = await walletClient.sendTransaction({
+        to: contractAddress,
+        data: txData,
+        gas: GAS_CAPS.claimVrfTimeout,
+      });
+
+      console.log(`✅ Transaction sent: ${txHash}`);
+      setHash(txHash);
+    } catch (err) {
+      console.error('❌ Transaction failed:', err);
+      setWriteError(err as Error);
+    } finally {
+      setIsWriting(false);
+    }
   };
 
   return {
