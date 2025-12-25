@@ -100,7 +100,7 @@ function Lights() {
 
 export function CoinFlip3D({ isFlipping, result, onFlipComplete, autoFlip = false }: CoinFlip3DProps) {
   return (
-    <div className="w-full h-96 rounded-lg overflow-hidden bg-gradient-to-b from-slate-900 to-slate-950 border border-cyan-500/20">
+    <div className="w-full h-64 sm:h-80 md:h-96 rounded-lg overflow-hidden bg-gradient-to-b from-slate-900 to-slate-950 border border-cyan-500/20">
       <Canvas shadows>
         <PerspectiveCamera makeDefault position={[0, 5, 8]} />
         <OrbitControls
@@ -153,9 +153,9 @@ export function CoinFlip2D({ isFlipping, result, onFlipComplete }: CoinFlip3DPro
   const showHeads = flips >= 5 ? !result : flips % 2 === 0;
 
   return (
-    <div className="w-full h-96 flex items-center justify-center">
+    <div className="w-full h-64 sm:h-80 md:h-96 flex items-center justify-center">
       <div
-        className={`w-48 h-48 rounded-full flex items-center justify-center text-7xl transition-all duration-300 ${
+        className={`w-32 h-32 sm:w-40 sm:h-40 md:w-48 md:h-48 rounded-full flex items-center justify-center text-5xl sm:text-6xl md:text-7xl transition-all duration-300 ${
           isFlipping && flips < 5 ? 'animate-flip' : ''
         }`}
         style={{
