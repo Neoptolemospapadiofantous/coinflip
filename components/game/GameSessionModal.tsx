@@ -478,11 +478,10 @@ export function GameSessionModal({ game, open, onClose, userAddress }: GameSessi
 
               <Flex direction="column" gap="2" align="center">
                 <Heading size="5" className="text-yellow-400">
-                  Game Cancelled
+                  Game Expired
                 </Heading>
                 <Text size="3" color="gray" align="center">
-                  This game was automatically cancelled after 15 minutes
-                  without finding a match.
+                  No one joined your game within 15 minutes.
                 </Text>
               </Flex>
 
@@ -499,12 +498,15 @@ export function GameSessionModal({ game, open, onClose, userAddress }: GameSessi
                   </Flex>
 
                   <Flex
-                    className="bg-green-500/10 rounded-lg p-3 border border-green-500/30"
-                    align="center"
+                    className="bg-yellow-500/10 rounded-lg p-3 border border-yellow-500/30"
+                    direction="column"
                     gap="2"
                   >
-                    <Text size="2" className="text-green-400">
-                      Your funds have been refunded to your wallet
+                    <Text size="2" className="text-yellow-400" weight="bold">
+                      Action Required
+                    </Text>
+                    <Text size="2" className="text-yellow-200">
+                      Go to the Queue page and click "Cancel Game" to get your refund.
                     </Text>
                   </Flex>
                 </Flex>
@@ -523,11 +525,11 @@ export function GameSessionModal({ game, open, onClose, userAddress }: GameSessi
                   size="3"
                   onClick={() => {
                     handleClose();
-                    window.location.href = '/play';
+                    window.location.href = '/queue';
                   }}
                   className="flex-1 glow-cyan hover:scale-105 transition-transform"
                 >
-                  Create New Game
+                  Go to Queue
                 </Button>
               </Flex>
             </Flex>

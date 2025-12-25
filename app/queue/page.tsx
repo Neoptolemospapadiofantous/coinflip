@@ -374,7 +374,7 @@ export default function QueuePage() {
                           <Card variant="surface" className="bg-blue-500/5 border border-blue-500/20">
                             <Flex direction="column" gap="1" p="2">
                               <Text size="1" color="blue">
-                                💡 Your game is visible to other players. It will auto-cancel after 15 minutes if no one joins.
+                                💡 Your game is visible to other players. You'll be notified when it expires (15 min) - cancel to get your refund.
                               </Text>
                             </Flex>
                           </Card>
