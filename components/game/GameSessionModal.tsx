@@ -1,16 +1,21 @@
 'use client';
 
-import { Dialog, Flex, Heading, Text, Button, Card, Callout } from '@radix-ui/themes';
-import { useState, useEffect, useRef } from 'react';
+import { Dialog, Flex, Heading, Text, Button, Card, Callout, Progress } from '@radix-ui/themes';
+import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
+import { useRouter } from 'next/navigation';
 import { CoinFlip3D, CoinFlip2D } from './CoinFlip3D';
+import { Confetti } from '@/components/effects/Confetti';
 import { Game } from '@/types/game';
 import { formatCurrency } from '@/lib/utils';
+import { invalidateGameQueries, removeGameFromPendingCache } from '@/lib/queryUtils';
 import { Loader2, Users, Trophy, Zap, AlertTriangle, Clock, XCircle } from 'lucide-react';
 import { useGameStore } from '@/store/gameStore';
 import { validateGameState } from '@/hooks/useGameSync';
 import { useGame } from '@/hooks/useGames';
 import { useCancelGame } from '@/hooks/useContract';
+import { showToast } from '@/lib/toast';
+import { playSound } from '@/lib/sounds';
 
 interface GameSessionModalProps {
   game: Game | null;
@@ -33,8 +38,14 @@ export function GameSessionModal({ game, open, onClose, userAddress, modalType }
   const [vrfTimedOut, setVrfTimedOut] = useState(false);
   const [dataRetryExhausted, setDataRetryExhausted] = useState(false);
   const [cancelStatus, setCancelStatus] = useState<'idle' | 'cancelling' | 'success' | 'error'>('idle');
+  const [showConfetti, setShowConfetti] = useState(false);
   const { resetGame, updateActiveGame, removeActiveGame, startCancellingGame, finishCancellingGame } = useGameStore();
+
+  // Use refs to prevent duplicate sounds/toasts (more reliable than state)
+  const hasPlayedMatchSoundRef = useRef(false);
+  const hasPlayedResultSoundRef = useRef(false);
   const queryClient = useQueryClient();
+  const router = useRouter();
 
   // Cancel game hook
   const { cancelGame, isLoading: isCancelling, isSuccess: cancelSuccess, error: cancelError, reset: resetCancel } = useCancelGame();
@@ -49,16 +60,22 @@ export function GameSessionModal({ game, open, onClose, userAddress, modalType }
   const lastGameStatusRef = useRef<string | null>(null);
   const retryCountRef = useRef(0);
 
-  // Determine if user is part of this game
-  const isCreator = game?.creator_address?.toLowerCase() === userAddress?.toLowerCase();
-  const isJoiner = game?.joiner_address?.toLowerCase() === userAddress?.toLowerCase();
-  const isParticipant = isCreator || isJoiner;
-
-  // Determine if user won
-  const isWinner = game?.winner_address?.toLowerCase() === userAddress?.toLowerCase();
+  // Memoize user role calculations to avoid recalculating on every render
+  const { isCreator, isJoiner, isParticipant, isWinner } = useMemo(() => {
+    const creator = game?.creator_address?.toLowerCase() === userAddress?.toLowerCase();
+    const joiner = game?.joiner_address?.toLowerCase() === userAddress?.toLowerCase();
+    return {
+      isCreator: creator,
+      isJoiner: joiner,
+      isParticipant: creator || joiner,
+      isWinner: game?.winner_address?.toLowerCase() === userAddress?.toLowerCase(),
+    };
+  }, [game?.creator_address, game?.joiner_address, game?.winner_address, userAddress]);
 
   // Validate game state
-  const validation = game ? validateGameState(game) : { valid: false, errors: [] };
+  const validation = useMemo(() => {
+    return game ? validateGameState(game) : { valid: false, errors: [] };
+  }, [game]);
 
   // Handle game changes and status transitions
   useEffect(() => {
@@ -88,6 +105,9 @@ export function GameSessionModal({ game, open, onClose, userAddress, modalType }
       setIsFlipping(false);
       setVrfElapsedSeconds(0);
       setVrfTimedOut(false);
+      setShowConfetti(false);
+      hasPlayedMatchSoundRef.current = false;
+      hasPlayedResultSoundRef.current = false;
     }
 
     // Handle status transitions
@@ -97,6 +117,13 @@ export function GameSessionModal({ game, open, onClose, userAddress, modalType }
         vrfStartTimeRef.current = Date.now();
         setVrfElapsedSeconds(0);
         setVrfTimedOut(false);
+      }
+
+      // Play match sound and show toast once
+      if (!hasPlayedMatchSoundRef.current && isParticipant) {
+        hasPlayedMatchSoundRef.current = true;
+        playSound.match();
+        showToast.gameMatched();
       }
     }
 
@@ -188,16 +215,10 @@ export function GameSessionModal({ game, open, onClose, userAddress, modalType }
         removeActiveGame(game.id);
 
         // Immediately invalidate all game queries to update the UI everywhere
-        queryClient.invalidateQueries({ queryKey: ['games', 'pending'] });
-        queryClient.invalidateQueries({ queryKey: ['games', 'active'] });
-        queryClient.invalidateQueries({ queryKey: ['games', 'player'] });
-        queryClient.invalidateQueries({ queryKey: ['game', game.id] });
-        queryClient.invalidateQueries({ queryKey: ['game-stats'] });
+        invalidateGameQueries(queryClient, game.id);
 
         // Also remove from pending games cache immediately (optimistic)
-        queryClient.setQueryData(['games', 'pending'], (old: Game[] | undefined) =>
-          old?.filter(g => g.id !== game.id) || []
-        );
+        removeGameFromPendingCache(queryClient, game.id);
       }
     } else if (cancelError) {
       setCancelStatus('error');
@@ -226,15 +247,32 @@ export function GameSessionModal({ game, open, onClose, userAddress, modalType }
     await cancelGame(game.id);
   };
 
-  const handleFlipComplete = () => {
-    setShowResult(true);
-  };
+  // Extracted: Play result effects (sound, confetti, toast)
+  const playResultEffects = useCallback(() => {
+    if (hasPlayedResultSoundRef.current || !isParticipant) return;
+    hasPlayedResultSoundRef.current = true;
 
-  const handleSkip = () => {
+    if (isWinner) {
+      playSound.win();
+      setShowConfetti(true);
+      showToast.gameWon(formatCurrency(BigInt(game?.payout || 0)));
+    } else {
+      playSound.loss();
+      showToast.gameLost();
+    }
+  }, [isParticipant, isWinner, game?.payout]);
+
+  const handleFlipComplete = useCallback(() => {
+    setShowResult(true);
+    playResultEffects();
+  }, [playResultEffects]);
+
+  const handleSkip = useCallback(() => {
     setSkipped(true);
     setIsFlipping(false);
     setShowResult(true);
-  };
+    playResultEffects();
+  }, [playResultEffects]);
 
   const handleClose = () => {
     // Cleanup
@@ -258,10 +296,15 @@ export function GameSessionModal({ game, open, onClose, userAddress, modalType }
   const result = game.coin_result ?? false; // false = heads, true = tails
 
   return (
-    <Dialog.Root open={open} onOpenChange={handleClose}>
+    <>
+      {/* Confetti on win */}
+      <Confetti show={showConfetti} duration={5000} onComplete={() => setShowConfetti(false)} />
+
+      <Dialog.Root open={open} onOpenChange={handleClose}>
       <Dialog.Content
         maxWidth="600px"
-        className="backdrop-blur-xl bg-slate-900/95 border-2 border-cyan-500/30"
+        className="backdrop-blur-xl bg-slate-900/95 border-2 border-cyan-500/30 max-h-[90vh] overflow-y-auto mx-4"
+        aria-describedby={undefined}
       >
         <Dialog.Title>
           <Flex direction="column" gap="2" align="center">
@@ -297,10 +340,26 @@ export function GameSessionModal({ game, open, onClose, userAddress, modalType }
                     </Text>
                   </Flex>
 
-                  {/* Timer */}
-                  <Flex align="center" gap="2" className="text-cyan-400">
-                    <Clock className="w-4 h-4" />
-                    <Text size="2" weight="bold">{formatTime(vrfElapsedSeconds)}</Text>
+                  {/* VRF Progress Bar */}
+                  <Flex direction="column" gap="2" className="w-full max-w-xs">
+                    <Progress
+                      value={Math.min(vrfElapsedSeconds, 30)}
+                      max={30}
+                      size="2"
+                      color={vrfElapsedSeconds > 30 ? 'amber' : 'cyan'}
+                    />
+                    <Flex justify="between" align="center">
+                      <Flex align="center" gap="1" className="text-cyan-400">
+                        <Clock className="w-3 h-3" />
+                        <Text size="1" weight="bold">{formatTime(vrfElapsedSeconds)}</Text>
+                      </Flex>
+                      <Text size="1" color="gray">
+                        {vrfElapsedSeconds < 10 && 'Starting...'}
+                        {vrfElapsedSeconds >= 10 && vrfElapsedSeconds < 30 && 'Almost there...'}
+                        {vrfElapsedSeconds >= 30 && vrfElapsedSeconds < 60 && 'Taking longer than usual'}
+                        {vrfElapsedSeconds >= 60 && 'Please wait...'}
+                      </Text>
+                    </Flex>
                   </Flex>
                 </>
               ) : (
@@ -375,7 +434,7 @@ export function GameSessionModal({ game, open, onClose, userAddress, modalType }
 
               {!vrfTimedOut && (
                 <Text size="1" color="gray" align="center" style={{ maxWidth: '400px' }}>
-                  This usually takes 10-30 seconds. The result is cryptographically secure and cannot be manipulated.
+                  Typically completes within 30 seconds. The result is cryptographically secure and cannot be manipulated.
                 </Text>
               )}
             </Flex>
@@ -441,12 +500,12 @@ export function GameSessionModal({ game, open, onClose, userAddress, modalType }
                     direction="column"
                     align="center"
                     justify="center"
-                    className="w-full h-96 bg-gradient-to-b from-slate-900 to-slate-950 border border-cyan-500/20 rounded-lg"
+                    className="w-full h-64 sm:h-80 md:h-96 bg-gradient-to-b from-slate-900 to-slate-950 border border-cyan-500/20 rounded-lg"
                   >
-                    <div className="text-8xl mb-4">
+                    <div className="text-6xl sm:text-7xl md:text-8xl mb-4">
                       {result ? '🪙' : '👑'}
                     </div>
-                    <Text size="5" weight="bold">
+                    <Text size="4" className="sm:text-lg md:text-xl" weight="bold">
                       {result ? 'Tails' : 'Heads'}
                     </Text>
                   </Flex>
@@ -487,7 +546,7 @@ export function GameSessionModal({ game, open, onClose, userAddress, modalType }
                 gap="4"
                 className="w-full py-8 bg-gradient-to-b from-slate-900/50 to-slate-950/50 rounded-lg border border-cyan-500/20"
               >
-                <div className="text-9xl animate-pulse-slow">
+                <div className="text-7xl sm:text-8xl md:text-9xl animate-pulse-slow">
                   {result ? '🪙' : '👑'}
                 </div>
                 <Heading size="6" className={isWinner ? 'text-gradient-gold' : 'text-gray-400'}>
@@ -557,7 +616,7 @@ export function GameSessionModal({ game, open, onClose, userAddress, modalType }
                   size="3"
                   onClick={() => {
                     handleClose();
-                    window.location.href = '/play';
+                    router.push('/play');
                   }}
                   className="flex-1 glow-cyan hover:scale-105 transition-transform"
                 >
@@ -735,5 +794,6 @@ export function GameSessionModal({ game, open, onClose, userAddress, modalType }
         </Flex>
       </Dialog.Content>
     </Dialog.Root>
+    </>
   );
 }
