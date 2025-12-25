@@ -15,6 +15,7 @@ import {
   Table,
   Dialog,
   Box,
+  Skeleton,
 } from '@radix-ui/themes';
 import { Layout } from '@/components/layout/Layout';
 import { useTiers } from '@/hooks/useTiers';
@@ -29,6 +30,7 @@ import { useGameStore } from '@/store/gameStore';
 import { useGameTimeout } from '@/hooks/useGameTimeout';
 import { useConnectionStatus } from '@/hooks/useRealtimeSync';
 import { useQueryClient } from '@tanstack/react-query';
+import { invalidateGameQueries } from '@/lib/queryUtils';
 
 // Contract timeout in milliseconds (100 blocks @ ~12 sec/block = ~20 minutes)
 const CONTRACT_TIMEOUT_MS = 20 * 60 * 1000;
@@ -137,7 +139,7 @@ export default function QueuePage() {
   const [joinedGameId, setJoinedGameId] = useState<string | null>(null);
   const [cancelingGameId, setCancelingGameId] = useState<string | null>(null);
   const [now, setNow] = useState(Date.now()); // For live time updates
-  const { addActiveGame, startCancellingGame, finishCancellingGame, isGameCancelling, cancellingGames } = useGameStore();
+  const { addActiveGame, startCancellingGame, finishCancellingGame, isGameCancelling, startJoiningGame, finishJoiningGame, isGameJoining } = useGameStore();
   const queryClient = useQueryClient();
 
   // Refs for cleanup
@@ -167,18 +169,20 @@ export default function QueuePage() {
   // Handle join success - invalidate queries to remove joined game from list
   useEffect(() => {
     if (isSuccess && joinedGameId) {
-      // Immediately invalidate queries for real-time sync
-      queryClient.invalidateQueries({ queryKey: ['games', 'pending'] });
-      queryClient.invalidateQueries({ queryKey: ['games', 'active'] });
-      queryClient.invalidateQueries({ queryKey: ['games', 'player'] });
-      queryClient.invalidateQueries({ queryKey: ['game', joinedGameId] });
+      // Complete the optimistic join
+      finishJoiningGame(joinedGameId, true);
 
-      // Optimistically remove from pending games cache
-      queryClient.setQueryData(['games', 'pending'], (old: any[] | undefined) =>
-        old?.filter(g => g.id !== joinedGameId) || []
-      );
+      // Immediately invalidate queries for real-time sync
+      invalidateGameQueries(queryClient, joinedGameId);
     }
-  }, [isSuccess, joinedGameId, queryClient]);
+  }, [isSuccess, joinedGameId, queryClient, finishJoiningGame]);
+
+  // Handle join error - revert optimistic update
+  useEffect(() => {
+    if (error && joinedGameId) {
+      finishJoiningGame(joinedGameId, false);
+    }
+  }, [error, joinedGameId, finishJoiningGame]);
 
   // Handle cancel success/error
   useEffect(() => {
@@ -186,16 +190,7 @@ export default function QueuePage() {
       finishCancellingGame(cancelingGameId, true);
 
       // Immediately invalidate all game queries for real-time sync
-      queryClient.invalidateQueries({ queryKey: ['games', 'pending'] });
-      queryClient.invalidateQueries({ queryKey: ['games', 'active'] });
-      queryClient.invalidateQueries({ queryKey: ['games', 'player'] });
-      queryClient.invalidateQueries({ queryKey: ['game', cancelingGameId] });
-      queryClient.invalidateQueries({ queryKey: ['game-stats'] });
-
-      // Optimistically remove from pending games cache
-      queryClient.setQueryData(['games', 'pending'], (old: any[] | undefined) =>
-        old?.filter(g => g.id !== cancelingGameId) || []
-      );
+      invalidateGameQueries(queryClient, cancelingGameId);
 
       setCancelingGameId(null);
       resetCancelState();
@@ -208,16 +203,16 @@ export default function QueuePage() {
       setCancelingGameId(null);
       resetCancelState();
       // Refresh list to get current state after error
-      queryClient.invalidateQueries({ queryKey: ['games', 'pending'] });
+      invalidateGameQueries(queryClient);
     }
   }, [cancelError, cancelingGameId, resetCancelState, finishCancellingGame, queryClient]);
 
-  // Separate user's games from other games, excluding games being cancelled
+  // Separate user's games from other games, excluding games being cancelled or joined
   const myPendingGames = pendingGames?.filter(
     (game) => game.creator_address.toLowerCase() === address?.toLowerCase() && !isGameCancelling(game.id)
   );
   const otherPendingGames = pendingGames?.filter(
-    (game) => game.creator_address.toLowerCase() !== address?.toLowerCase() && !isGameCancelling(game.id)
+    (game) => game.creator_address.toLowerCase() !== address?.toLowerCase() && !isGameCancelling(game.id) && !isGameJoining(game.id)
   );
 
   const handleJoinClick = useCallback((game: any, tier: any) => {
@@ -233,6 +228,9 @@ export default function QueuePage() {
       const joinerChoice = !selectedGame.creator_choice;
       setJoinedGameId(selectedGame.id);
 
+      // Optimistic UI - mark game as being joined (removes from list immediately)
+      startJoiningGame(selectedGame.id);
+
       // Add game to active games store immediately for tracking
       addActiveGame({
         ...selectedGame,
@@ -242,7 +240,7 @@ export default function QueuePage() {
 
       joinGame(selectedGame.id, joinerChoice, selectedGame.tier.amount);
     }
-  }, [selectedGame, joinGame, addActiveGame]);
+  }, [selectedGame, joinGame, addActiveGame, startJoiningGame]);
 
   const handleCancelGame = useCallback(async (gameId: string) => {
     // Check if already cancelling
@@ -487,12 +485,32 @@ export default function QueuePage() {
                 </Flex>
 
                 {isLoadingGames ? (
-                  <Flex direction="column" gap="4" align="center" py="9">
-                    <Loader2 className="w-12 h-12 text-cyan-400 animate-spin" />
-                    <Text size="3" color="gray">
-                      Loading games...
-                    </Text>
-                  </Flex>
+                  <Table.Root variant="surface">
+                    <Table.Header>
+                      <Table.Row>
+                        <Table.ColumnHeaderCell>Game ID</Table.ColumnHeaderCell>
+                        <Table.ColumnHeaderCell>Status</Table.ColumnHeaderCell>
+                        <Table.ColumnHeaderCell>Tier</Table.ColumnHeaderCell>
+                        <Table.ColumnHeaderCell>Amount</Table.ColumnHeaderCell>
+                        <Table.ColumnHeaderCell>Creator</Table.ColumnHeaderCell>
+                        <Table.ColumnHeaderCell>Time</Table.ColumnHeaderCell>
+                        <Table.ColumnHeaderCell>Action</Table.ColumnHeaderCell>
+                      </Table.Row>
+                    </Table.Header>
+                    <Table.Body>
+                      {[...Array(5)].map((_, i) => (
+                        <Table.Row key={i}>
+                          <Table.Cell><Skeleton className="h-4 w-12" /></Table.Cell>
+                          <Table.Cell><Skeleton className="h-5 w-16 rounded-full" /></Table.Cell>
+                          <Table.Cell><Skeleton className="h-4 w-14" /></Table.Cell>
+                          <Table.Cell><Skeleton className="h-4 w-16" /></Table.Cell>
+                          <Table.Cell><Skeleton className="h-4 w-24" /></Table.Cell>
+                          <Table.Cell><Skeleton className="h-4 w-12" /></Table.Cell>
+                          <Table.Cell><Skeleton className="h-8 w-16 rounded" /></Table.Cell>
+                        </Table.Row>
+                      ))}
+                    </Table.Body>
+                  </Table.Root>
                 ) : !otherPendingGames || otherPendingGames.length === 0 ? (
                   <Flex direction="column" gap="4" align="center" py="9">
                     <Text size="4" color="gray">

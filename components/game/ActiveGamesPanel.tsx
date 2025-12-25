@@ -3,9 +3,10 @@
 import { Card, Flex, Heading, Text, Badge, ScrollArea } from '@radix-ui/themes';
 import { useActiveGamesList, useGameStore, MAX_CONCURRENT_GAMES } from '@/store/gameStore';
 import { Game } from '@/types/game';
-import { Users, Loader2, Trophy, ChevronRight, Wifi } from 'lucide-react';
+import { Users, Loader2, Trophy, ChevronRight, Wifi, WifiOff } from 'lucide-react';
 import { formatCurrency } from '@/lib/utils';
 import { useAccount } from 'wagmi';
+import { useConnectionStatus } from '@/hooks/useRealtimeSync';
 
 interface ActiveGameCardProps {
   game: Game;
@@ -101,6 +102,7 @@ export function ActiveGamesPanel() {
   const { address } = useAccount();
   const activeGames = useActiveGamesList();
   const { queueModal } = useGameStore();
+  const { isConnected, isConnecting } = useConnectionStatus();
 
   // Real-time updates are handled centrally by useRealtimeSync (in Providers)
   // This component just displays the games from the Zustand store
@@ -149,10 +151,22 @@ export function ActiveGamesPanel() {
         </ScrollArea>
 
         <Flex align="center" justify="center" gap="2">
-          <Wifi className="w-3 h-3 text-green-400" />
-          <Text size="1" color="gray">
-            Live updates active
-          </Text>
+          {isConnected ? (
+            <>
+              <Wifi className="w-3 h-3 text-green-400" />
+              <Text size="1" className="text-green-400">Live</Text>
+            </>
+          ) : isConnecting ? (
+            <>
+              <Loader2 className="w-3 h-3 text-yellow-400 animate-spin" />
+              <Text size="1" className="text-yellow-400">Connecting...</Text>
+            </>
+          ) : (
+            <>
+              <WifiOff className="w-3 h-3 text-red-400" />
+              <Text size="1" className="text-red-400">Offline</Text>
+            </>
+          )}
         </Flex>
       </Flex>
     </Card>
