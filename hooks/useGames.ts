@@ -82,9 +82,9 @@ export function useActiveGames() {
 
 // Fetch games by player address
 // Real-time updates handled by central sync (useRealtimeSync)
-export function usePlayerGames(address: string | undefined) {
+export function usePlayerGames(address: string | undefined, limit: number = 50) {
   return useQuery({
-    queryKey: ['games', 'player', address],
+    queryKey: ['games', 'player', address, limit],
     queryFn: async (): Promise<Game[]> => {
       if (!address) return [];
 
@@ -93,8 +93,9 @@ export function usePlayerGames(address: string | undefined) {
       const { data, error } = await supabase
         .from('games')
         .select('*')
-        .or(`creator_address.eq.${lowerAddress},joiner_address.eq.${lowerAddress}`)
-        .order('created_at', { ascending: false });
+        .or(`creator_address.ilike.${lowerAddress},joiner_address.ilike.${lowerAddress}`)
+        .order('created_at', { ascending: false })
+        .limit(limit);
 
       if (error) {
         console.error('Error fetching player games:', error);
@@ -106,6 +107,84 @@ export function usePlayerGames(address: string | undefined) {
     enabled: !!address,
     staleTime: 30000, // 30 seconds
     refetchInterval: false, // Disabled - central sync handles updates
+    retry: 2,
+  });
+}
+
+// Fetch player statistics (aggregated server-side)
+export function usePlayerStats(address: string | undefined) {
+  return useQuery({
+    queryKey: ['player-stats', address],
+    queryFn: async () => {
+      if (!address) return null;
+
+      const lowerAddress = address.toLowerCase();
+
+      // Use a single query with aggregations
+      const { data, error } = await supabase
+        .from('games')
+        .select('status, amount, payout, winner_address, tier')
+        .or(`creator_address.ilike.${lowerAddress},joiner_address.ilike.${lowerAddress}`);
+
+      if (error) {
+        console.error('Error fetching player stats:', error);
+        return null;
+      }
+
+      if (!data || data.length === 0) {
+        return {
+          totalGames: 0,
+          wins: 0,
+          losses: 0,
+          pending: 0,
+          totalWagered: BigInt(0),
+          totalWon: BigInt(0),
+          totalLost: BigInt(0),
+          gamesByTier: [0, 0, 0, 0, 0],
+          winsByTier: [0, 0, 0, 0, 0],
+        };
+      }
+
+      // Calculate stats from data
+      let wins = 0, losses = 0, pending = 0;
+      let totalWagered = BigInt(0), totalWon = BigInt(0), totalLost = BigInt(0);
+      const gamesByTier = [0, 0, 0, 0, 0];
+      const winsByTier = [0, 0, 0, 0, 0];
+
+      for (const game of data) {
+        totalWagered += BigInt(game.amount);
+        gamesByTier[game.tier] = (gamesByTier[game.tier] || 0) + 1;
+
+        if (game.status === 'pending' || game.status === 'matched') {
+          pending++;
+        } else if (game.status === 'resolved') {
+          const isWin = game.winner_address?.toLowerCase() === lowerAddress;
+          if (isWin) {
+            wins++;
+            totalWon += game.payout ? BigInt(game.payout) : BigInt(0);
+            winsByTier[game.tier] = (winsByTier[game.tier] || 0) + 1;
+          } else {
+            losses++;
+            totalLost += BigInt(game.amount);
+          }
+        }
+      }
+
+      return {
+        totalGames: data.length,
+        wins,
+        losses,
+        pending,
+        totalWagered,
+        totalWon,
+        totalLost,
+        gamesByTier,
+        winsByTier,
+      };
+    },
+    enabled: !!address,
+    staleTime: 60000, // 1 minute - stats don't need to be super fresh
+    refetchInterval: false,
     retry: 2,
   });
 }

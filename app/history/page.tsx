@@ -3,9 +3,10 @@
 import { Layout } from '@/components/layout/Layout';
 import { Container, Section, Heading, Card, Flex, Text, Grid, Badge, Table, Button, Skeleton } from '@radix-ui/themes';
 import { useAccount } from 'wagmi';
-import { usePlayerGames } from '@/hooks/useGames';
-import { formatCurrency, formatRelativeTime, formatAddress } from '@/lib/utils';
+import { usePlayerGames, usePlayerStats } from '@/hooks/useGames';
+import { formatCurrency, formatRelativeTime } from '@/lib/utils';
 import { getCoinSideLabel } from '@/lib/utils';
+import { useMemo } from 'react';
 import {
   LineChart,
   Line,
@@ -28,58 +29,63 @@ import Link from 'next/link';
 
 export default function HistoryPage() {
   const { address } = useAccount();
-  const { data: games = [], isLoading } = usePlayerGames(address);
+  const { data: games = [], isLoading: isLoadingGames } = usePlayerGames(address, 50);
+  const { data: playerStats, isLoading: isLoadingStats } = usePlayerStats(address);
 
-  // Calculate statistics
-  const stats = {
-    totalGames: games.length,
-    wins: games.filter(
-      (g) => g.status === 'resolved' && g.winner_address?.toLowerCase() === address?.toLowerCase()
-    ).length,
-    losses: games.filter(
-      (g) => g.status === 'resolved' && g.winner_address?.toLowerCase() !== address?.toLowerCase()
-    ).length,
-    pending: games.filter((g) => g.status === 'pending' || g.status === 'matched').length,
-    totalWagered: games.reduce((sum, g) => sum + BigInt(g.amount), BigInt(0)),
-    totalWon: games
-      .filter((g) => g.status === 'resolved' && g.winner_address?.toLowerCase() === address?.toLowerCase())
-      .reduce((sum, g) => sum + (g.payout ? BigInt(g.payout) : BigInt(0)), BigInt(0)),
-    totalLost: games
-      .filter((g) => g.status === 'resolved' && g.winner_address?.toLowerCase() !== address?.toLowerCase())
-      .reduce((sum, g) => sum + BigInt(g.amount), BigInt(0)),
+  const isLoading = isLoadingGames || isLoadingStats;
+
+  // Use stats from hook (already computed server-side)
+  const stats = playerStats || {
+    totalGames: 0,
+    wins: 0,
+    losses: 0,
+    pending: 0,
+    totalWagered: BigInt(0),
+    totalWon: BigInt(0),
+    totalLost: BigInt(0),
+    gamesByTier: [0, 0, 0, 0, 0],
+    winsByTier: [0, 0, 0, 0, 0],
   };
 
-  const winRate = stats.totalGames > 0 ? (stats.wins / stats.totalGames) * 100 : 0;
-  const profitLoss = stats.totalWon - stats.totalLost - stats.totalWagered;
-  const isProfit = profitLoss > BigInt(0);
+  // Memoize derived calculations
+  const { winRate, profitLoss, isProfit } = useMemo(() => {
+    const rate = stats.totalGames > 0 ? (stats.wins / stats.totalGames) * 100 : 0;
+    const profit = stats.totalWon - stats.totalLost;
+    return {
+      winRate: rate,
+      profitLoss: profit,
+      isProfit: profit > BigInt(0),
+    };
+  }, [stats.totalGames, stats.wins, stats.totalWon, stats.totalLost]);
 
-  // Prepare chart data
-  const gamesByTier = [0, 1, 2, 3, 4].map((tier) => ({
-    tier: `$${tier === 0 ? '5' : tier === 1 ? '10' : tier === 2 ? '25' : tier === 3 ? '50' : '100'}`,
-    games: games.filter((g) => g.tier === tier).length,
-    wins: games.filter(
-      (g) => g.tier === tier && g.status === 'resolved' && g.winner_address?.toLowerCase() === address?.toLowerCase()
-    ).length,
-  }));
+  // Memoize chart data
+  const gamesByTier = useMemo(() => {
+    const tierLabels = ['$5', '$10', '$25', '$50', '$100'];
+    return tierLabels.map((label, tier) => ({
+      tier: label,
+      games: stats.gamesByTier[tier] || 0,
+      wins: stats.winsByTier[tier] || 0,
+    }));
+  }, [stats.gamesByTier, stats.winsByTier]);
 
   // Filter out 0 values from pie chart to avoid overlap
-  const winLossData = [
+  const winLossData = useMemo(() => [
     { name: 'Wins', value: stats.wins, color: '#22c55e' },
     { name: 'Losses', value: stats.losses, color: '#ef4444' },
     { name: 'Pending', value: stats.pending, color: '#facc15' },
-  ].filter(item => item.value > 0);
+  ].filter(item => item.value > 0), [stats.wins, stats.losses, stats.pending]);
 
-  // Recent games for timeline
-  const recentGames = games
+  // Recent games for timeline (memoized)
+  const recentGames = useMemo(() => games
     .filter((g) => g.status === 'resolved')
     .slice(0, 10)
-    .map((g, index) => ({
+    .map((g) => ({
       date: new Date(g.resolved_at || g.created_at).toLocaleDateString(),
       profit: g.winner_address?.toLowerCase() === address?.toLowerCase()
         ? Number(g.payout || 0) / 1e18 - Number(g.amount) / 1e18
         : -Number(g.amount) / 1e18,
     }))
-    .reverse();
+    .reverse(), [games, address]);
 
   if (!address) {
     return (

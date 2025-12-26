@@ -14,6 +14,7 @@ export function invalidateGameQueries(
   queryClient.invalidateQueries({ queryKey: ['games', 'active'] });
   queryClient.invalidateQueries({ queryKey: ['games', 'player'] });
   queryClient.invalidateQueries({ queryKey: ['game-stats'] });
+  queryClient.invalidateQueries({ queryKey: ['player-stats'] });
 
   // Invalidate specific game query if provided
   if (gameId) {
