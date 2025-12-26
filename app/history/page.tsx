@@ -1,7 +1,7 @@
 'use client';
 
 import { Layout } from '@/components/layout/Layout';
-import { Container, Section, Heading, Card, Flex, Text, Grid, Badge, Table, Button } from '@radix-ui/themes';
+import { Container, Section, Heading, Card, Flex, Text, Grid, Badge, Table, Button, Skeleton } from '@radix-ui/themes';
 import { useAccount } from 'wagmi';
 import { usePlayerGames } from '@/hooks/useGames';
 import { formatCurrency, formatRelativeTime, formatAddress } from '@/lib/utils';
@@ -115,64 +115,79 @@ export default function HistoryPage() {
 
             {/* Stats Overview */}
             <Grid columns={{ initial: '1', sm: '2', md: '4' }} gap="4">
-              <Card className="card-simple card-hover border-cyan-500/60">
-                <Flex direction="column" gap="2" p="4">
-                  <Flex align="center" gap="2">
-                    <Target className="w-5 h-5 text-cyan-400" />
-                    <Text size="2" color="gray">
-                      Total Games
-                    </Text>
-                  </Flex>
-                  <Heading size="7">{stats.totalGames}</Heading>
-                </Flex>
-              </Card>
+              {isLoading ? (
+                <>
+                  {[...Array(4)].map((_, i) => (
+                    <Card key={i} className="card-simple">
+                      <Flex direction="column" gap="2" p="4">
+                        <Skeleton className="h-4 w-24" />
+                        <Skeleton className="h-8 w-20" />
+                      </Flex>
+                    </Card>
+                  ))}
+                </>
+              ) : (
+                <>
+                  <Card className="card-simple card-hover border-cyan-500/60">
+                    <Flex direction="column" gap="2" p="4">
+                      <Flex align="center" gap="2">
+                        <Target className="w-5 h-5 text-cyan-400" />
+                        <Text size="2" color="gray">
+                          Total Games
+                        </Text>
+                      </Flex>
+                      <Heading size="7">{stats.totalGames}</Heading>
+                    </Flex>
+                  </Card>
 
-              <Card className="card-simple card-hover border-green-500/60">
-                <Flex direction="column" gap="2" p="4">
-                  <Flex align="center" gap="2">
-                    <Trophy className="w-5 h-5 text-green-400" />
-                    <Text size="2" color="gray">
-                      Win Rate
-                    </Text>
-                  </Flex>
-                  <Heading size="7" className="text-green-400">
-                    {winRate.toFixed(1)}%
-                  </Heading>
-                </Flex>
-              </Card>
+                  <Card className="card-simple card-hover border-green-500/60">
+                    <Flex direction="column" gap="2" p="4">
+                      <Flex align="center" gap="2">
+                        <Trophy className="w-5 h-5 text-green-400" />
+                        <Text size="2" color="gray">
+                          Win Rate
+                        </Text>
+                      </Flex>
+                      <Heading size="7" className="text-green-400">
+                        {winRate.toFixed(1)}%
+                      </Heading>
+                    </Flex>
+                  </Card>
 
-              <Card className="card-simple card-hover border-purple-500/60">
-                <Flex direction="column" gap="2" p="4">
-                  <Flex align="center" gap="2">
-                    <DollarSign className="w-5 h-5 text-purple-400" />
-                    <Text size="2" color="gray">
-                      Total Wagered
-                    </Text>
-                  </Flex>
-                  <Heading size="7" className="text-purple-400">
-                    {formatCurrency(stats.totalWagered)}
-                  </Heading>
-                </Flex>
-              </Card>
+                  <Card className="card-simple card-hover border-purple-500/60">
+                    <Flex direction="column" gap="2" p="4">
+                      <Flex align="center" gap="2">
+                        <DollarSign className="w-5 h-5 text-purple-400" />
+                        <Text size="2" color="gray">
+                          Total Wagered
+                        </Text>
+                      </Flex>
+                      <Heading size="7" className="text-purple-400">
+                        {formatCurrency(stats.totalWagered)}
+                      </Heading>
+                    </Flex>
+                  </Card>
 
-              <Card className={`card-simple card-hover ${isProfit ? 'border-green-500/60' : 'border-red-500/60'}`}>
-                <Flex direction="column" gap="2" p="4">
-                  <Flex align="center" gap="2">
-                    {isProfit ? (
-                      <TrendingUp className="w-5 h-5 text-green-400" />
-                    ) : (
-                      <TrendingDown className="w-5 h-5 text-red-400" />
-                    )}
-                    <Text size="2" color="gray">
-                      Profit/Loss
-                    </Text>
-                  </Flex>
-                  <Heading size="7" className={isProfit ? 'text-green-400' : 'text-red-400'}>
-                    {isProfit ? '+' : ''}
-                    {formatCurrency(profitLoss)}
-                  </Heading>
-                </Flex>
-              </Card>
+                  <Card className={`card-simple card-hover ${isProfit ? 'border-green-500/60' : 'border-red-500/60'}`}>
+                    <Flex direction="column" gap="2" p="4">
+                      <Flex align="center" gap="2">
+                        {isProfit ? (
+                          <TrendingUp className="w-5 h-5 text-green-400" />
+                        ) : (
+                          <TrendingDown className="w-5 h-5 text-red-400" />
+                        )}
+                        <Text size="2" color="gray">
+                          Profit/Loss
+                        </Text>
+                      </Flex>
+                      <Heading size="7" className={isProfit ? 'text-green-400' : 'text-red-400'}>
+                        {isProfit ? '+' : ''}
+                        {formatCurrency(profitLoss)}
+                      </Heading>
+                    </Flex>
+                  </Card>
+                </>
+              )}
             </Grid>
 
             {/* Charts */}
@@ -182,7 +197,14 @@ export default function HistoryPage() {
                 <Heading size="5" mb="4">
                   Win Distribution
                 </Heading>
-                {winLossData.length === 0 ? (
+                {isLoading ? (
+                  <Flex align="center" justify="center" style={{ height: 300 }}>
+                    <Flex direction="column" align="center" gap="3">
+                      <Skeleton className="h-32 w-32 rounded-full" />
+                      <Skeleton className="h-4 w-24" />
+                    </Flex>
+                  </Flex>
+                ) : winLossData.length === 0 ? (
                   <Flex align="center" justify="center" style={{ height: 300 }}>
                     <Text color="gray" size="3">No resolved games yet</Text>
                   </Flex>
@@ -220,23 +242,31 @@ export default function HistoryPage() {
                 <Heading size="5" mb="4">
                   Games by Tier
                 </Heading>
-                <ResponsiveContainer width="100%" height={300}>
-                  <BarChart data={gamesByTier}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
-                    <XAxis dataKey="tier" stroke="#94a3b8" />
-                    <YAxis stroke="#94a3b8" />
-                    <Tooltip
-                      contentStyle={{
-                        background: 'rgba(15, 23, 42, 0.9)',
-                        border: '1px solid rgba(6, 182, 212, 0.3)',
-                        borderRadius: '8px',
-                      }}
-                    />
-                    <Legend />
-                    <Bar dataKey="games" fill="#06b6d4" name="Total Games" />
-                    <Bar dataKey="wins" fill="#22c55e" name="Wins" />
-                  </BarChart>
-                </ResponsiveContainer>
+                {isLoading ? (
+                  <Flex align="end" justify="center" gap="4" style={{ height: 300 }} className="pb-8">
+                    {[80, 120, 60, 100, 40].map((h, i) => (
+                      <Skeleton key={i} className="w-12" style={{ height: h }} />
+                    ))}
+                  </Flex>
+                ) : (
+                  <ResponsiveContainer width="100%" height={300}>
+                    <BarChart data={gamesByTier}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
+                      <XAxis dataKey="tier" stroke="#94a3b8" />
+                      <YAxis stroke="#94a3b8" />
+                      <Tooltip
+                        contentStyle={{
+                          background: 'rgba(15, 23, 42, 0.9)',
+                          border: '1px solid rgba(6, 182, 212, 0.3)',
+                          borderRadius: '8px',
+                        }}
+                      />
+                      <Legend />
+                      <Bar dataKey="games" fill="#06b6d4" name="Total Games" />
+                      <Bar dataKey="wins" fill="#22c55e" name="Wins" />
+                    </BarChart>
+                  </ResponsiveContainer>
+                )}
               </Card>
             </Grid>
 
@@ -281,7 +311,30 @@ export default function HistoryPage() {
                 <Heading size="5">Recent Games</Heading>
 
                 {isLoading ? (
-                  <Text color="gray">Loading games...</Text>
+                  <div className="overflow-x-auto">
+                    <Table.Root>
+                      <Table.Header>
+                        <Table.Row>
+                          <Table.ColumnHeaderCell>Game ID</Table.ColumnHeaderCell>
+                          <Table.ColumnHeaderCell>Status</Table.ColumnHeaderCell>
+                          <Table.ColumnHeaderCell>Amount</Table.ColumnHeaderCell>
+                          <Table.ColumnHeaderCell>Result</Table.ColumnHeaderCell>
+                          <Table.ColumnHeaderCell>Time</Table.ColumnHeaderCell>
+                        </Table.Row>
+                      </Table.Header>
+                      <Table.Body>
+                        {[...Array(5)].map((_, i) => (
+                          <Table.Row key={i}>
+                            <Table.Cell><Skeleton className="h-4 w-12" /></Table.Cell>
+                            <Table.Cell><Skeleton className="h-5 w-16 rounded-full" /></Table.Cell>
+                            <Table.Cell><Skeleton className="h-4 w-20" /></Table.Cell>
+                            <Table.Cell><Skeleton className="h-4 w-24" /></Table.Cell>
+                            <Table.Cell><Skeleton className="h-4 w-16" /></Table.Cell>
+                          </Table.Row>
+                        ))}
+                      </Table.Body>
+                    </Table.Root>
+                  </div>
                 ) : games.length === 0 ? (
                   <Flex direction="column" align="center" gap="3" py="8">
                     <Text size="5" color="gray">
