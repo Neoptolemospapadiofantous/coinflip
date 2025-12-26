@@ -11,11 +11,13 @@ CREATE TABLE IF NOT EXISTS indexer_state (
 ALTER TABLE indexer_state ENABLE ROW LEVEL SECURITY;
 
 -- Policy: Anyone can read
+DROP POLICY IF EXISTS "Indexer state is viewable by everyone" ON indexer_state;
 CREATE POLICY "Indexer state is viewable by everyone"
   ON indexer_state FOR SELECT
   USING (true);
 
 -- Policy: Anyone can insert/update (restrict to service role in production)
+DROP POLICY IF EXISTS "Indexer state can be modified by anyone" ON indexer_state;
 CREATE POLICY "Indexer state can be modified by anyone"
   ON indexer_state FOR ALL
   USING (true);

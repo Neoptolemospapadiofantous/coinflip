@@ -1,12 +1,14 @@
 -- Create views for better query performance and cleaner code
 
 -- Active games view (pending + matched games)
+DROP VIEW IF EXISTS active_games CASCADE;
 CREATE OR REPLACE VIEW active_games AS
 SELECT * FROM games
 WHERE status IN ('pending', 'matched')
 ORDER BY created_at DESC;
 
 -- Game statistics view (aggregated stats)
+DROP VIEW IF EXISTS game_statistics CASCADE;
 CREATE OR REPLACE VIEW game_statistics AS
 SELECT
   COUNT(*) as total_games,
@@ -50,6 +52,7 @@ SELECT
 FROM games;
 
 -- Player leaderboard view
+DROP VIEW IF EXISTS player_leaderboard CASCADE;
 CREATE OR REPLACE VIEW player_leaderboard AS
 SELECT
   player_address,
@@ -89,6 +92,7 @@ GROUP BY player_address
 ORDER BY wins DESC, total_games DESC;
 
 -- Recent games view (last 100 games with full details)
+DROP VIEW IF EXISTS recent_games CASCADE;
 CREATE OR REPLACE VIEW recent_games AS
 SELECT
   g.*,
