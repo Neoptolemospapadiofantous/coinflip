@@ -50,7 +50,7 @@ interface GameStatsProps {
 
 export const GameStatsGrid = memo(function GameStatsGrid({
   totalGames = 0,
-  wins = 0,
+  wins: _wins = 0,
   totalWagered = '0',
   profitLoss = '0',
   winRate = 0,

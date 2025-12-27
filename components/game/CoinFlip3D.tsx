@@ -14,14 +14,13 @@ interface CoinFlip3DProps {
 }
 
 function Coin({ isFlipping, result, onFlipComplete }: CoinFlip3DProps) {
-  const [ref, api] = useCylinder(() => ({
+  const [_ref, api] = useCylinder(() => ({
     mass: 1,
     args: [1, 1, 0.2, 32],
     position: [0, 5, 0],
   }));
 
   const meshRef = useRef<THREE.Mesh>(null);
-  const [rotation, setRotation] = useState(0);
   const [hasLanded, setHasLanded] = useState(false);
 
   useEffect(() => {
@@ -59,7 +58,7 @@ function Coin({ isFlipping, result, onFlipComplete }: CoinFlip3DProps) {
   });
 
   return (
-    <mesh ref={meshRef as any} castShadow receiveShadow>
+    <mesh ref={meshRef as React.RefObject<THREE.Mesh>} castShadow receiveShadow>
       <cylinderGeometry args={[1, 1, 0.2, 32]} />
       <meshStandardMaterial
         color="#facc15"

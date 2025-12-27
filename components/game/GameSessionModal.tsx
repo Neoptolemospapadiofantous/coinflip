@@ -141,6 +141,7 @@ export function GameSessionModal({ game, open, onClose, userAddress, modalType }
       setIsFlipping(true);
       setVrfTimedOut(false);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- Intentionally using game?.id and game?.status to prevent re-renders
   }, [game?.id, game?.status, validation.valid]);
 
   // Auto-refetch on validation errors (incomplete VRF data)
@@ -168,6 +169,7 @@ export function GameSessionModal({ game, open, onClose, userAddress, modalType }
         setDataRetryExhausted(true);
       }
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- Intentionally using game?.id to prevent infinite re-renders
   }, [game?.id, game?.status, validation.valid, refetchGame]);
 
   // Update game in store when fresh data arrives
@@ -244,6 +246,7 @@ export function GameSessionModal({ game, open, onClose, userAddress, modalType }
       setCancelStatus('idle');
       resetCancel();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- Intentionally using game?.id to prevent re-renders on every game update
   }, [open, game?.id, resetCancel]);
 
   const handleCancelGame = async () => {
