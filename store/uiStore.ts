@@ -2,6 +2,7 @@
 
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
+import { useShallow } from 'zustand/react/shallow';
 
 // Theme types matching Radix UI Theme
 export type ThemeAccentColor =
@@ -181,15 +182,12 @@ export const useUIStore = create<UIState & UIActions>()(
 );
 
 // Selector hooks for performance (prevent unnecessary re-renders)
-export const useTheme = () => useUIStore((state) => state.theme);
+// Use primitive selectors or useShallow for objects to avoid infinite loops
+export const useTheme = () => useUIStore(useShallow((state) => state.theme));
 export const useAppearance = () => useUIStore((state) => state.theme.appearance);
 export const useAccentColor = () => useUIStore((state) => state.theme.accentColor);
-export const useSoundPreferences = () => useUIStore((state) => ({
-  enabled: state.soundEnabled,
-  volume: state.soundVolume,
-}));
+export const useSoundEnabled = () => useUIStore((state) => state.soundEnabled);
+export const useSoundVolume = () => useUIStore((state) => state.soundVolume);
 export const useReducedMotion = () => useUIStore((state) => state.reducedMotion);
-export const useActiveModal = () => useUIStore((state) => ({
-  id: state.activeModal,
-  data: state.modalData,
-}));
+export const useActiveModalId = () => useUIStore((state) => state.activeModal);
+export const useActiveModalData = () => useUIStore((state) => state.modalData);

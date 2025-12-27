@@ -4,10 +4,10 @@ import { useEffect } from 'react';
 import { Volume2, VolumeX } from 'lucide-react';
 import { Button } from '@radix-ui/themes';
 import { soundManager } from '@/lib/sounds';
-import { useUIStore, useSoundPreferences } from '@/store/uiStore';
+import { useUIStore, useSoundEnabled } from '@/store/uiStore';
 
 export function SoundToggle() {
-  const { enabled, volume } = useSoundPreferences();
+  const enabled = useSoundEnabled();
   const toggleSound = useUIStore((state) => state.toggleSound);
 
   // Sync soundManager with store
