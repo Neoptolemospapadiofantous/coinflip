@@ -172,7 +172,7 @@ export const useGameStore = create<GameState>((set, get) => ({
       return { joiningGames: newSet };
     }),
 
-  finishJoiningGame: (gameId, success) =>
+  finishJoiningGame: (gameId, _success) =>
     set((state) => {
       const newSet = new Set(state.joiningGames);
       newSet.delete(gameId);

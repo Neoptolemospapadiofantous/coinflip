@@ -106,7 +106,7 @@ const initialState: UIState = {
 
 export const useUIStore = create<UIState & UIActions>()(
   persist(
-    (set, get) => ({
+    (set, _get) => ({
       ...initialState,
 
       // Theme actions

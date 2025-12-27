@@ -26,7 +26,8 @@ function addToExpiredCache(gameId: string) {
   globalExpiredGameIds.add(gameId);
 }
 
-interface TimeoutInfo {
+// TimeoutInfo interface for potential future use
+interface _TimeoutInfo {
   gameId: string;
   createdAt: Date;
   timeoutAt: Date;
@@ -39,7 +40,7 @@ interface TimeoutInfo {
  */
 export function useGameTimeout() {
   const { address } = useAccount();
-  const { activeGames, queueModal, removeActiveGame } = useGameStore();
+  const { activeGames, queueModal, removeActiveGame: _removeActiveGame } = useGameStore();
 
   // Use a ref instead of state to avoid re-render loops
   const expiredGameIdsRef = useRef<Set<string>>(globalExpiredGameIds);
