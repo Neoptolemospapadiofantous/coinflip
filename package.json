@@ -23,7 +23,10 @@
     "db:logs": "docker-compose logs -f postgres",
     "migrate:local": "tsx scripts/migrate-local.ts",
     "migrate:cloud": "tsx scripts/migrate-cloud.ts",
-    "migrations:show": "tsx scripts/show-migrations.ts"
+    "migrations:show": "tsx scripts/show-migrations.ts",
+    "audit:security": "tsx scripts/security-audit.ts",
+    "audit:security:save": "tsx scripts/security-audit.ts --save --md",
+    "audit:security:json": "tsx scripts/security-audit.ts --json"
   },
   "keywords": [
     "web3",
