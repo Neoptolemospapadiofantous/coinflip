@@ -20,6 +20,19 @@ export interface ParsedError {
   suggestion?: string;
 }
 
+// Type guard for error-like objects
+interface ErrorLike {
+  message?: string;
+  code?: string | number;
+  status?: number;
+  statusCode?: number;
+  toString?: () => string;
+}
+
+function isErrorLike(error: unknown): error is ErrorLike {
+  return typeof error === 'object' && error !== null;
+}
+
 /**
  * Parse error and return user-friendly message
  */
@@ -34,16 +47,16 @@ export function parseError(error: unknown): ParsedError {
     };
   }
 
-  const err = error as any;
-  const errorMessage = err?.message || err?.toString() || 'Unknown error';
+  const err = isErrorLike(error) ? error : { message: String(error) };
+  const errorMessage = err.message || err.toString?.() || 'Unknown error';
 
   // User rejected transaction
   if (
     errorMessage.includes('User rejected') ||
     errorMessage.includes('User denied') ||
     errorMessage.includes('user rejected') ||
-    err?.code === 4001 ||
-    err?.code === 'ACTION_REJECTED'
+    err.code === 4001 ||
+    err.code === 'ACTION_REJECTED'
   ) {
     return {
       type: 'transaction_rejected',
@@ -170,8 +183,8 @@ export function parseError(error: unknown): ParsedError {
   }
 
   // API errors
-  if (err?.status || err?.statusCode) {
-    const status = err.status || err.statusCode;
+  if (err.status !== undefined || err.statusCode !== undefined) {
+    const status = err.status ?? err.statusCode ?? 0;
 
     if (status === 404) {
       return {

@@ -16,13 +16,13 @@ export const MAINNET_CHAIN_IDS = [
 // Check if a chain ID is a testnet
 export function isTestnet(chainId: number | undefined): boolean {
   if (!chainId) return true; // Default to testnet for safety
-  return TESTNET_CHAIN_IDS.includes(chainId as any);
+  return (TESTNET_CHAIN_IDS as readonly number[]).includes(chainId);
 }
 
 // Check if a chain ID is mainnet
 export function isMainnet(chainId: number | undefined): boolean {
   if (!chainId) return false;
-  return MAINNET_CHAIN_IDS.includes(chainId as any);
+  return (MAINNET_CHAIN_IDS as readonly number[]).includes(chainId);
 }
 
 // Get network name from chain ID

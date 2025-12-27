@@ -1,9 +1,17 @@
 import { supabase } from './supabase';
 
+// Type for migration records from _migrations table
+interface MigrationRecord {
+  version: number;
+  filename: string;
+  executed_at: string;
+}
+
 export interface HealthCheckResult {
   success: boolean;
   message: string;
-  details?: any;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  details?: Record<string, any>;
 }
 
 export interface DatabaseHealth {
@@ -60,11 +68,12 @@ export async function checkSupabaseConnection(): Promise<HealthCheckResult> {
       success: true,
       message: 'Successfully connected to Supabase',
     };
-  } catch (error: any) {
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Unknown error';
     return {
       success: false,
-      message: `Connection error: ${error.message}`,
-      details: error,
+      message: `Connection error: ${message}`,
+      details: { error: String(error) },
     };
   }
 }
@@ -72,7 +81,7 @@ export async function checkSupabaseConnection(): Promise<HealthCheckResult> {
 // Check if a table exists and is accessible
 async function checkTable(tableName: string): Promise<HealthCheckResult> {
   try {
-    const { data, error, count } = await supabase
+    const { error, count } = await supabase
       .from(tableName)
       .select('*', { count: 'exact', head: true });
 
@@ -96,11 +105,12 @@ async function checkTable(tableName: string): Promise<HealthCheckResult> {
       message: `Table '${tableName}' exists and is accessible`,
       details: { rowCount: count },
     };
-  } catch (error: any) {
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Unknown error';
     return {
       success: false,
-      message: `Exception checking table '${tableName}': ${error.message}`,
-      details: error,
+      message: `Exception checking table '${tableName}': ${message}`,
+      details: { error: String(error) },
     };
   }
 }
@@ -108,7 +118,7 @@ async function checkTable(tableName: string): Promise<HealthCheckResult> {
 // Check if tiers table has data
 async function checkTiersData(): Promise<HealthCheckResult> {
   try {
-    const { data, error, count } = await supabase
+    const { data, error } = await supabase
       .from('tiers')
       .select('*', { count: 'exact' })
       .eq('enabled', true);
@@ -142,11 +152,12 @@ async function checkTiersData(): Promise<HealthCheckResult> {
       message: `Found ${data.length} tiers configured`,
       details: { count: data.length, tiers: data },
     };
-  } catch (error: any) {
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Unknown error';
     return {
       success: false,
-      message: `Exception checking tiers data: ${error.message}`,
-      details: error,
+      message: `Exception checking tiers data: ${message}`,
+      details: { error: String(error) },
     };
   }
 }
@@ -192,7 +203,7 @@ async function checkMigrations(): Promise<HealthCheckResult> {
         details: {
           executedCount,
           expectedCount,
-          executed: migrationData?.map((m: any) => m.filename) || [],
+          executed: (migrationData as MigrationRecord[] | null)?.map((m) => m.filename) || [],
         },
       };
     }
@@ -202,18 +213,19 @@ async function checkMigrations(): Promise<HealthCheckResult> {
       message: `All ${executedCount} migrations executed successfully`,
       details: {
         executedCount,
-        migrations: migrationData?.map((m: any) => ({
+        migrations: (migrationData as MigrationRecord[] | null)?.map((m) => ({
           version: m.version,
           filename: m.filename,
           executedAt: m.executed_at,
         })),
       },
     };
-  } catch (error: any) {
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Unknown error';
     return {
       success: false,
-      message: `Exception checking migrations: ${error.message}`,
-      details: error,
+      message: `Exception checking migrations: ${message}`,
+      details: { error: String(error) },
     };
   }
 }
@@ -231,7 +243,7 @@ async function checkRealtime(): Promise<HealthCheckResult> {
           isResolved = true;
           try {
             channel.unsubscribe();
-          } catch (e) {
+          } catch {
             // Ignore unsubscribe errors
           }
           resolve({
@@ -252,7 +264,7 @@ async function checkRealtime(): Promise<HealthCheckResult> {
             setTimeout(() => {
               try {
                 channel.unsubscribe();
-              } catch (e) {
+              } catch {
                 // Ignore unsubscribe errors
               }
             }, 100);
@@ -272,11 +284,12 @@ async function checkRealtime(): Promise<HealthCheckResult> {
           }
         });
     });
-  } catch (error: any) {
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Unknown error';
     return {
       success: false,
-      message: `Realtime check failed: ${error.message}`,
-      details: error,
+      message: `Realtime check failed: ${message}`,
+      details: { error: String(error) },
     };
   }
 }

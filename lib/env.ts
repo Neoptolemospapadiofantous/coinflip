@@ -83,9 +83,9 @@ export function validateEnv(): Env {
     }
 
     return env;
-  } catch (error: any) {
+  } catch (error) {
     if (error instanceof z.ZodError) {
-      const errorMessages = error.issues?.map((err: any) =>
+      const errorMessages = error.issues?.map((err) =>
         `  ❌ ${err.path.join('.')}: ${err.message}`
       ).join('\n') || error.message;
 
@@ -111,9 +111,9 @@ export function validateIndexerEnv(): IndexerEnv {
     console.log(`📍 Contract: ${env.NEXT_PUBLIC_COINFLIP_CONTRACT_ADDRESS_SEPOLIA}`);
 
     return env;
-  } catch (error: any) {
+  } catch (error) {
     if (error instanceof z.ZodError) {
-      const errorMessages = error.issues?.map((err: any) =>
+      const errorMessages = error.issues?.map((err) =>
         `  ❌ ${err.path.join('.')}: ${err.message}`
       ).join('\n') || error.message;
 

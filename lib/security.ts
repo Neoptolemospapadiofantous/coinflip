@@ -265,12 +265,12 @@ export function sanitizeJson<T = unknown>(
     const parsed = JSON.parse(jsonString);
 
     // Check depth
-    function checkDepth(obj: any, depth: number = 0): boolean {
+    function checkDepth(obj: unknown, depth: number = 0): boolean {
       if (depth > maxDepth) return false;
       if (obj === null || typeof obj !== 'object') return true;
 
-      for (const key in obj) {
-        if (!checkDepth(obj[key], depth + 1)) return false;
+      for (const key in obj as Record<string, unknown>) {
+        if (!checkDepth((obj as Record<string, unknown>)[key], depth + 1)) return false;
       }
       return true;
     }
