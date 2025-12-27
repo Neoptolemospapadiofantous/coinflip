@@ -3,7 +3,7 @@
 import { useEffect, useState, useRef, useCallback } from 'react';
 import { useWatchContractEvent, useChainId } from 'wagmi';
 import { supabase } from '@/lib/supabase';
-import { Game } from '@/types/game';
+import { Game, parseGame } from '@/types/game';
 import { COINFLIP_ABI } from '@/lib/contracts/abi';
 import { getCoinFlipAddress } from '@/lib/contracts/addresses';
 
@@ -188,7 +188,11 @@ export function useCreatedGameTracking({
           },
           (payload) => {
             if (!mountedRef.current) return;
-            const updatedGame = payload.new as Game;
+            const updatedGame = parseGame(payload.new);
+            if (!updatedGame) {
+              console.warn(`📡 Game ${game.id} received invalid payload`);
+              return;
+            }
             console.log(`📡 Game ${game.id} status changed to:`, updatedGame.status);
 
             // Update local state
@@ -263,32 +267,52 @@ export function useCreatedGameTracking({
           // Clear any existing retry interval first
           if (retryIntervalRef.current) {
             clearInterval(retryIntervalRef.current);
+            retryIntervalRef.current = null;
+          }
+
+          // Don't create new interval if component is unmounting
+          if (!mountedRef.current) {
+            return;
           }
 
           let retries = 0;
           const maxRetries = 10;
-          retryIntervalRef.current = setInterval(async () => {
-            if (!mountedRef.current || gameIdRef.current || retries >= maxRetries) {
-              if (retryIntervalRef.current) {
-                clearInterval(retryIntervalRef.current);
+          const intervalId = setInterval(async () => {
+            // Check mount status first and clear interval if unmounted
+            if (!mountedRef.current) {
+              clearInterval(intervalId);
+              if (retryIntervalRef.current === intervalId) {
                 retryIntervalRef.current = null;
               }
               return;
             }
+
+            if (gameIdRef.current || retries >= maxRetries) {
+              clearInterval(intervalId);
+              if (retryIntervalRef.current === intervalId) {
+                retryIntervalRef.current = null;
+              }
+              return;
+            }
+
             retries++;
             try {
               const retryGame = await fetchGameFromDB(txHash);
-              if (retryGame) {
-                if (retryIntervalRef.current) {
-                  clearInterval(retryIntervalRef.current);
+              if (retryGame && mountedRef.current) {
+                clearInterval(intervalId);
+                if (retryIntervalRef.current === intervalId) {
                   retryIntervalRef.current = null;
                 }
                 handleGameFound(retryGame);
               }
             } catch (err) {
-              console.error('[GameTracking] Error in retry fetch:', err);
+              // Only log if still mounted
+              if (mountedRef.current) {
+                console.error('[GameTracking] Error in retry fetch:', err);
+              }
             }
           }, 500);
+          retryIntervalRef.current = intervalId;
 
           return;
         }

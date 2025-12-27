@@ -4,7 +4,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
 import { useGameStore } from '@/store/gameStore';
-import { Game } from '@/types/game';
+import { Game, parseGame } from '@/types/game';
 import { useAccount } from 'wagmi';
 
 // Fallback polling with exponential backoff
@@ -85,7 +85,11 @@ export function useRealtimeSync() {
           table: 'games',
         },
         (payload) => {
-          const game = payload.new as Game;
+          const game = parseGame(payload.new);
+          if (!game) {
+            console.warn('🆕 [RealtimeSync] Received invalid game payload on INSERT');
+            return;
+          }
           console.log('🆕 [RealtimeSync] Game created:', game.id);
 
           // Invalidate pending games list
@@ -110,8 +114,13 @@ export function useRealtimeSync() {
           table: 'games',
         },
         (payload) => {
-          const game = payload.new as Game;
-          const oldGame = payload.old as Partial<Game>;
+          const game = parseGame(payload.new);
+          if (!game) {
+            console.warn('🔄 [RealtimeSync] Received invalid game payload on UPDATE');
+            return;
+          }
+          // oldGame is partial and may be incomplete, just extract what we need
+          const oldGame = payload.old as Partial<Game> | null;
           console.log('🔄 [RealtimeSync] Game updated:', game.id, oldGame?.status, '→', game.status);
 
           const userAddress = addressRef.current?.toLowerCase();
@@ -184,12 +193,14 @@ export function useRealtimeSync() {
           table: 'games',
         },
         (payload) => {
-          const oldGame = payload.old as Partial<Game>;
-          console.log('🗑️ [RealtimeSync] Game deleted:', oldGame?.id);
+          // DELETE payloads only contain the primary key in old
+          const oldGame = payload.old as { id?: string } | null;
+          const gameId = oldGame?.id;
+          console.log('🗑️ [RealtimeSync] Game deleted:', gameId);
 
-          if (oldGame?.id) {
-            queryClientRef.current.removeQueries({ queryKey: ['game', oldGame.id] });
-            actionsRef.current.removeActiveGame(oldGame.id);
+          if (gameId && typeof gameId === 'string') {
+            queryClientRef.current.removeQueries({ queryKey: ['game', gameId] });
+            actionsRef.current.removeActiveGame(gameId);
           }
 
           // Invalidate lists

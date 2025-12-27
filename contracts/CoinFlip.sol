@@ -304,6 +304,9 @@ contract CoinFlip is ReentrancyGuard, Pausable, Ownable {
             )
         });
 
+        // Note: requestId is only known after the VRF call, so these writes must come after.
+        // This is safe because: (1) nonReentrant modifier prevents reentrancy,
+        // (2) game.state is LOCKED before this call, (3) VRF coordinator is trusted.
         uint256 requestId = i_vrfCoordinator.requestRandomWords(req);
 
         game.vrfRequestId = requestId;
@@ -313,7 +316,8 @@ contract CoinFlip is ReentrancyGuard, Pausable, Ownable {
     }
 
     /**
-     * @notice Cancel a game that has timed out
+     * @notice Cancel an open game and receive full refund
+     * @dev Creator can cancel immediately - no timeout required
      * @param gameId The game ID to cancel
      */
     function cancelGame(uint256 gameId)
@@ -326,11 +330,9 @@ contract CoinFlip is ReentrancyGuard, Pausable, Ownable {
         if (game.state == GameState.NONE) revert GameDoesNotExist();
         if (game.state != GameState.OPEN) revert InvalidGameState();
         if (msg.sender != game.playerA) revert NotGameCreator();
-        if (block.number < game.createdBlock + TIMEOUT_BLOCKS) {
-            revert TimeoutNotReached();
-        }
+        // No timeout required - creator can cancel immediately
 
-        // Update state
+        // Update state first (CEI pattern)
         game.state = GameState.CANCELLED;
 
         // Refund creator
@@ -552,8 +554,7 @@ contract CoinFlip is ReentrancyGuard, Pausable, Ownable {
         returns (bool)
     {
         Game storage game = games[gameId];
-        return game.state == GameState.OPEN &&
-               block.number >= game.createdBlock + TIMEOUT_BLOCKS;
+        return game.state == GameState.OPEN;
     }
 
     /**

@@ -1,5 +1,83 @@
 import { NextRequest, NextResponse } from 'next/server';
 
+// =============================================================
+// RATE LIMITING
+// =============================================================
+
+// Simple in-memory rate limiter (for single-instance deployments)
+// For distributed systems, use Redis or similar
+const rateLimitMap = new Map<string, { count: number; resetTime: number }>();
+const RATE_LIMIT_WINDOW_MS = 60000; // 1 minute
+const RATE_LIMIT_MAX_REQUESTS = 100; // 100 requests per minute per IP
+
+// Cleanup old entries periodically (every 5 minutes)
+const CLEANUP_INTERVAL_MS = 300000;
+let lastCleanup = Date.now();
+
+function cleanupRateLimitMap() {
+  const now = Date.now();
+  if (now - lastCleanup < CLEANUP_INTERVAL_MS) return;
+
+  lastCleanup = now;
+  for (const [key, value] of rateLimitMap.entries()) {
+    if (now > value.resetTime) {
+      rateLimitMap.delete(key);
+    }
+  }
+}
+
+function isRateLimited(clientId: string): boolean {
+  cleanupRateLimitMap();
+
+  const now = Date.now();
+  const entry = rateLimitMap.get(clientId);
+
+  if (!entry || now > entry.resetTime) {
+    // New window
+    rateLimitMap.set(clientId, { count: 1, resetTime: now + RATE_LIMIT_WINDOW_MS });
+    return false;
+  }
+
+  entry.count++;
+  if (entry.count > RATE_LIMIT_MAX_REQUESTS) {
+    return true;
+  }
+
+  return false;
+}
+
+// Get client identifier (IP address)
+function getClientId(request: NextRequest): string {
+  const forwarded = request.headers.get('x-forwarded-for');
+  if (forwarded) {
+    return forwarded.split(',')[0].trim();
+  }
+  const realIp = request.headers.get('x-real-ip');
+  if (realIp) {
+    return realIp;
+  }
+  return 'unknown';
+}
+
+// =============================================================
+// SECURITY HEADERS
+// =============================================================
+
+function addSecurityHeaders(response: NextResponse): NextResponse {
+  response.headers.set('X-Content-Type-Options', 'nosniff');
+  response.headers.set('X-Frame-Options', 'DENY');
+  response.headers.set('X-XSS-Protection', '1; mode=block');
+  response.headers.set('Referrer-Policy', 'strict-origin-when-cross-origin');
+  return response;
+}
+
+// =============================================================
+// RPC CONFIGURATION
+// =============================================================
+
+// Allowed chain IDs (whitelist)
+const ALLOWED_CHAIN_IDS = new Set([11155111, 80002, 137]);
+
 // RPC endpoints by chain ID (server-side, no CORS issues)
 // Note: ALCHEMY_API_KEY is server-only (no NEXT_PUBLIC_ prefix) to prevent client exposure
 const RPC_URLS: Record<number, string> = {
@@ -66,41 +144,60 @@ function isValidJsonRpcResponse(data: unknown): data is { jsonrpc: string; id: u
 
 export async function POST(request: NextRequest) {
   try {
+    // Rate limiting check
+    const clientId = getClientId(request);
+    if (isRateLimited(clientId)) {
+      return addSecurityHeaders(NextResponse.json(
+        { jsonrpc: '2.0', error: { code: -32005, message: 'Rate limit exceeded. Please try again later.' }, id: null },
+        { status: 429 }
+      ));
+    }
+
+    // Check content length to prevent DoS
+    const contentLength = request.headers.get('content-length');
+    const MAX_PAYLOAD_SIZE = 10240; // 10KB
+    if (contentLength && parseInt(contentLength) > MAX_PAYLOAD_SIZE) {
+      return addSecurityHeaders(NextResponse.json(
+        { jsonrpc: '2.0', error: { code: -32600, message: 'Request too large' }, id: null },
+        { status: 413 }
+      ));
+    }
+
     const body = await request.json();
 
     // Validate JSON-RPC request structure
     if (!isValidJsonRpcRequest(body)) {
-      return NextResponse.json(
+      return addSecurityHeaders(NextResponse.json(
         { jsonrpc: '2.0', error: { code: -32600, message: 'Invalid Request' }, id: null },
         { status: 400 }
-      );
+      ));
     }
 
     // Validate method is allowed (prevent admin_, debug_, personal_ methods etc.)
     if (!ALLOWED_METHODS.has(body.method)) {
-      return NextResponse.json(
+      return addSecurityHeaders(NextResponse.json(
         { jsonrpc: '2.0', error: { code: -32601, message: 'Method not allowed' }, id: body.id },
         { status: 403 }
-      );
+      ));
     }
 
     const chainIdHeader = request.headers.get('x-chain-id');
     const chainId = chainIdHeader ? parseInt(chainIdHeader, 10) : 11155111;
 
-    // Validate chain ID is a valid number
-    if (isNaN(chainId) || chainId <= 0) {
-      return NextResponse.json(
-        { jsonrpc: '2.0', error: { code: -32602, message: 'Invalid chain ID' }, id: body.id },
+    // Validate chain ID against whitelist
+    if (!ALLOWED_CHAIN_IDS.has(chainId)) {
+      return addSecurityHeaders(NextResponse.json(
+        { jsonrpc: '2.0', error: { code: -32602, message: 'Unsupported chain ID' }, id: body.id },
         { status: 400 }
-      );
+      ));
     }
 
     const rpcUrl = RPC_URLS[chainId];
     if (!rpcUrl) {
-      return NextResponse.json(
-        { jsonrpc: '2.0', error: { code: -32602, message: `Unsupported chain ID: ${chainId}` }, id: body.id },
+      return addSecurityHeaders(NextResponse.json(
+        { jsonrpc: '2.0', error: { code: -32602, message: 'RPC not configured for this chain' }, id: body.id },
         { status: 400 }
-      );
+      ));
     }
 
     // Create abort controller for timeout
@@ -120,38 +217,40 @@ export async function POST(request: NextRequest) {
       clearTimeout(timeoutId);
 
       if (!response.ok) {
-        return NextResponse.json(
-          { jsonrpc: '2.0', error: { code: -32603, message: `RPC server error: ${response.status}` }, id: body.id },
+        // Don't expose internal status codes
+        return addSecurityHeaders(NextResponse.json(
+          { jsonrpc: '2.0', error: { code: -32603, message: 'RPC server error' }, id: body.id },
           { status: 502 }
-        );
+        ));
       }
 
       const data = await response.json();
 
       // Validate response structure
       if (!isValidJsonRpcResponse(data)) {
-        return NextResponse.json(
+        return addSecurityHeaders(NextResponse.json(
           { jsonrpc: '2.0', error: { code: -32603, message: 'Invalid response from RPC server' }, id: body.id },
           { status: 502 }
-        );
+        ));
       }
 
-      return NextResponse.json(data);
+      return addSecurityHeaders(NextResponse.json(data));
     } catch (fetchError) {
       clearTimeout(timeoutId);
       if (fetchError instanceof Error && fetchError.name === 'AbortError') {
-        return NextResponse.json(
-          { jsonrpc: '2.0', error: { code: -32603, message: 'RPC request timeout' }, id: body.id },
+        return addSecurityHeaders(NextResponse.json(
+          { jsonrpc: '2.0', error: { code: -32603, message: 'Request timeout' }, id: body.id },
           { status: 504 }
-        );
+        ));
       }
       throw fetchError;
     }
   } catch (error) {
+    // Log internally but don't expose details
     console.error('RPC proxy error:', error);
-    return NextResponse.json(
+    return addSecurityHeaders(NextResponse.json(
       { jsonrpc: '2.0', error: { code: -32603, message: 'Internal error' }, id: null },
       { status: 500 }
-    );
+    ));
   }
 }

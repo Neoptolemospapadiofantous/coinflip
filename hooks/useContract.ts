@@ -12,6 +12,75 @@ const GAS_CAPS = {
   claimVrfTimeout: BigInt(200_000),
 };
 
+// =============================================================
+// INPUT VALIDATION
+// =============================================================
+
+// Valid tier range (0-9 based on contract)
+const MIN_TIER = 0;
+const MAX_TIER = 9;
+
+// Minimum bet amount in wei (prevent dust transactions)
+const MIN_BET_WEI = BigInt(1000); // 1000 wei minimum
+
+/**
+ * Validate tier is within valid range
+ */
+function validateTier(tier: number): { valid: boolean; error?: string } {
+  if (typeof tier !== 'number' || !Number.isInteger(tier)) {
+    return { valid: false, error: 'Tier must be an integer' };
+  }
+  if (tier < MIN_TIER || tier > MAX_TIER) {
+    return { valid: false, error: `Tier must be between ${MIN_TIER} and ${MAX_TIER}` };
+  }
+  return { valid: true };
+}
+
+/**
+ * Validate amount string can be converted to BigInt and is reasonable
+ */
+function validateAmount(amount: string): { valid: boolean; error?: string; value?: bigint } {
+  if (typeof amount !== 'string' || amount.trim() === '') {
+    return { valid: false, error: 'Amount must be a non-empty string' };
+  }
+
+  try {
+    const value = BigInt(amount);
+    if (value < 0) {
+      return { valid: false, error: 'Amount cannot be negative' };
+    }
+    if (value < MIN_BET_WEI) {
+      return { valid: false, error: 'Amount is too small' };
+    }
+    return { valid: true, value };
+  } catch {
+    return { valid: false, error: 'Amount must be a valid number string' };
+  }
+}
+
+/**
+ * Validate gameId can be converted to BigInt
+ */
+function validateGameId(gameId: string | number | bigint): { valid: boolean; error?: string; value?: bigint } {
+  try {
+    // Handle string with optional # prefix
+    const idStr = typeof gameId === 'string' ? gameId.replace(/^#/, '').trim() : String(gameId);
+
+    if (idStr === '') {
+      return { valid: false, error: 'Game ID cannot be empty' };
+    }
+
+    const value = BigInt(idStr);
+    if (value < 0) {
+      return { valid: false, error: 'Game ID cannot be negative' };
+    }
+
+    return { valid: true, value };
+  } catch {
+    return { valid: false, error: 'Game ID must be a valid number' };
+  }
+}
+
 // Re-export GameState for backwards compatibility
 export { GameState };
 
@@ -54,6 +123,19 @@ export function useCreateGame() {
       return;
     }
 
+    // Validate inputs before sending transaction
+    const tierValidation = validateTier(tier);
+    if (!tierValidation.valid) {
+      setWriteError(new Error(tierValidation.error));
+      return;
+    }
+
+    const amountValidation = validateAmount(amount);
+    if (!amountValidation.valid) {
+      setWriteError(new Error(amountValidation.error));
+      return;
+    }
+
     setIsWriting(true);
     setWriteError(null);
 
@@ -69,11 +151,11 @@ export function useCreateGame() {
       const txHash = await walletClient.sendTransaction({
         to: contractAddress,
         data: txData,
-        value: BigInt(amount),
+        value: amountValidation.value!,
         gas: GAS_CAPS.createGame,
       });
 
-      console.log(`✅ Transaction sent: ${txHash}`);
+      console.log(`✅ Transaction sent: ${txHash.slice(0, 10)}...`);
       setHash(txHash);
     } catch (err) {
       console.error('❌ Transaction failed:', err);
@@ -119,6 +201,19 @@ export function useJoinGame() {
       return;
     }
 
+    // Validate inputs before sending transaction
+    const gameIdValidation = validateGameId(gameId);
+    if (!gameIdValidation.valid) {
+      setWriteError(new Error(gameIdValidation.error));
+      return;
+    }
+
+    const amountValidation = validateAmount(amount);
+    if (!amountValidation.valid) {
+      setWriteError(new Error(amountValidation.error));
+      return;
+    }
+
     setIsWriting(true);
     setWriteError(null);
 
@@ -126,7 +221,7 @@ export function useJoinGame() {
       const txData = encodeFunctionData({
         abi: COINFLIP_ABI,
         functionName: 'joinGame',
-        args: [BigInt(gameId), choice],
+        args: [gameIdValidation.value!, choice],
       });
 
       console.log(`🚀 Sending joinGame tx with gas=${GAS_CAPS.joinGame}`);
@@ -134,11 +229,11 @@ export function useJoinGame() {
       const txHash = await walletClient.sendTransaction({
         to: contractAddress,
         data: txData,
-        value: BigInt(amount),
+        value: amountValidation.value!,
         gas: GAS_CAPS.joinGame,
       });
 
-      console.log(`✅ Transaction sent: ${txHash}`);
+      console.log(`✅ Transaction sent: ${txHash.slice(0, 10)}...`);
       setHash(txHash);
     } catch (err) {
       console.error('❌ Transaction failed:', err);
@@ -204,6 +299,13 @@ export function useCancelGame() {
       return;
     }
 
+    // Validate gameId before proceeding
+    const gameIdValidation = validateGameId(gameId);
+    if (!gameIdValidation.valid) {
+      setWriteError(new Error(gameIdValidation.error));
+      return;
+    }
+
     if (isCooldown) {
       console.log('⏳ Cancel cooldown active, please wait...');
       return;
@@ -227,16 +329,13 @@ export function useCancelGame() {
     }, CANCEL_COOLDOWN_MS);
 
     try {
-      const gameIdStr = String(gameId).replace(/^#/, '');
-      const gameIdBigInt = BigInt(gameIdStr);
-
       const txData = encodeFunctionData({
         abi: COINFLIP_ABI,
         functionName: 'cancelGame',
-        args: [gameIdBigInt],
+        args: [gameIdValidation.value!],
       });
 
-      console.log(`🚀 Sending cancelGame tx for game ${gameIdStr} with gas=${GAS_CAPS.cancelGame}`);
+      console.log(`🚀 Sending cancelGame tx for game ${gameIdValidation.value} with gas=${GAS_CAPS.cancelGame}`);
 
       const txHash = await walletClient.sendTransaction({
         to: contractAddress,
@@ -244,7 +343,7 @@ export function useCancelGame() {
         gas: GAS_CAPS.cancelGame,
       });
 
-      console.log(`✅ Transaction sent: ${txHash}`);
+      console.log(`✅ Transaction sent: ${txHash.slice(0, 10)}...`);
       setHash(txHash);
     } catch (err) {
       console.error('❌ Transaction failed:', err);
@@ -291,20 +390,24 @@ export function useClaimVrfTimeout() {
       return;
     }
 
+    // Validate gameId before proceeding
+    const gameIdValidation = validateGameId(gameId);
+    if (!gameIdValidation.valid) {
+      setWriteError(new Error(gameIdValidation.error));
+      return;
+    }
+
     reset();
     setIsWriting(true);
 
     try {
-      const gameIdStr = String(gameId).replace(/^#/, '');
-      const gameIdBigInt = BigInt(gameIdStr);
-
       const txData = encodeFunctionData({
         abi: COINFLIP_ABI,
         functionName: 'claimVrfTimeout',
-        args: [gameIdBigInt],
+        args: [gameIdValidation.value!],
       });
 
-      console.log(`🚀 Sending claimVrfTimeout tx for game ${gameIdStr} with gas=${GAS_CAPS.claimVrfTimeout}`);
+      console.log(`🚀 Sending claimVrfTimeout tx for game ${gameIdValidation.value} with gas=${GAS_CAPS.claimVrfTimeout}`);
 
       const txHash = await walletClient.sendTransaction({
         to: contractAddress,
@@ -312,7 +415,7 @@ export function useClaimVrfTimeout() {
         gas: GAS_CAPS.claimVrfTimeout,
       });
 
-      console.log(`✅ Transaction sent: ${txHash}`);
+      console.log(`✅ Transaction sent: ${txHash.slice(0, 10)}...`);
       setHash(txHash);
     } catch (err) {
       console.error('❌ Transaction failed:', err);

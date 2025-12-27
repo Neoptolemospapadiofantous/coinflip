@@ -1,7 +1,7 @@
 # Project TODO
 
 > This file tracks ongoing improvements, security recommendations, and technical debt.
-> Updated: 2025-12-27
+> Updated: 2025-12-28
 
 ---
 
@@ -9,28 +9,22 @@
 
 ### High Priority
 
-- [ ] **Smart Contract: Reorder VRF call and state updates**
+- [x] **Smart Contract: VRF call state updates analyzed**
   - Location: `contracts/CoinFlip.sol` - `joinGame()` function
-  - Issue: State variables written after external VRF call (potential reentrancy)
-  - Fix: Move state updates before `requestRandomWords()` call
-  - Detected by: Slither
+  - Issue: State variables written after external VRF call (Slither warning)
+  - Analysis: This is a FALSE POSITIVE - `requestId` is only known after VRF call
+  - Mitigations in place: (1) `nonReentrant` modifier, (2) game state set to LOCKED before call, (3) VRF coordinator is trusted Chainlink contract
+  - Added documentation comment explaining the design decision
+  - Risk: LOW - not exploitable
 
 ### Medium Priority
 
-- [ ] **API Route: Add rate limiting**
+- [x] **API Route: Add rate limiting**
   - Location: `app/api/rpc/route.ts`
   - Issue: No rate limiting on RPC proxy endpoint
-  - Fix: Add Upstash Ratelimit or similar
-  - Example:
-    ```typescript
-    import { Ratelimit } from "@upstash/ratelimit";
-    import { Redis } from "@upstash/redis";
-
-    const ratelimit = new Ratelimit({
-      redis: Redis.fromEnv(),
-      limiter: Ratelimit.slidingWindow(100, "1 m"),
-    });
-    ```
+  - Fix: Added in-memory rate limiting (100 requests/minute per IP)
+  - Also added: Security headers (X-Content-Type-Options, X-Frame-Options, etc.)
+  - Note: For distributed deployments, consider upgrading to Redis-based solution
 
 - [ ] **Dependency: Update transitive dependencies**
   - Issue: 8 vulnerabilities in transitive deps (@chainlink, hardhat)
@@ -107,6 +101,11 @@
 - [x] Add ESLint v9 configuration
 - [x] Create security audit system
 - [x] Add error boundaries
+- [x] Add database security hardening migration (RLS, audit triggers, indexes)
+- [x] Add runtime game validation (parseGame, isValidGame)
+- [x] Add input validation to useContract hooks
+- [x] Allow immediate game cancellation (improved UX)
+- [x] Remove hardcoded secrets from .env.example
 
 ---
 
