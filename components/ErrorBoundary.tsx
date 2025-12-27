@@ -129,37 +129,3 @@ export class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoun
     return this.props.children;
   }
 }
-
-/**
- * Simple error fallback component for specific sections
- */
-export function ErrorFallback({
-  error,
-  resetError
-}: {
-  error: Error;
-  resetError?: () => void;
-}) {
-  return (
-    <Card className="card-simple" size="3">
-      <Flex direction="column" gap="4" p="4" align="center">
-        <AlertTriangle className="w-12 h-12 text-red-400" />
-
-        <Heading size="4" className="text-red-400">
-          Error Loading Content
-        </Heading>
-
-        <Text size="2" color="gray" align="center">
-          {error.message || 'An unexpected error occurred'}
-        </Text>
-
-        {resetError && (
-          <Button size="2" onClick={resetError}>
-            <RefreshCw className="w-4 h-4" />
-            Try Again
-          </Button>
-        )}
-      </Flex>
-    </Card>
-  );
-}

@@ -100,6 +100,3 @@ export const PRODUCTION_TIERS: Tier[] = [
     enabled: true,
   },
 ];
-
-// Auto-select tiers based on environment or default to testnet for safety
-export const MOCK_TIERS = TESTNET_TIERS;

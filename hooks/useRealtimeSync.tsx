@@ -50,6 +50,7 @@ export function useRealtimeSync() {
   const actionsRef = useRef({ updateActiveGame, addActiveGame, removeActiveGame, queueModal });
   const fallbackIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const fallbackRetryCountRef = useRef(0);
+  const initialPollTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   // Keep refs updated
   queryClientRef.current = queryClient;
@@ -231,7 +232,7 @@ export function useRealtimeSync() {
       });
 
     // Initial fallback poll to ensure data is fresh
-    setTimeout(fallbackPoll, 1000);
+    initialPollTimeoutRef.current = setTimeout(fallbackPoll, 1000);
 
     // Cleanup on unmount only
     return () => {
@@ -240,6 +241,10 @@ export function useRealtimeSync() {
       if (fallbackIntervalRef.current) {
         clearTimeout(fallbackIntervalRef.current);
         fallbackIntervalRef.current = null;
+      }
+      if (initialPollTimeoutRef.current) {
+        clearTimeout(initialPollTimeoutRef.current);
+        initialPollTimeoutRef.current = null;
       }
       globalConnectionStatus = 'disconnected';
       notifyListeners();

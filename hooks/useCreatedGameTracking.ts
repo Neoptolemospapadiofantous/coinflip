@@ -62,6 +62,7 @@ export function useCreatedGameTracking({
   const pollIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const elapsedIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const timeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const retryIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const gameIdRef = useRef<string | null>(null);
   const currentTxHashRef = useRef<string | null>(null);
   const eventReceivedRef = useRef(false);
@@ -89,6 +90,10 @@ export function useCreatedGameTracking({
     if (timeoutRef.current) {
       clearTimeout(timeoutRef.current);
       timeoutRef.current = null;
+    }
+    if (retryIntervalRef.current) {
+      clearInterval(retryIntervalRef.current);
+      retryIntervalRef.current = null;
     }
   }, []);
 
@@ -229,26 +234,45 @@ export function useCreatedGameTracking({
             }));
           }
 
-          // Immediately try to fetch from DB (indexer may have already processed it)
-          const game = await fetchGameFromDB(txHash);
-          if (game) {
-            handleGameFound(game);
-            return;
+          try {
+            // Immediately try to fetch from DB (indexer may have already processed it)
+            const game = await fetchGameFromDB(txHash);
+            if (game) {
+              handleGameFound(game);
+              return;
+            }
+          } catch (err) {
+            console.error('[GameTracking] Error fetching game after event:', err);
           }
 
           // If not in DB yet, poll more aggressively for a few seconds
+          // Clear any existing retry interval first
+          if (retryIntervalRef.current) {
+            clearInterval(retryIntervalRef.current);
+          }
+
           let retries = 0;
           const maxRetries = 10;
-          const retryInterval = setInterval(async () => {
-            if (gameIdRef.current || retries >= maxRetries) {
-              clearInterval(retryInterval);
+          retryIntervalRef.current = setInterval(async () => {
+            if (!mountedRef.current || gameIdRef.current || retries >= maxRetries) {
+              if (retryIntervalRef.current) {
+                clearInterval(retryIntervalRef.current);
+                retryIntervalRef.current = null;
+              }
               return;
             }
             retries++;
-            const retryGame = await fetchGameFromDB(txHash);
-            if (retryGame) {
-              clearInterval(retryInterval);
-              handleGameFound(retryGame);
+            try {
+              const retryGame = await fetchGameFromDB(txHash);
+              if (retryGame) {
+                if (retryIntervalRef.current) {
+                  clearInterval(retryIntervalRef.current);
+                  retryIntervalRef.current = null;
+                }
+                handleGameFound(retryGame);
+              }
+            } catch (err) {
+              console.error('[GameTracking] Error in retry fetch:', err);
             }
           }, 500);
 

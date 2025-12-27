@@ -2,7 +2,7 @@ import { useWaitForTransactionReceipt, useReadContract, usePublicClient, useChai
 import { COINFLIP_ABI, GameState } from '@/lib/contracts/abi';
 import { getCoinFlipAddress } from '@/lib/contracts/addresses';
 import { encodeFunctionData } from 'viem';
-import { useState } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 
 // Static gas limits - safe values that work on Sepolia
 const GAS_CAPS = {
@@ -175,18 +175,33 @@ export function useCancelGame() {
   const [isWriting, setIsWriting] = useState(false);
   const [writeError, setWriteError] = useState<Error | null>(null);
   const [isCooldown, setIsCooldown] = useState(false);
+  const cooldownTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const mountedRef = useRef(true);
 
   const { isLoading: isConfirming, isSuccess } = useWaitForTransactionReceipt({
     hash,
   });
 
-  const reset = () => {
+  // Cleanup on unmount
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      if (cooldownTimeoutRef.current) {
+        clearTimeout(cooldownTimeoutRef.current);
+        cooldownTimeoutRef.current = null;
+      }
+    };
+  }, []);
+
+  const reset = useCallback(() => {
     setHash(undefined);
     setWriteError(null);
     setIsWriting(false);
-  };
+    // Don't reset cooldown on manual reset - it should expire naturally
+  }, []);
 
-  const cancelGame = async (gameId: string | number | bigint) => {
+  const cancelGame = useCallback(async (gameId: string | number | bigint) => {
     if (!walletClient) {
       setWriteError(new Error('Wallet not connected'));
       return;
@@ -201,9 +216,17 @@ export function useCancelGame() {
     setIsWriting(true);
     setIsCooldown(true);
 
+    // Clear any existing cooldown timer
+    if (cooldownTimeoutRef.current) {
+      clearTimeout(cooldownTimeoutRef.current);
+    }
+
     // Start cooldown timer
-    setTimeout(() => {
-      setIsCooldown(false);
+    cooldownTimeoutRef.current = setTimeout(() => {
+      if (mountedRef.current) {
+        setIsCooldown(false);
+      }
+      cooldownTimeoutRef.current = null;
     }, CANCEL_COOLDOWN_MS);
 
     try {
@@ -232,7 +255,7 @@ export function useCancelGame() {
     } finally {
       setIsWriting(false);
     }
-  };
+  }, [walletClient, isCooldown, reset, contractAddress]);
 
   return {
     cancelGame,

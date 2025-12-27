@@ -81,16 +81,6 @@ export const theme = {
   },
 } as const;
 
-// Helper function to get color with opacity
-export function colorWithOpacity(color: string, opacity: number): string {
-  return `${color}${Math.round(opacity * 255).toString(16).padStart(2, '0')}`;
-}
-
-// Helper function to get RGB with alpha
-export function rgba(rgb: string, alpha: number): string {
-  return `rgba(${rgb}, ${alpha})`;
-}
-
 // Export color values for easy access
 export const colors = {
   primary: theme.colors.primary.main,
