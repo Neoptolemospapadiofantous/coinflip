@@ -4,7 +4,7 @@ import '@radix-ui/themes/styles.css';
 import './globals.css';
 import { Providers } from '@/components/Providers';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
-import { Theme } from '@radix-ui/themes';
+import { ThemeProvider } from '@/components/providers/ThemeProvider';
 import { ActiveGamesPanel } from '@/components/game/ActiveGamesPanel';
 
 const inter = Inter({ subsets: ['latin'] });
@@ -23,21 +23,14 @@ export default function RootLayout({
   return (
     <html lang="en" className="dark">
       <body className={inter.className}>
-        <Theme
-          appearance="dark"
-          accentColor="cyan"
-          grayColor="slate"
-          radius="large"
-          scaling="100%"
-          panelBackground="solid"
-        >
+        <ThemeProvider>
           <ErrorBoundary>
             <Providers>
               {children}
               <ActiveGamesPanel />
             </Providers>
           </ErrorBoundary>
-        </Theme>
+        </ThemeProvider>
       </body>
     </html>
   );

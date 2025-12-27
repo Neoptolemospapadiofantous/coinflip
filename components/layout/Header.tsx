@@ -5,6 +5,7 @@ import { Coins, Menu, X, Wifi, WifiOff, Loader2 } from 'lucide-react';
 import { Flex, Heading, Badge, Box, Container, Button, Tooltip } from '@radix-ui/themes';
 import Link from 'next/link';
 import { SoundToggle } from '@/components/ui/SoundToggle';
+import { ThemeSwitcher } from '@/components/ui/ThemeSwitcher';
 import { useState } from 'react';
 import { usePathname } from 'next/navigation';
 import { useConnectionStatus } from '@/hooks/useRealtimeSync';
@@ -94,6 +95,7 @@ export function Header() {
               </Flex>
             </Tooltip>
 
+            <ThemeSwitcher />
             <SoundToggle />
             <div className="hidden md:block">
               <ConnectButton />

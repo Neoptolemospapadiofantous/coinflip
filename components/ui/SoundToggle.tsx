@@ -1,28 +1,19 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useEffect } from 'react';
 import { Volume2, VolumeX } from 'lucide-react';
 import { Button } from '@radix-ui/themes';
 import { soundManager } from '@/lib/sounds';
+import { useUIStore, useSoundPreferences } from '@/store/uiStore';
 
 export function SoundToggle() {
-  const [enabled, setEnabled] = useState(true);
+  const { enabled, volume } = useSoundPreferences();
+  const toggleSound = useUIStore((state) => state.toggleSound);
 
+  // Sync soundManager with store
   useEffect(() => {
-    // Load saved preference from localStorage
-    const saved = localStorage.getItem('soundEnabled');
-    if (saved !== null) {
-      const isEnabled = saved === 'true';
-      setEnabled(isEnabled);
-      soundManager.setEnabled(isEnabled);
-    }
-  }, []);
-
-  const toggleSound = () => {
-    const newState = soundManager.toggle();
-    setEnabled(newState);
-    localStorage.setItem('soundEnabled', String(newState));
-  };
+    soundManager.setEnabled(enabled);
+  }, [enabled]);
 
   return (
     <Button
