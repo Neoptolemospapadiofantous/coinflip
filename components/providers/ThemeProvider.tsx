@@ -1,7 +1,7 @@
 'use client';
 
 import { Theme } from '@radix-ui/themes';
-import { useUIStore, useTheme } from '@/store/uiStore';
+import { useTheme } from '@/store/uiStore';
 import { useEffect, useState } from 'react';
 
 interface ThemeProviderProps {

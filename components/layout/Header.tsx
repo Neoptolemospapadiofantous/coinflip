@@ -10,19 +10,20 @@ import { useState } from 'react';
 import { usePathname } from 'next/navigation';
 import { useConnectionStatus } from '@/hooks/useRealtimeSync';
 
+// Static navigation items - defined outside component to avoid recreation on each render
+const NAV_ITEMS = [
+  { href: '/play', label: 'Play', glowClass: 'hover:glow-primary' },
+  { href: '/queue', label: 'Queue', glowClass: 'hover:glow-accent' },
+  { href: '/history', label: 'History', glowClass: 'hover:glow-success' },
+  { href: '/leaderboard', label: 'Leaderboard', glowClass: 'hover:glow-warning' },
+] as const;
+
 export function Header() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const pathname = usePathname();
   const { isConnected, isConnecting, isDisconnected } = useConnectionStatus();
 
   const isActive = (path: string) => pathname === path;
-
-  const navItems = [
-    { href: '/play', label: 'Play', glowClass: 'hover:glow-primary' },
-    { href: '/queue', label: 'Queue', glowClass: 'hover:glow-accent' },
-    { href: '/history', label: 'History', glowClass: 'hover:glow-success' },
-    { href: '/leaderboard', label: 'Leaderboard', glowClass: 'hover:glow-warning' },
-  ];
 
   return (
     <Box className="card-solid border-b border-cyan-500/30 sticky top-0 z-50 backdrop-blur-xl">
@@ -52,7 +53,7 @@ export function Header() {
 
           {/* Desktop Navigation */}
           <Flex gap="2" className="hidden md:flex">
-            {navItems.map((item) => (
+            {NAV_ITEMS.map((item) => (
               <Link key={item.href} href={item.href}>
                 <Button
                   variant={isActive(item.href) ? 'solid' : 'soft'}
@@ -124,7 +125,7 @@ export function Header() {
             gap="2"
             className="md:hidden pb-4 animate-slide-down"
           >
-            {navItems.map((item) => (
+            {NAV_ITEMS.map((item) => (
               <Link key={item.href} href={item.href} onClick={() => setMobileMenuOpen(false)}>
                 <Button
                   variant={isActive(item.href) ? 'solid' : 'soft'}

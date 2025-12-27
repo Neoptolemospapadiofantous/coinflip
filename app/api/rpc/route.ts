@@ -1,10 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 
 // RPC endpoints by chain ID (server-side, no CORS issues)
+// Note: ALCHEMY_API_KEY is server-only (no NEXT_PUBLIC_ prefix) to prevent client exposure
 const RPC_URLS: Record<number, string> = {
   // Sepolia - use Alchemy if available, fallback to public
-  11155111: process.env.NEXT_PUBLIC_ALCHEMY_API_KEY
-    ? `https://eth-sepolia.g.alchemy.com/v2/${process.env.NEXT_PUBLIC_ALCHEMY_API_KEY}`
+  11155111: process.env.ALCHEMY_API_KEY
+    ? `https://eth-sepolia.g.alchemy.com/v2/${process.env.ALCHEMY_API_KEY}`
     : 'https://ethereum-sepolia-rpc.publicnode.com',
   // Polygon Amoy
   80002: 'https://rpc-amoy.polygon.technology',
@@ -41,6 +42,9 @@ const ALLOWED_METHODS = new Set([
   'eth_sendRawTransaction',
 ]);
 
+// RPC request timeout in milliseconds
+const RPC_TIMEOUT = 15000;
+
 // Validate JSON-RPC request structure
 function isValidJsonRpcRequest(body: unknown): body is { jsonrpc: string; method: string; id: number | string; params?: unknown[] } {
   if (typeof body !== 'object' || body === null) return false;
@@ -51,6 +55,13 @@ function isValidJsonRpcRequest(body: unknown): body is { jsonrpc: string; method
     (typeof req.id === 'number' || typeof req.id === 'string') &&
     (req.params === undefined || Array.isArray(req.params))
   );
+}
+
+// Validate JSON-RPC response structure
+function isValidJsonRpcResponse(data: unknown): data is { jsonrpc: string; id: unknown; result?: unknown; error?: unknown } {
+  if (typeof data !== 'object' || data === null) return false;
+  const res = data as Record<string, unknown>;
+  return res.jsonrpc === '2.0' && ('result' in res || 'error' in res);
 }
 
 export async function POST(request: NextRequest) {
@@ -92,16 +103,50 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const response = await fetch(rpcUrl, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(body),
-    });
+    // Create abort controller for timeout
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), RPC_TIMEOUT);
 
-    const data = await response.json();
-    return NextResponse.json(data);
+    try {
+      const response = await fetch(rpcUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(body),
+        signal: controller.signal,
+      });
+
+      clearTimeout(timeoutId);
+
+      if (!response.ok) {
+        return NextResponse.json(
+          { jsonrpc: '2.0', error: { code: -32603, message: `RPC server error: ${response.status}` }, id: body.id },
+          { status: 502 }
+        );
+      }
+
+      const data = await response.json();
+
+      // Validate response structure
+      if (!isValidJsonRpcResponse(data)) {
+        return NextResponse.json(
+          { jsonrpc: '2.0', error: { code: -32603, message: 'Invalid response from RPC server' }, id: body.id },
+          { status: 502 }
+        );
+      }
+
+      return NextResponse.json(data);
+    } catch (fetchError) {
+      clearTimeout(timeoutId);
+      if (fetchError instanceof Error && fetchError.name === 'AbortError') {
+        return NextResponse.json(
+          { jsonrpc: '2.0', error: { code: -32603, message: 'RPC request timeout' }, id: body.id },
+          { status: 504 }
+        );
+      }
+      throw fetchError;
+    }
   } catch (error) {
     console.error('RPC proxy error:', error);
     return NextResponse.json(

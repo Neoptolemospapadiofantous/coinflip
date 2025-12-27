@@ -51,6 +51,8 @@ export function useRealtimeSync() {
   const fallbackIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const fallbackRetryCountRef = useRef(0);
   const initialPollTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const autoRemoveTimeoutsRef = useRef<Set<NodeJS.Timeout>>(new Set());
+  const mountedRef = useRef(true);
 
   // Keep refs updated
   queryClientRef.current = queryClient;
@@ -151,8 +153,14 @@ export function useRealtimeSync() {
                 actionsRef.current.queueModal(game, 'matched');
               } else if (game.status === 'resolved') {
                 actionsRef.current.queueModal(game, 'resolved');
-                // Auto-remove from active games after delay
-                setTimeout(() => actionsRef.current.removeActiveGame(game.id), 5000);
+                // Auto-remove from active games after delay (tracked for cleanup)
+                const timeoutId = setTimeout(() => {
+                  autoRemoveTimeoutsRef.current.delete(timeoutId);
+                  if (mountedRef.current) {
+                    actionsRef.current.removeActiveGame(game.id);
+                  }
+                }, 5000);
+                autoRemoveTimeoutsRef.current.add(timeoutId);
               } else if (game.status === 'cancelled') {
                 actionsRef.current.removeActiveGame(game.id);
               }
@@ -234,9 +242,13 @@ export function useRealtimeSync() {
     // Initial fallback poll to ensure data is fresh
     initialPollTimeoutRef.current = setTimeout(fallbackPoll, 1000);
 
+    // Capture ref values for cleanup
+    const autoRemoveTimeouts = autoRemoveTimeoutsRef.current;
+
     // Cleanup on unmount only
     return () => {
       console.log('🔌 [RealtimeSync] Cleaning up...');
+      mountedRef.current = false;
       channel.unsubscribe();
       if (fallbackIntervalRef.current) {
         clearTimeout(fallbackIntervalRef.current);
@@ -246,6 +258,9 @@ export function useRealtimeSync() {
         clearTimeout(initialPollTimeoutRef.current);
         initialPollTimeoutRef.current = null;
       }
+      // Clear all auto-remove timeouts
+      autoRemoveTimeouts.forEach((timeout) => clearTimeout(timeout));
+      autoRemoveTimeouts.clear();
       globalConnectionStatus = 'disconnected';
       notifyListeners();
     };

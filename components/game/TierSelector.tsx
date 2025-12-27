@@ -6,7 +6,6 @@ import { useGameStore } from '@/store/gameStore';
 import { formatCurrency } from '@/lib/utils';
 import { Button, Flex, Text, Grid, Badge, Card, Heading, Skeleton } from '@radix-ui/themes';
 import { Users, Lock } from 'lucide-react';
-import { parseEther } from 'viem';
 import { NetworkIndicator } from '@/components/ui/NetworkIndicator';
 
 export function TierSelector() {

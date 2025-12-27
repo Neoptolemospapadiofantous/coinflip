@@ -1,7 +1,7 @@
 'use client';
 
 import { useGameStore } from '@/store/gameStore';
-import { Button, Flex, Text, Heading, Card, Callout } from '@radix-ui/themes';
+import { Flex, Text, Heading, Card, Callout } from '@radix-ui/themes';
 import { getCoinSideEmoji } from '@/lib/utils';
 import { Info } from 'lucide-react';
 

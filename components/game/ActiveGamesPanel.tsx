@@ -1,5 +1,6 @@
 'use client';
 
+import { useMemo } from 'react';
 import { Card, Flex, Heading, Text, Badge, ScrollArea } from '@radix-ui/themes';
 import { useActiveGamesList, useGameStore, MAX_CONCURRENT_GAMES } from '@/store/gameStore';
 import { Game } from '@/types/game';
@@ -113,16 +114,13 @@ export function ActiveGamesPanel() {
     }
   };
 
-  // Don't render if no active games
-  if (activeGames.length === 0) {
-    return null;
-  }
-
   // Filter to only show pending/matched games (resolved ones auto-close)
-  const visibleGames = activeGames.filter(
-    (g) => g.status === 'pending' || g.status === 'matched'
+  const visibleGames = useMemo(() =>
+    activeGames.filter((g) => g.status === 'pending' || g.status === 'matched'),
+    [activeGames]
   );
 
+  // Don't render if no visible games
   if (visibleGames.length === 0) {
     return null;
   }

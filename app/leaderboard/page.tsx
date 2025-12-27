@@ -11,8 +11,6 @@ import {
   Grid,
   Badge,
   Table,
-  Avatar,
-  Button,
   Tabs,
 } from '@radix-ui/themes';
 import { Trophy, TrendingUp, Zap, Crown } from 'lucide-react';

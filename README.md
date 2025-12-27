@@ -202,7 +202,7 @@ if (isTestnet(chainId)) {
    - `NEXT_PUBLIC_WALLET_CONNECT_PROJECT_ID`: Get from [WalletConnect Cloud](https://cloud.walletconnect.com)
    - `NEXT_PUBLIC_SUPABASE_URL`: Your Supabase project URL
    - `NEXT_PUBLIC_SUPABASE_ANON_KEY`: Your Supabase anonymous key
-   - `NEXT_PUBLIC_ALCHEMY_API_KEY`: Get from [Alchemy](https://www.alchemy.com)
+   - `ALCHEMY_API_KEY`: Get from [Alchemy](https://www.alchemy.com) (server-side only for security)
 
 4. **Set up the database**
 
@@ -530,8 +530,8 @@ NEXT_PUBLIC_CHAIN_ID=11155111  # Sepolia testnet (or 80002 for Amoy)
 NEXT_PUBLIC_COINFLIP_CONTRACT_ADDRESS_SEPOLIA=0x0D24d83E396c96759294b2b0C5c6C64F7DB189CB
 NEXT_PUBLIC_COINFLIP_CONTRACT_ADDRESS_AMOY=0xD94991Babc68bA91Ec3B0c4B36fbA6f2d60385ae
 
-# Alchemy RPC (optional but recommended)
-NEXT_PUBLIC_ALCHEMY_API_KEY=your_alchemy_key
+# Alchemy RPC (optional but recommended - server-side only)
+ALCHEMY_API_KEY=your_alchemy_key
 
 # Private deployment variables (server-side only)
 PRIVATE_KEY=your_wallet_private_key  # For contract deployment

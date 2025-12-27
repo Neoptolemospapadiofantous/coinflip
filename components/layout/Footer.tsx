@@ -16,25 +16,26 @@ interface FooterSection {
   links: FooterLink[];
 }
 
+// Static footer links - defined outside component to avoid recreation on each render
+const FOOTER_LINKS: FooterSection[] = [
+  {
+    title: 'Resources',
+    links: [
+      { href: '/docs', label: 'Documentation', icon: FileText },
+      { href: '/admin/setup', label: 'Setup Guide', icon: Shield },
+    ],
+  },
+  {
+    title: 'Community',
+    links: [
+      { href: 'https://github.com', label: 'GitHub', icon: Github, external: true },
+      { href: 'https://twitter.com', label: 'Twitter', icon: Twitter, external: true },
+    ],
+  },
+];
+
 export function Footer() {
   const currentYear = new Date().getFullYear();
-
-  const footerLinks: FooterSection[] = [
-    {
-      title: 'Resources',
-      links: [
-        { href: '/docs', label: 'Documentation', icon: FileText },
-        { href: '/admin/setup', label: 'Setup Guide', icon: Shield },
-      ],
-    },
-    {
-      title: 'Community',
-      links: [
-        { href: 'https://github.com', label: 'GitHub', icon: Github, external: true },
-        { href: 'https://twitter.com', label: 'Twitter', icon: Twitter, external: true },
-      ],
-    },
-  ];
 
   return (
     <Box className="card-solid border-t border-cyan-500/30 mt-auto">
@@ -70,7 +71,7 @@ export function Footer() {
 
             {/* Links Sections */}
             <Flex gap="8" className="flex-wrap">
-              {footerLinks.map((section) => (
+              {FOOTER_LINKS.map((section) => (
                 <Flex key={section.title} direction="column" gap="3">
                   <Text size="2" weight="bold" className="text-cyan-400">
                     {section.title}

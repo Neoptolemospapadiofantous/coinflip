@@ -39,8 +39,8 @@ const envSchema = z.object({
   // WalletConnect
   NEXT_PUBLIC_WALLET_CONNECT_PROJECT_ID: z.string().min(1, 'WalletConnect project ID required'),
 
-  // API Keys
-  NEXT_PUBLIC_ALCHEMY_API_KEY: z.string().optional(),
+  // API Keys (server-side only - no NEXT_PUBLIC_ prefix)
+  ALCHEMY_API_KEY: z.string().optional(),
   POLYGONSCAN_API_KEY: z.string().optional(),
   ETHERSCAN_API_KEY: z.string().optional(),
 
@@ -77,7 +77,7 @@ export function validateEnv(): Env {
       if (!env.SUPABASE_SERVICE_ROLE_KEY) {
         throw new Error('SUPABASE_SERVICE_ROLE_KEY is required in production');
       }
-      if (!env.NEXT_PUBLIC_ALCHEMY_API_KEY) {
+      if (!env.ALCHEMY_API_KEY) {
         console.warn('⚠️  ALCHEMY_API_KEY not set - RPC calls may be rate limited');
       }
     }
@@ -182,8 +182,8 @@ export function getRpcUrl(): string {
   switch (chainId) {
     case '11155111': // Sepolia
       if (env.SEPOLIA_RPC_URL) return env.SEPOLIA_RPC_URL;
-      if (env.NEXT_PUBLIC_ALCHEMY_API_KEY) {
-        return `https://eth-sepolia.g.alchemy.com/v2/${env.NEXT_PUBLIC_ALCHEMY_API_KEY}`;
+      if (env.ALCHEMY_API_KEY) {
+        return `https://eth-sepolia.g.alchemy.com/v2/${env.ALCHEMY_API_KEY}`;
       }
       return 'https://rpc.sepolia.org';
     case '80002': // Amoy

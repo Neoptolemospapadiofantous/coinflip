@@ -1,7 +1,7 @@
 'use client';
 
 import { Canvas, useFrame } from '@react-three/fiber';
-import { OrbitControls, PerspectiveCamera, useTexture } from '@react-three/drei';
+import { OrbitControls, PerspectiveCamera } from '@react-three/drei';
 import { Physics, useCylinder } from '@react-three/cannon';
 import { useRef, useState, useEffect } from 'react';
 import * as THREE from 'three';

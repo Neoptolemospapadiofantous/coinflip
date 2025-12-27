@@ -29,7 +29,7 @@ export function sanitizeString(input: string, maxLength: number = 1000): string 
   }
 
   // Remove potentially dangerous characters
-  sanitized = sanitized.replace(/[<>\"']/g, '');
+  sanitized = sanitized.replace(/[<>"']/g, '');
 
   return sanitized;
 }
@@ -157,10 +157,11 @@ export function generateSecureToken(length: number = 32): string {
     return Array.from(array, byte => byte.toString(16).padStart(2, '0')).join('');
   }
 
-  // Fallback for Node.js
-  if (typeof require !== 'undefined') {
-    const crypto = require('crypto');
-    return crypto.randomBytes(length).toString('hex');
+  // Fallback for Node.js - use globalThis.crypto which is available in modern Node.js
+  if (typeof globalThis !== 'undefined' && globalThis.crypto) {
+    const array = new Uint8Array(length);
+    globalThis.crypto.getRandomValues(array);
+    return Array.from(array, byte => byte.toString(16).padStart(2, '0')).join('');
   }
 
   throw new Error('No secure random generator available');

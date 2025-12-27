@@ -1,5 +1,6 @@
 'use client';
 
+import React, { memo } from 'react';
 import { Card, Flex, Text, Heading, Grid } from '@radix-ui/themes';
 import { Trophy, Target, TrendingUp, DollarSign, Zap, Users } from 'lucide-react';
 import { formatCurrency, formatNumber } from '@/lib/utils';
@@ -12,7 +13,7 @@ interface StatsCardProps {
   glowClass?: string;
 }
 
-export function StatsCard({ icon, label, value, color = 'cyan', glowClass = 'glow-primary' }: StatsCardProps) {
+export const StatsCard = memo(function StatsCard({ icon, label, value, color = 'cyan', glowClass = 'glow-primary' }: StatsCardProps) {
   const colorClass = {
     cyan: 'text-cyan-400',
     yellow: 'text-yellow-400',
@@ -36,7 +37,7 @@ export function StatsCard({ icon, label, value, color = 'cyan', glowClass = 'glo
       </Flex>
     </Card>
   );
-}
+});
 
 interface GameStatsProps {
   totalGames?: number;
@@ -47,7 +48,7 @@ interface GameStatsProps {
   avgGameDuration?: number;
 }
 
-export function GameStatsGrid({
+export const GameStatsGrid = memo(function GameStatsGrid({
   totalGames = 0,
   wins = 0,
   totalWagered = '0',
@@ -91,9 +92,9 @@ export function GameStatsGrid({
       />
     </Grid>
   );
-}
+});
 
-export function GlobalStatsGrid({
+export const GlobalStatsGrid = memo(function GlobalStatsGrid({
   totalGames = 0,
   activePlayers = 0,
   totalVolume = '0',
@@ -139,4 +140,4 @@ export function GlobalStatsGrid({
       />
     </Grid>
   );
-}
+});

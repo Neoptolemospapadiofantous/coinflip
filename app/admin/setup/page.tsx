@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { useAccount } from 'wagmi';
 import { Layout } from '@/components/layout/Layout';
 import {
   Container,
@@ -13,7 +14,6 @@ import {
   Badge,
   Code,
   Callout,
-  Separator,
 } from '@radix-ui/themes';
 import { runDatabaseHealthCheck, DatabaseHealth } from '@/lib/dbHealthCheck';
 import {
@@ -25,11 +25,32 @@ import {
   Layers,
   Activity,
   AlertTriangle,
+  ShieldAlert,
+  Wallet,
 } from 'lucide-react';
 
+// Admin whitelist - add authorized wallet addresses here
+const ADMIN_ADDRESSES: string[] = [
+  // Add admin addresses in lowercase
+  // Example: '0x1234...'.toLowerCase()
+];
+
+// Check if address is admin (also allow access in development with no admins configured)
+function isAdmin(address: string | undefined): boolean {
+  if (!address) return false;
+  // If no admins configured, allow in development only
+  if (ADMIN_ADDRESSES.length === 0) {
+    return process.env.NODE_ENV === 'development';
+  }
+  return ADMIN_ADDRESSES.includes(address.toLowerCase());
+}
+
 export default function SetupPage() {
+  const { address, isConnected } = useAccount();
   const [health, setHealth] = useState<DatabaseHealth | null>(null);
   const [loading, setLoading] = useState(true);
+
+  const authorized = isAdmin(address);
 
   const runCheck = async () => {
     setLoading(true);
@@ -44,8 +65,55 @@ export default function SetupPage() {
   };
 
   useEffect(() => {
-    runCheck();
-  }, []);
+    if (authorized) {
+      runCheck();
+    }
+  }, [authorized]);
+
+  // Not connected - show connect wallet prompt
+  if (!isConnected) {
+    return (
+      <Layout>
+        <Section size="3">
+          <Container size="2">
+            <Card className="card-simple mt-20">
+              <Flex direction="column" gap="4" p="8" align="center">
+                <Wallet className="w-16 h-16 text-cyan-400" />
+                <Heading size="6">Connect Wallet</Heading>
+                <Text size="3" color="gray" align="center">
+                  Please connect your wallet to access the admin panel.
+                </Text>
+              </Flex>
+            </Card>
+          </Container>
+        </Section>
+      </Layout>
+    );
+  }
+
+  // Connected but not authorized
+  if (!authorized) {
+    return (
+      <Layout>
+        <Section size="3">
+          <Container size="2">
+            <Card className="card-simple border-2 border-red-500/50 mt-20">
+              <Flex direction="column" gap="4" p="8" align="center">
+                <ShieldAlert className="w-16 h-16 text-red-400" />
+                <Heading size="6" className="text-red-400">Access Denied</Heading>
+                <Text size="3" color="gray" align="center">
+                  Your wallet address is not authorized to access this page.
+                </Text>
+                <Code size="2" className="mt-2">
+                  {address}
+                </Code>
+              </Flex>
+            </Card>
+          </Container>
+        </Section>
+      </Layout>
+    );
+  }
 
   return (
     <Layout>

@@ -1,6 +1,6 @@
 'use client';
 
-import { Dialog, Flex, Heading, Text, Button, Card, Callout, Progress } from '@radix-ui/themes';
+import { Dialog, Flex, Heading, Text, Button, Card, Progress } from '@radix-ui/themes';
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
@@ -59,6 +59,7 @@ export function GameSessionModal({ game, open, onClose, userAddress, modalType }
   const lastGameIdRef = useRef<string | null>(null);
   const lastGameStatusRef = useRef<string | null>(null);
   const retryCountRef = useRef(0);
+  const mountedRef = useRef(true);
 
   // Memoize user role calculations to avoid recalculating on every render
   const { isCreator, isJoiner, isParticipant, isWinner } = useMemo(() => {
@@ -153,6 +154,8 @@ export function GameSessionModal({ game, open, onClose, userAddress, modalType }
     // If resolved but invalid, try to refetch aggressively (max retries)
     if (retryCountRef.current < MAX_DATA_RETRIES) {
       const timeout = setTimeout(() => {
+        // Check if still mounted before updating state
+        if (!mountedRef.current) return;
         console.log(`🔄 Auto-refetching game ${game.id} due to validation errors (attempt ${retryCountRef.current + 1}/${MAX_DATA_RETRIES})`);
         retryCountRef.current++;
         refetchGame();
@@ -161,7 +164,9 @@ export function GameSessionModal({ game, open, onClose, userAddress, modalType }
       return () => clearTimeout(timeout);
     } else {
       // Exhausted retries
-      setDataRetryExhausted(true);
+      if (mountedRef.current) {
+        setDataRetryExhausted(true);
+      }
     }
   }, [game?.id, game?.status, validation.valid, refetchGame]);
 
@@ -198,7 +203,9 @@ export function GameSessionModal({ game, open, onClose, userAddress, modalType }
 
   // Cleanup on unmount
   useEffect(() => {
+    mountedRef.current = true;
     return () => {
+      mountedRef.current = false;
       if (vrfTimerRef.current) {
         clearInterval(vrfTimerRef.current);
       }

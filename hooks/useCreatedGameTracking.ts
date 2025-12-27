@@ -197,7 +197,7 @@ export function useCreatedGameTracking({
               game: updatedGame,
             }));
 
-            // Trigger callbacks
+            // Trigger callbacks based on new status
             if (updatedGame.status === 'matched') {
               onGameMatchedRef.current?.(updatedGame);
             } else if (updatedGame.status === 'resolved') {
@@ -205,9 +205,23 @@ export function useCreatedGameTracking({
             } else if (updatedGame.status === 'cancelled') {
               onGameCancelledRef.current?.(updatedGame);
             }
+
+            // Game left pending state - cleanup subscription since we no longer need updates
+            if (updatedGame.status !== 'pending' && subscriptionRef.current) {
+              console.log(`📡 Game ${game.id} left pending state - cleaning up subscription`);
+              supabase.removeChannel(subscriptionRef.current);
+              subscriptionRef.current = null;
+            }
           }
         )
-        .subscribe();
+        .subscribe((status, err) => {
+          if (err) {
+            console.error(`[GameTracking] Subscription error for game ${game.id}:`, err.message);
+          }
+          if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+            console.warn(`[GameTracking] Subscription ${status} for game ${game.id}`);
+          }
+        });
     }
   }, [cleanup]);
 

@@ -15,9 +15,6 @@ const GAS_CAPS = {
 // Re-export GameState for backwards compatibility
 export { GameState };
 
-// Legacy alias
-export const GameStatus = GameState;
-
 // Type for the game struct returned by getGame
 export interface OnChainGame {
   playerA: string;

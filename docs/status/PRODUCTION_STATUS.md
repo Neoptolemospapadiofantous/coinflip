@@ -186,7 +186,7 @@ pnpm migrations:show   # View migration files
 
 **Needs Update Before Production:**
 - ⚠️  `SUPABASE_SERVICE_ROLE_KEY` - currently using anon key value
-- ⚠️  `NEXT_PUBLIC_ALCHEMY_API_KEY` - appears incomplete
+- ⚠️  `ALCHEMY_API_KEY` - appears incomplete (server-side only)
 - ⚠️  `POLYGONSCAN_API_KEY` - still placeholder (optional)
 - ⚠️  `NEXT_PUBLIC_APP_URL` - update for production domain
 - ⚠️  Remove `old_VRF_SUBSCRIPTION_ID` (cleanup)
@@ -199,7 +199,7 @@ pnpm migrations:show   # View migration files
 
 - [ ] Update `.env.local` with production values:
   - [ ] Get actual `SUPABASE_SERVICE_ROLE_KEY` from Supabase dashboard
-  - [ ] Verify `NEXT_PUBLIC_ALCHEMY_API_KEY` is complete
+  - [ ] Verify `ALCHEMY_API_KEY` is complete
   - [ ] Update `NEXT_PUBLIC_APP_URL` to production domain
   - [ ] Remove `old_VRF_SUBSCRIPTION_ID`
 

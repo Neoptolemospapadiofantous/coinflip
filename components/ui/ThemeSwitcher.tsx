@@ -1,7 +1,7 @@
 'use client';
 
-import { Button, DropdownMenu, Flex, Text, Separator } from '@radix-ui/themes';
-import { Sun, Moon, Monitor, Palette, Check } from 'lucide-react';
+import { Button, DropdownMenu, Flex, Text } from '@radix-ui/themes';
+import { Sun, Moon, Monitor, Check } from 'lucide-react';
 import { useUIStore, useTheme, ThemeAccentColor, ThemeAppearance } from '@/store/uiStore';
 
 const ACCENT_COLORS: { value: ThemeAccentColor; label: string; class: string }[] = [

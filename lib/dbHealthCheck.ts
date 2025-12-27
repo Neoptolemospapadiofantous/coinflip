@@ -293,7 +293,7 @@ export async function runDatabaseHealthCheck(): Promise<DatabaseHealth> {
     message: 'Skipped - connection failed',
   } as HealthCheckResult;
 
-  let tablesCheck = {
+  const tablesCheck = {
     tiers: { success: false, message: 'Skipped - connection failed' } as HealthCheckResult,
     games: { success: false, message: 'Skipped - connection failed' } as HealthCheckResult,
     queue: { success: false, message: 'Skipped - connection failed' } as HealthCheckResult,
