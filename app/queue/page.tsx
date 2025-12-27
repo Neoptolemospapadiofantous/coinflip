@@ -33,6 +33,12 @@ import { useQueryClient } from '@tanstack/react-query';
 import { invalidateGameQueries } from '@/lib/queryUtils';
 import { showToast } from '@/lib/toast';
 import { playSound } from '@/lib/sounds';
+import { Game } from '@/types/game';
+import { Tier } from '@/types/tier';
+
+// Type for selected game with attached tier info
+// Use tierInfo to avoid conflict with Game.tier (which is number)
+type SelectedGame = Game & { tierInfo: Tier };
 
 // Contract timeout in milliseconds (100 blocks @ ~12 sec/block = ~20 minutes)
 const CONTRACT_TIMEOUT_MS = 20 * 60 * 1000;
@@ -131,12 +137,12 @@ export default function QueuePage() {
   const { isConnected, address } = useAccount();
   const { data: tiers } = useTiers();
   const { data: pendingGames, isLoading: isLoadingGames, refetch } = usePendingGames();
-  const { data: gameStats, refetch: refetchStats } = useGameStats();
+  const { data: gameStats } = useGameStats();
   const { joinGame, isLoading, isConfirming, isSuccess, txHash, error, reset: resetJoinState } = useJoinGame();
   const { cancelGame, isLoading: isCanceling, isSuccess: isCancelSuccess, error: cancelError, reset: resetCancelState } = useCancelGame();
   const { formatTimeRemaining } = useGameTimeout();
   const { isConnected: isLive, isConnecting } = useConnectionStatus();
-  const [selectedGame, setSelectedGame] = useState<any>(null);
+  const [selectedGame, setSelectedGame] = useState<SelectedGame | null>(null);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [joinedGameId, setJoinedGameId] = useState<string | null>(null);
   const [cancelingGameId, setCancelingGameId] = useState<string | null>(null);
@@ -224,11 +230,11 @@ export default function QueuePage() {
     (game) => game.creator_address.toLowerCase() !== address?.toLowerCase() && !isGameCancelling(game.id) && !isGameJoining(game.id)
   );
 
-  const handleJoinClick = useCallback((game: any, tier: any) => {
+  const handleJoinClick = useCallback((game: Game, tier: Tier) => {
     // Reset any previous join state
     resetJoinState();
     setJoinedGameId(null);
-    setSelectedGame({ ...game, tier });
+    setSelectedGame({ ...game, tierInfo: tier });
     setIsDialogOpen(true);
   }, [resetJoinState]);
 
@@ -247,7 +253,7 @@ export default function QueuePage() {
         status: 'pending', // Will update to 'matched' via subscription
       });
 
-      joinGame(selectedGame.id, joinerChoice, selectedGame.tier.amount);
+      joinGame(selectedGame.id, joinerChoice, selectedGame.tierInfo.amount);
     }
   }, [selectedGame, joinGame, addActiveGame, startJoiningGame]);
 
@@ -557,7 +563,7 @@ export default function QueuePage() {
                               <Text weight="bold" className="text-cyan-400">{formatGameId(game.id)}</Text>
                             </Table.Cell>
                             <Table.Cell>
-                              <StatusBadge status={game.status as any} size="1" />
+                              <StatusBadge status={game.status} size="1" />
                             </Table.Cell>
                             <Table.Cell>
                               <Badge color="purple" variant="soft" className="neon-border-purple">
@@ -626,8 +632,8 @@ export default function QueuePage() {
                     Bet Amount:
                   </Text>
                   <Text size="2" weight="bold">
-                    ${selectedGame?.tier?.amountUsd} (
-                    {selectedGame?.tier && formatCurrency(selectedGame.tier.amount)})
+                    ${selectedGame?.tierInfo?.amountUsd} (
+                    {selectedGame?.tierInfo && formatCurrency(selectedGame.tierInfo.amount)})
                   </Text>
                 </Flex>
                 <Flex justify="between">
@@ -635,7 +641,7 @@ export default function QueuePage() {
                     Potential Win:
                   </Text>
                   <Text size="2" weight="bold" className="text-green-400">
-                    ${selectedGame?.tier?.winAmountUsd}
+                    ${selectedGame?.tierInfo?.winAmountUsd}
                   </Text>
                 </Flex>
                 <Flex justify="between">

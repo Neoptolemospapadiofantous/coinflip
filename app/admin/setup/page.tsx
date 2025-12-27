@@ -218,7 +218,7 @@ export default function SetupPage() {
                         <Text size="1" weight="bold" color="gray">
                           Executed Migrations:
                         </Text>
-                        {health.migrations.details.migrations.map((m: any) => (
+                        {(health.migrations.details.migrations as Array<{ version: number; filename: string }>).map((m) => (
                           <Code key={m.version} size="1">
                             {m.filename}
                           </Code>
@@ -262,7 +262,7 @@ export default function SetupPage() {
                           </Flex>
                           {result.details?.rowCount !== undefined && (
                             <Badge color="gray" variant="soft">
-                              {result.details.rowCount} rows
+                              {String(result.details.rowCount)} rows
                             </Badge>
                           )}
                         </Flex>
@@ -304,7 +304,7 @@ export default function SetupPage() {
                       </Flex>
                       {health.data.tiersCount.details?.count && (
                         <Badge color="cyan" variant="soft">
-                          {health.data.tiersCount.details.count} tiers
+                          {String(health.data.tiersCount.details.count)} tiers
                         </Badge>
                       )}
                     </Flex>

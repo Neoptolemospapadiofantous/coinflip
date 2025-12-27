@@ -119,7 +119,7 @@ export default function PlayPage() {
     setStep(GameStep.SELECT_TIER);
   }, [updateActiveGame, queueModal, resetGameCreation]);
 
-  const handleGameCancelled = useCallback((game: Game) => {
+  const handleGameCancelled = useCallback((_game: Game) => {
     if (!mountedRef.current) return;
     console.log('🎮 Game cancelled');
     // Game will be removed when modal closes
