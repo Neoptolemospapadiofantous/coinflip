@@ -33,6 +33,10 @@ export default tseslint.config(
       "cache/**",
       "typechain-types/**",
       "scripts/**",
+      "test/**",
+      "tests/contracts/**",
+      "*.config.js",
+      "*.config.ts",
     ],
   }
 );

@@ -39,6 +39,7 @@
     "node_modules",
     "scripts",
     "test",
+    "tests/contracts",
     "hardhat.config.ts",
     "typechain-types"
   ]
