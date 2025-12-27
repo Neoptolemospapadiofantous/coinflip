@@ -123,7 +123,7 @@ export function usePlayerStats(address: string | undefined) {
       // Use a single query with aggregations
       const { data, error } = await supabase
         .from('games')
-        .select('status, amount, payout, winner_address, tier')
+        .select('status, amount, payout, fee, winner_address, tier')
         .or(`creator_address.ilike.${lowerAddress},joiner_address.ilike.${lowerAddress}`);
 
       if (error) {
@@ -140,6 +140,7 @@ export function usePlayerStats(address: string | undefined) {
           totalWagered: BigInt(0),
           totalWon: BigInt(0),
           totalLost: BigInt(0),
+          totalFees: BigInt(0),
           gamesByTier: [0, 0, 0, 0, 0],
           winsByTier: [0, 0, 0, 0, 0],
         };
@@ -147,7 +148,7 @@ export function usePlayerStats(address: string | undefined) {
 
       // Calculate stats from data
       let wins = 0, losses = 0, pending = 0;
-      let totalWagered = BigInt(0), totalWon = BigInt(0), totalLost = BigInt(0);
+      let totalWagered = BigInt(0), totalWon = BigInt(0), totalLost = BigInt(0), totalFees = BigInt(0);
       const gamesByTier = [0, 0, 0, 0, 0];
       const winsByTier = [0, 0, 0, 0, 0];
 
@@ -162,6 +163,8 @@ export function usePlayerStats(address: string | undefined) {
           if (isWin) {
             wins++;
             totalWon += game.payout ? BigInt(game.payout) : BigInt(0);
+            // Add fee to total fees (fee is stored in database for each resolved game)
+            totalFees += game.fee ? BigInt(game.fee) : BigInt(0);
             winsByTier[game.tier] = (winsByTier[game.tier] || 0) + 1;
           } else {
             losses++;
@@ -178,6 +181,7 @@ export function usePlayerStats(address: string | undefined) {
         totalWagered,
         totalWon,
         totalLost,
+        totalFees,
         gamesByTier,
         winsByTier,
       };

@@ -4,7 +4,7 @@ import { Card, Flex, Heading, Text, Badge, ScrollArea } from '@radix-ui/themes';
 import { useActiveGamesList, useGameStore, MAX_CONCURRENT_GAMES } from '@/store/gameStore';
 import { Game } from '@/types/game';
 import { Users, Loader2, Trophy, ChevronRight, Wifi, WifiOff } from 'lucide-react';
-import { formatCurrency } from '@/lib/utils';
+import { formatCurrency, formatGameId } from '@/lib/utils';
 import { useAccount } from 'wagmi';
 import { useConnectionStatus } from '@/hooks/useRealtimeSync';
 
@@ -68,7 +68,7 @@ function ActiveGameCard({ game, onViewGame, userAddress }: ActiveGameCardProps) 
       <Flex direction="column" gap="2" p="3">
         <Flex justify="between" align="center">
           <Text size="1" className="font-mono text-gray-500">
-            #{game.id}
+            {formatGameId(game.id)}
           </Text>
           <Badge size="1" color={getStatusColor()} variant="soft">
             <Flex align="center" gap="1">

@@ -15,11 +15,20 @@ export function TierSelector() {
   const { address, isConnected, chain } = useAccount();
   const { data: balance, isLoading: isBalanceLoading, error: balanceError } = useBalance({
     address,
-    chainId: chain?.id, // Explicitly use the connected chain
+    chainId: chain?.id,
+    query: {
+      enabled: Boolean(address && chain?.id),
+      refetchInterval: 30000, // Refetch every 30 seconds
+    },
   });
 
-  if (isLoading) {
+  if (isLoading || (isConnected && isBalanceLoading && !balance)) {
     return <TierSelectorSkeleton />;
+  }
+
+  // Show error message if balance fetch failed
+  if (balanceError) {
+    console.error('Balance fetch error:', balanceError);
   }
 
   return (
@@ -27,9 +36,14 @@ export function TierSelector() {
       <Flex direction="column" gap="2">
         <Flex align="center" justify="between">
           <Heading size="5">Choose Your Bet</Heading>
-          {balance && (
+          {isConnected && balance && (
             <Text size="2" color="gray">
               Balance: {formatCurrency(balance.value)}
+            </Text>
+          )}
+          {isConnected && !balance && !isBalanceLoading && (
+            <Text size="2" color="red">
+              Balance unavailable
             </Text>
           )}
         </Flex>

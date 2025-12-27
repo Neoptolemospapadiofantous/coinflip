@@ -16,9 +16,9 @@ export interface Game {
   joiner_choice: boolean | null;
   status: 'pending' | 'matched' | 'resolved' | 'cancelled';
   winner_address: string | null;
-  random_number: string | null;
-  coin_result: boolean | null; // false = heads, true = tails (replaces random_number)
+  coin_result: boolean | null; // false = heads, true = tails
   payout: string | null;
+  fee: string | null; // Platform fee in wei
   block_number: string;
   matched_tx_hash: string | null;
   matched_block_number: string | null;
@@ -31,27 +31,12 @@ export interface Game {
   resolved_at: string | null;
   cancelled_at: string | null;
   updated_at: string;
+  // Contract tracking
+  contract_address?: string;
+  contract_version?: number;
   // Optional fields from joins with tiers/views
   amount_usd?: number;
   win_amount_usd?: number;
   time_waiting_seconds?: number;
 }
 
-export interface GameCreate {
-  tier: number;
-  choice: boolean; // false = heads, true = tails
-  amount: string; // in wei
-}
-
-export interface GameJoin {
-  gameId: string;
-  choice: boolean;
-  amount: string;
-}
-
-export interface GameResult {
-  gameId: string;
-  result: boolean; // coin flip result
-  winner: string;
-  amount: string;
-}

@@ -1,14 +1,20 @@
-const hre = require("hardhat");
-const { parseEther } = require("ethers");
+import hre from "hardhat";
+import { parseEther, Interface } from "ethers";
+
+interface Tier {
+  id: number;
+  amount: string;
+  usd: number;
+}
 
 async function main() {
   // Get network information
-  const network = await hre.network.provider.request({ method: "eth_chainId" });
+  const network = await hre.network.provider.request({ method: "eth_chainId" }) as string;
   const chainId = parseInt(network, 16);
 
   // Determine which contract address to use based on network
-  let contractAddress;
-  let networkName;
+  let contractAddress: string | undefined;
+  let networkName: string;
 
   if (chainId === 11155111) {
     contractAddress = process.env.NEXT_PUBLIC_COINFLIP_CONTRACT_ADDRESS_SEPOLIA;
@@ -40,7 +46,7 @@ async function main() {
   // Get signer
   const signers = await hre.network.provider.request({
     method: "eth_accounts",
-  });
+  }) as string[];
 
   if (!signers || signers.length === 0) {
     console.error("❌ No accounts found. Make sure PRIVATE_KEY is set in .env.local");
@@ -56,7 +62,7 @@ async function main() {
   const isTestnet = chainId === 11155111 || chainId === 80002 || chainId === 80001;
 
   // TESTNET TIERS - 100x smaller for easy testing
-  const testnetTiers = [
+  const testnetTiers: Tier[] = [
     { id: 0, amount: "0.00001", usd: 0.05 },   // 0.00001 ETH
     { id: 1, amount: "0.00005", usd: 0.1 },    // 0.00005 ETH
     { id: 2, amount: "0.0001", usd: 0.25 },    // 0.0001 ETH
@@ -65,7 +71,7 @@ async function main() {
   ];
 
   // PRODUCTION TIERS - Normal amounts for mainnet
-  const productionTiers = [
+  const productionTiers: Tier[] = [
     { id: 0, amount: "0.001", usd: 5 },    // ~$5
     { id: 1, amount: "0.002", usd: 10 },   // ~$10
     { id: 2, amount: "0.005", usd: 25 },   // ~$25
@@ -83,7 +89,6 @@ async function main() {
 
   const currencySymbol = chainId === 137 || chainId === 80002 || chainId === 80001 ? 'POL' : 'ETH';
 
-  const { Interface } = require("ethers");
   const iface = new Interface(CoinFlip.abi);
 
   for (const tier of tiers) {
@@ -99,7 +104,7 @@ async function main() {
         to: contractAddress,
         data: data,
       }],
-    });
+    }) as string;
 
     console.log(`  ✅ Transaction: ${tx}`);
 
@@ -113,7 +118,7 @@ async function main() {
       });
     }
 
-    console.log(`  ✅ Confirmed in block ${receipt.blockNumber}`);
+    console.log(`  ✅ Confirmed in block ${(receipt as { blockNumber: string }).blockNumber}`);
   }
 
   console.log("\n✅ All tiers initialized successfully!");

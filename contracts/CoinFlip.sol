@@ -19,19 +19,19 @@ contract CoinFlip is ReentrancyGuard, Pausable, Ownable {
     // =============================================================
 
     /// @notice Contract version for upgrade tracking
-    uint8 public constant VERSION = 1;
+    uint8 public constant VERSION = 2;
 
     /// @notice Maximum number of tiers
     uint8 public constant MAX_TIERS = 10;
 
-    /// @notice Platform fee in basis points (500 = 5%)
-    uint16 public constant FEE_BASIS_POINTS = 500;
+    /// @notice Platform fee in basis points (300 = 3%)
+    uint16 public constant FEE_BASIS_POINTS = 300;
 
     /// @notice Blocks before game can be cancelled (timeout)
     uint256 public constant TIMEOUT_BLOCKS = 100;
 
-    /// @notice Blocks before LOCKED game can be refunded if VRF fails (~3 hours on Sepolia)
-    uint256 public constant VRF_TIMEOUT_BLOCKS = 1000;
+    /// @notice Blocks before LOCKED game can be refunded if VRF fails (~40 min on Sepolia)
+    uint256 public constant VRF_TIMEOUT_BLOCKS = 200;
 
     /// @notice VRF callback gas limit
     uint32 public constant VRF_CALLBACK_GAS_LIMIT = 100000;

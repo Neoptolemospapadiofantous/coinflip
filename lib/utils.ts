@@ -151,3 +151,13 @@ export function getTimeoutRemaining(createdAt: string): string {
   if (minutes > 0) return `${minutes}m ${seconds}s`;
   return `${seconds}s`;
 }
+
+/**
+ * Format game ID for display (1-indexed for user-friendliness)
+ * Contract uses 0-indexed game IDs, but users expect numbering to start at 1
+ */
+export function formatGameId(gameId: string | number): string {
+  const id = typeof gameId === 'string' ? parseInt(gameId, 10) : gameId;
+  if (isNaN(id)) return '#?';
+  return `#${id + 1}`;
+}

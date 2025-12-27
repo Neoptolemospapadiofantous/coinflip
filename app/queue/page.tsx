@@ -21,7 +21,7 @@ import { Layout } from '@/components/layout/Layout';
 import { useTiers } from '@/hooks/useTiers';
 import { useJoinGame } from '@/hooks/useContract';
 import { usePendingGames, useGameStats } from '@/hooks/useGames';
-import { formatCurrency } from '@/lib/utils';
+import { formatCurrency, formatGameId } from '@/lib/utils';
 import { Clock, Users, Loader2, TrendingUp, XCircle, AlertCircle, Wifi, WifiOff } from 'lucide-react';
 import Link from 'next/link';
 import { StatusBadge } from '@/components/game/StatusBadge';
@@ -31,6 +31,8 @@ import { useGameTimeout } from '@/hooks/useGameTimeout';
 import { useConnectionStatus } from '@/hooks/useRealtimeSync';
 import { useQueryClient } from '@tanstack/react-query';
 import { invalidateGameQueries } from '@/lib/queryUtils';
+import { showToast } from '@/lib/toast';
+import { playSound } from '@/lib/sounds';
 
 // Contract timeout in milliseconds (100 blocks @ ~12 sec/block = ~20 minutes)
 const CONTRACT_TIMEOUT_MS = 20 * 60 * 1000;
@@ -174,6 +176,10 @@ export default function QueuePage() {
 
       // Immediately invalidate queries for real-time sync
       invalidateGameQueries(queryClient, joinedGameId);
+
+      // Show success feedback
+      showToast.gameMatched();
+      playSound.match();
     }
   }, [isSuccess, joinedGameId, queryClient, finishJoiningGame]);
 
@@ -191,6 +197,9 @@ export default function QueuePage() {
 
       // Immediately invalidate all game queries for real-time sync
       invalidateGameQueries(queryClient, cancelingGameId);
+
+      // Show success feedback
+      showToast.success('Game cancelled - bet refunded');
 
       setCancelingGameId(null);
       resetCancelState();
@@ -404,7 +413,7 @@ export default function QueuePage() {
                           <Flex justify="between" align="center">
                             <Flex direction="column" gap="1">
                               <Text size="2" weight="bold" className="text-yellow-400">
-                                Game #{game.id}
+                                Game {formatGameId(game.id)}
                               </Text>
                               <Text size="1" color="gray">
                                 Waiting for opponent...
@@ -545,7 +554,7 @@ export default function QueuePage() {
                             style={{ animationDelay: `${index * 0.05}s` }}
                           >
                             <Table.Cell>
-                              <Text weight="bold" className="text-cyan-400">#{game.id}</Text>
+                              <Text weight="bold" className="text-cyan-400">{formatGameId(game.id)}</Text>
                             </Table.Cell>
                             <Table.Cell>
                               <StatusBadge status={game.status as any} size="1" />
@@ -603,7 +612,7 @@ export default function QueuePage() {
       {/* Join Game Dialog */}
       <Dialog.Root open={isDialogOpen} onOpenChange={(open) => !open && handleDialogClose(true)}>
         <Dialog.Content style={{ maxWidth: 500 }}>
-          <Dialog.Title>Join Game #{selectedGame?.id}</Dialog.Title>
+          <Dialog.Title>Join Game {selectedGame ? formatGameId(selectedGame.id) : ''}</Dialog.Title>
           <Dialog.Description size="2" mb="4">
             Review the game details and join
           </Dialog.Description>

@@ -1,15 +1,12 @@
 'use client';
 
 import { Layout } from '@/components/layout/Layout';
-import { Container, Section, Heading, Card, Flex, Text, Grid, Badge, Table, Button, Skeleton } from '@radix-ui/themes';
+import { Container, Section, Heading, Card, Flex, Text, Grid, Badge, Table, Button, Skeleton, Select } from '@radix-ui/themes';
 import { useAccount } from 'wagmi';
 import { usePlayerGames, usePlayerStats } from '@/hooks/useGames';
-import { formatCurrency, formatRelativeTime } from '@/lib/utils';
-import { getCoinSideLabel } from '@/lib/utils';
-import { useMemo } from 'react';
+import { formatCurrency, formatRelativeTime, formatGameId, getCoinSideLabel } from '@/lib/utils';
+import { useMemo, useState } from 'react';
 import {
-  LineChart,
-  Line,
   AreaChart,
   Area,
   BarChart,
@@ -24,12 +21,13 @@ import {
   Legend,
   ResponsiveContainer,
 } from 'recharts';
-import { TrendingUp, TrendingDown, Trophy, Target, DollarSign } from 'lucide-react';
+import { TrendingUp, TrendingDown, Trophy, Target, DollarSign, Percent } from 'lucide-react';
 import Link from 'next/link';
 
 export default function HistoryPage() {
   const { address } = useAccount();
-  const { data: games = [], isLoading: isLoadingGames } = usePlayerGames(address, 50);
+  const { data: games = [], isLoading: isLoadingGames } = usePlayerGames(address, 100);
+  const [chartFilter, setChartFilter] = useState<string>('10');
   const { data: playerStats, isLoading: isLoadingStats } = usePlayerStats(address);
 
   const isLoading = isLoadingGames || isLoadingStats;
@@ -43,20 +41,23 @@ export default function HistoryPage() {
     totalWagered: BigInt(0),
     totalWon: BigInt(0),
     totalLost: BigInt(0),
+    totalFees: BigInt(0),
     gamesByTier: [0, 0, 0, 0, 0],
     winsByTier: [0, 0, 0, 0, 0],
   };
 
   // Memoize derived calculations
   const { winRate, profitLoss, isProfit } = useMemo(() => {
-    const rate = stats.totalGames > 0 ? (stats.wins / stats.totalGames) * 100 : 0;
+    // Win rate should only count resolved games (wins + losses), not cancelled/pending
+    const resolvedGames = stats.wins + stats.losses;
+    const rate = resolvedGames > 0 ? (stats.wins / resolvedGames) * 100 : 0;
     const profit = stats.totalWon - stats.totalLost;
     return {
       winRate: rate,
       profitLoss: profit,
       isProfit: profit > BigInt(0),
     };
-  }, [stats.totalGames, stats.wins, stats.totalWon, stats.totalLost]);
+  }, [stats.wins, stats.losses, stats.totalWon, stats.totalLost]);
 
   // Memoize chart data
   const gamesByTier = useMemo(() => {
@@ -75,17 +76,26 @@ export default function HistoryPage() {
     { name: 'Pending', value: stats.pending, color: '#facc15' },
   ].filter(item => item.value > 0), [stats.wins, stats.losses, stats.pending]);
 
-  // Recent games for timeline (memoized)
-  const recentGames = useMemo(() => games
-    .filter((g) => g.status === 'resolved')
-    .slice(0, 10)
-    .map((g) => ({
-      date: new Date(g.resolved_at || g.created_at).toLocaleDateString(),
-      profit: g.winner_address?.toLowerCase() === address?.toLowerCase()
+  // Recent games for timeline with cumulative profit (memoized)
+  const recentGames = useMemo(() => {
+    const limit = chartFilter === 'all' ? undefined : parseInt(chartFilter);
+    const resolved = games
+      .filter((g) => g.status === 'resolved')
+      .slice(0, limit)
+      .reverse();
+
+    let cumulative = 0;
+    return resolved.map((g) => {
+      const profit = g.winner_address?.toLowerCase() === address?.toLowerCase()
         ? Number(g.payout || 0) / 1e18 - Number(g.amount) / 1e18
-        : -Number(g.amount) / 1e18,
-    }))
-    .reverse(), [games, address]);
+        : -Number(g.amount) / 1e18;
+      cumulative += profit;
+      return {
+        game: `#${g.id}`,
+        profit: cumulative,
+      };
+    });
+  }, [games, address, chartFilter]);
 
   if (!address) {
     return (
@@ -120,10 +130,10 @@ export default function HistoryPage() {
             </Flex>
 
             {/* Stats Overview */}
-            <Grid columns={{ initial: '1', sm: '2', md: '4' }} gap="4">
+            <Grid columns={{ initial: '1', sm: '2', md: '5' }} gap="4">
               {isLoading ? (
                 <>
-                  {[...Array(4)].map((_, i) => (
+                  {[...Array(5)].map((_, i) => (
                     <Card key={i} className="card-simple">
                       <Flex direction="column" gap="2" p="4">
                         <Skeleton className="h-4 w-24" />
@@ -139,10 +149,13 @@ export default function HistoryPage() {
                       <Flex align="center" gap="2">
                         <Target className="w-5 h-5 text-cyan-400" />
                         <Text size="2" color="gray">
-                          Total Games
+                          Games Played
                         </Text>
                       </Flex>
-                      <Heading size="7">{stats.totalGames}</Heading>
+                      <Heading size="7">{stats.wins + stats.losses}</Heading>
+                      <Text size="1" color="gray">
+                        {stats.totalGames - stats.wins - stats.losses > 0 && `+${stats.totalGames - stats.wins - stats.losses} cancelled`}
+                      </Text>
                     </Flex>
                   </Card>
 
@@ -192,6 +205,21 @@ export default function HistoryPage() {
                       </Heading>
                     </Flex>
                   </Card>
+
+                  <Card className="card-simple card-hover border-orange-500/60">
+                    <Flex direction="column" gap="2" p="4">
+                      <Flex align="center" gap="2">
+                        <Percent className="w-5 h-5 text-orange-400" />
+                        <Text size="2" color="gray">
+                          Fees Paid
+                        </Text>
+                      </Flex>
+                      <Heading size="7" className="text-orange-400">
+                        {formatCurrency(stats.totalFees)}
+                      </Heading>
+                      <Text size="1" color="gray">5% on wins</Text>
+                    </Flex>
+                  </Card>
                 </>
               )}
             </Grid>
@@ -221,22 +249,34 @@ export default function HistoryPage() {
                         data={winLossData}
                         cx="50%"
                         cy="50%"
-                        labelLine={false}
+                        labelLine={true}
                         label={({ name, percent }) => `${name} ${((percent ?? 0) * 100).toFixed(0)}%`}
-                        outerRadius={80}
+                        outerRadius={90}
                         fill="#8884d8"
                         dataKey="value"
+                        stroke="rgba(15, 23, 42, 0.5)"
+                        strokeWidth={2}
                       >
                         {winLossData.map((entry, index) => (
-                          <Cell key={`cell-${index}`} fill={entry.color} />
+                          <Cell
+                            key={`cell-${index}`}
+                            fill={entry.color}
+                            style={{ cursor: 'pointer', filter: 'brightness(1)', transition: 'filter 0.2s' }}
+                          />
                         ))}
                       </Pie>
                       <Tooltip
                         contentStyle={{
-                          background: 'rgba(15, 23, 42, 0.9)',
-                          border: '1px solid rgba(6, 182, 212, 0.3)',
+                          background: 'rgba(15, 23, 42, 0.95)',
+                          border: '1px solid rgba(6, 182, 212, 0.5)',
                           borderRadius: '8px',
+                          color: '#e2e8f0',
                         }}
+                        itemStyle={{ color: '#e2e8f0' }}
+                        labelStyle={{ color: '#94a3b8' }}
+                      />
+                      <Legend
+                        formatter={(value, entry) => <span style={{ color: entry.color }}>{value}</span>}
                       />
                     </PieChart>
                   </ResponsiveContainer>
@@ -256,20 +296,40 @@ export default function HistoryPage() {
                   </Flex>
                 ) : (
                   <ResponsiveContainer width="100%" height={300}>
-                    <BarChart data={gamesByTier}>
+                    <BarChart data={gamesByTier} margin={{ top: 10, right: 20, left: 10, bottom: 10 }}>
                       <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
-                      <XAxis dataKey="tier" stroke="#94a3b8" />
-                      <YAxis stroke="#94a3b8" />
+                      <XAxis dataKey="tier" stroke="#94a3b8" tick={{ fill: '#94a3b8' }} />
+                      <YAxis stroke="#94a3b8" tick={{ fill: '#94a3b8' }} />
                       <Tooltip
                         contentStyle={{
-                          background: 'rgba(15, 23, 42, 0.9)',
-                          border: '1px solid rgba(6, 182, 212, 0.3)',
+                          background: 'rgba(15, 23, 42, 0.95)',
+                          border: '1px solid rgba(6, 182, 212, 0.5)',
                           borderRadius: '8px',
+                          color: '#e2e8f0',
                         }}
+                        itemStyle={{ color: '#e2e8f0' }}
+                        labelStyle={{ color: '#94a3b8', fontWeight: 'bold' }}
+                        cursor={{ fill: 'rgba(6, 182, 212, 0.1)' }}
                       />
-                      <Legend />
-                      <Bar dataKey="games" fill="#06b6d4" name="Total Games" />
-                      <Bar dataKey="wins" fill="#22c55e" name="Wins" />
+                      <Legend
+                        formatter={(value, entry) => (
+                          <span style={{ color: entry.color }}>{value}</span>
+                        )}
+                      />
+                      <Bar
+                        dataKey="games"
+                        fill="#8b5cf6"
+                        name="Total Games"
+                        radius={[4, 4, 0, 0]}
+                        style={{ cursor: 'pointer' }}
+                      />
+                      <Bar
+                        dataKey="wins"
+                        fill="#22c55e"
+                        name="Wins"
+                        radius={[4, 4, 0, 0]}
+                        style={{ cursor: 'pointer' }}
+                      />
                     </BarChart>
                   </ResponsiveContainer>
                 )}
@@ -279,33 +339,62 @@ export default function HistoryPage() {
             {/* Profit Timeline */}
             {recentGames.length > 0 && (
               <Card className="card-simple p-6">
-                <Heading size="5" mb="4">
-                  Profit Timeline (Last 10 Games)
-                </Heading>
-                <ResponsiveContainer width="100%" height={300}>
-                  <AreaChart data={recentGames}>
+                <Flex justify="between" align="center" mb="4">
+                  <Heading size="5">
+                    Cumulative Profit
+                  </Heading>
+                  <Select.Root value={chartFilter} onValueChange={setChartFilter}>
+                    <Select.Trigger placeholder="Filter" />
+                    <Select.Content>
+                      <Select.Item value="10">Last 10 Games</Select.Item>
+                      <Select.Item value="25">Last 25 Games</Select.Item>
+                      <Select.Item value="50">Last 50 Games</Select.Item>
+                      <Select.Item value="all">All Games</Select.Item>
+                    </Select.Content>
+                  </Select.Root>
+                </Flex>
+                <ResponsiveContainer width="100%" height={400}>
+                  <AreaChart data={recentGames} margin={{ top: 20, right: 30, left: 30, bottom: 30 }}>
+                    <defs>
+                      <linearGradient id="colorProfitGreen" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#22c55e" stopOpacity={0.8} />
+                        <stop offset="95%" stopColor="#22c55e" stopOpacity={0} />
+                      </linearGradient>
+                      <linearGradient id="colorProfitRed" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#ef4444" stopOpacity={0.8} />
+                        <stop offset="95%" stopColor="#ef4444" stopOpacity={0} />
+                      </linearGradient>
+                    </defs>
                     <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
-                    <XAxis dataKey="date" stroke="#94a3b8" />
-                    <YAxis stroke="#94a3b8" />
+                    <XAxis dataKey="game" stroke="#94a3b8" tick={{ dy: 15 }} />
+                    <YAxis stroke="#94a3b8" width={85} tick={{ dx: -15 }} tickFormatter={(value) => `${value >= 0 ? '+' : ''}${value.toFixed(4)}`} />
                     <Tooltip
                       contentStyle={{
-                        background: 'rgba(15, 23, 42, 0.9)',
-                        border: '1px solid rgba(6, 182, 212, 0.3)',
+                        background: 'rgba(15, 23, 42, 0.95)',
+                        border: '1px solid rgba(6, 182, 212, 0.5)',
                         borderRadius: '8px',
+                        color: '#e2e8f0',
                       }}
+                      itemStyle={{ color: '#e2e8f0' }}
+                      labelStyle={{ color: '#94a3b8', fontWeight: 'bold' }}
+                      formatter={(value) => {
+                        const val = typeof value === 'number' ? value : 0;
+                        const color = val >= 0 ? '#22c55e' : '#ef4444';
+                        return [
+                          <span style={{ color }}>{`${val >= 0 ? '+' : ''}${val.toFixed(6)} ETH`}</span>,
+                          'Cumulative P/L'
+                        ];
+                      }}
+                      cursor={{ stroke: 'rgba(6, 182, 212, 0.5)', strokeWidth: 2 }}
                     />
                     <Area
                       type="monotone"
                       dataKey="profit"
-                      stroke="#06b6d4"
-                      fill="url(#colorProfit)"
+                      stroke={recentGames[recentGames.length - 1]?.profit >= 0 ? '#22c55e' : '#ef4444'}
+                      strokeWidth={2}
+                      fill={recentGames[recentGames.length - 1]?.profit >= 0 ? 'url(#colorProfitGreen)' : 'url(#colorProfitRed)'}
+                      style={{ cursor: 'crosshair' }}
                     />
-                    <defs>
-                      <linearGradient id="colorProfit" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor="#06b6d4" stopOpacity={0.8} />
-                        <stop offset="95%" stopColor="#06b6d4" stopOpacity={0} />
-                      </linearGradient>
-                    </defs>
                   </AreaChart>
                 </ResponsiveContainer>
               </Card>
@@ -374,7 +463,7 @@ export default function HistoryPage() {
                           return (
                             <Table.Row key={game.id}>
                               <Table.Cell>
-                                <code className="text-cyan-400">#{game.id}</code>
+                                <code className="text-cyan-400">{formatGameId(game.id)}</code>
                               </Table.Cell>
                               <Table.Cell>
                                 <Badge

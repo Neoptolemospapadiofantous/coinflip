@@ -375,12 +375,12 @@ export const TIER_AMOUNTS_USD = {
   4: 100, // $100
 } as const;
 
-// Fee percentage (5%)
-export const FEE_PERCENTAGE = 5;
+// Fee percentage (3%)
+export const FEE_PERCENTAGE = 3;
 
 // Timeout blocks
 export const TIMEOUT_BLOCKS = 100; // ~20 min on Sepolia
-export const VRF_TIMEOUT_BLOCKS = 1000; // ~3 hours on Sepolia
+export const VRF_TIMEOUT_BLOCKS = 200; // ~40 min on Sepolia
 
 // Calculate win amount after fee
 export function calculateWinAmount(betAmount: number): number {

@@ -1,11 +1,8 @@
 -- Games Table Migration
 -- Stores all coinflip games synced from blockchain events
 
--- Drop existing table if it exists
-DROP TABLE IF EXISTS games CASCADE;
-
--- Create games table
-CREATE TABLE games (
+-- Create games table (IF NOT EXISTS to preserve data on re-runs)
+CREATE TABLE IF NOT EXISTS games (
   -- Primary identifiers
   id BIGINT PRIMARY KEY,                    -- Game ID from contract
   tx_hash TEXT NOT NULL,                    -- Transaction hash of GameCreated event

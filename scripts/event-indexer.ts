@@ -50,11 +50,102 @@ async function retryOperation<T>(
   throw new Error('Max retries exceeded');
 }
 
+// Sync contract configuration to database
+async function syncContractConfig(blockNumber: bigint) {
+  console.log('📋 Syncing contract configuration...');
+
+  try {
+    // Read contract constants and state (only what's available in ABI)
+    const [
+      feeBasisPoints,
+      timeoutBlocks,
+      vrfTimeoutBlocks,
+      activeTierCount,
+      collectedFees,
+    ] = await Promise.all([
+      publicClient.readContract({
+        address: CONTRACT_ADDRESS,
+        abi: COINFLIP_ABI,
+        functionName: 'FEE_BASIS_POINTS',
+      }) as Promise<number>,
+      publicClient.readContract({
+        address: CONTRACT_ADDRESS,
+        abi: COINFLIP_ABI,
+        functionName: 'TIMEOUT_BLOCKS',
+      }) as Promise<bigint>,
+      publicClient.readContract({
+        address: CONTRACT_ADDRESS,
+        abi: COINFLIP_ABI,
+        functionName: 'VRF_TIMEOUT_BLOCKS',
+      }) as Promise<bigint>,
+      publicClient.readContract({
+        address: CONTRACT_ADDRESS,
+        abi: COINFLIP_ABI,
+        functionName: 'activeTierCount',
+      }) as Promise<number>,
+      publicClient.readContract({
+        address: CONTRACT_ADDRESS,
+        abi: COINFLIP_ABI,
+        functionName: 'collectedFees',
+      }) as Promise<bigint>,
+    ]);
+
+    // Read tier amounts using getTier function
+    const tierAmounts: { tier: number; amount: string; enabled: boolean; totalGames: string; totalVolume: string }[] = [];
+    for (let i = 0; i < activeTierCount; i++) {
+      const tier = await publicClient.readContract({
+        address: CONTRACT_ADDRESS,
+        abi: COINFLIP_ABI,
+        functionName: 'getTier',
+        args: [i],
+      }) as { amount: bigint; enabled: boolean; totalGames: bigint; totalVolume: bigint };
+      tierAmounts.push({
+        tier: i,
+        amount: tier.amount.toString(),
+        enabled: tier.enabled,
+        totalGames: tier.totalGames.toString(),
+        totalVolume: tier.totalVolume.toString(),
+      });
+    }
+
+    // Upsert config to database
+    const { error } = await supabase.from('contract_config').upsert({
+      id: 'current',
+      contract_address: CONTRACT_ADDRESS.toLowerCase(),
+      network: 'sepolia',
+      fee_basis_points: Number(feeBasisPoints),
+      timeout_blocks: Number(timeoutBlocks),
+      vrf_timeout_blocks: Number(vrfTimeoutBlocks),
+      tier_amounts: tierAmounts,
+      active_tier_count: Number(activeTierCount),
+      contract_version: 2, // V2 contract with 3% fee
+      last_synced_block: blockNumber.toString(),
+      last_synced_at: new Date().toISOString(),
+    });
+
+    if (error) {
+      console.error('❌ Error syncing contract config:', error);
+    } else {
+      console.log(`✅ Contract config synced:
+  - Fee: ${Number(feeBasisPoints) / 100}%
+  - Timeout: ${timeoutBlocks} blocks
+  - VRF Timeout: ${vrfTimeoutBlocks} blocks
+  - Active Tiers: ${activeTierCount}
+  - Collected Fees: ${Number(collectedFees) / 1e18} ETH
+  - Tier Amounts: ${tierAmounts.map(t => `${Number(t.amount) / 1e18} ETH`).join(', ')}`);
+    }
+  } catch (error) {
+    console.error('❌ Failed to sync contract config:', error);
+  }
+}
+
 // Event signatures (must match contract exactly!)
 const GAME_CREATED_EVENT = parseAbiItem('event GameCreated(uint256 indexed gameId, address indexed creator, uint8 tier, uint256 amount, bool choice)');
 const GAME_MATCHED_EVENT = parseAbiItem('event GameJoined(uint256 indexed gameId, address indexed joiner, uint256 totalPot)');
 const GAME_RESOLVED_EVENT = parseAbiItem('event GameResolved(uint256 indexed gameId, address indexed winner, address indexed loser, bool coinResult, uint256 payout)');
 const GAME_CANCELLED_EVENT = parseAbiItem('event GameCancelled(uint256 indexed gameId, address indexed creator, uint256 refundAmount)');
+const VRF_TIMEOUT_EVENT = parseAbiItem('event VrfTimeoutClaimed(uint256 indexed gameId, address indexed playerA, address indexed playerB, uint256 refundAmount)');
+const EMERGENCY_REFUND_EVENT = parseAbiItem('event EmergencyRefund(uint256 indexed gameId, address indexed playerA, address indexed playerB, uint256 totalRefund)');
 
 interface IndexerState {
   lastProcessedBlock: bigint;
@@ -100,6 +191,8 @@ async function processGameCreated(log: any) {
     creator_choice: choice,
     status: 'pending',
     block_number: blockNumber.toString(),
+    contract_address: CONTRACT_ADDRESS.toLowerCase(),
+    contract_version: 2,
   }, { onConflict: 'id', ignoreDuplicates: true });
 
   if (error) {
@@ -109,20 +202,37 @@ async function processGameCreated(log: any) {
 
 // Process GameJoined event
 async function processGameJoined(log: any) {
-  const { gameId, joiner, choice } = log.args; // choice is included in the event
+  // Note: Contract's GameJoined event only has (gameId, joiner, totalPot) - NOT choice
+  // The joiner's choice is always the opposite of the creator's choice (it's a heads vs tails game)
+  const { gameId, joiner } = log.args;
   const blockNumber = log.blockNumber;
   const txHash = log.transactionHash;
 
-  console.log(`🤝 GameJoined: ID=${gameId}, Joiner=${joiner}, Choice=${choice}`);
+  console.log(`🤝 GameJoined: ID=${gameId}, Joiner=${joiner}`);
 
   try {
-    // Update game with retry - choice is directly from the event
+    // First, fetch the game to get creator's choice
+    const { data: game, error: fetchError } = await supabase
+      .from('games')
+      .select('creator_choice')
+      .eq('id', gameId.toString())
+      .single();
+
+    if (fetchError || !game) {
+      console.error(`❌ Game ${gameId} not found for joining:`, fetchError);
+      return;
+    }
+
+    // Joiner always gets the opposite choice of creator
+    const joinerChoice = !game.creator_choice;
+
+    // Update game with retry
     await retryOperation(async () => {
       const { error } = await supabase
         .from('games')
         .update({
           joiner_address: joiner.toLowerCase(),
-          joiner_choice: choice,
+          joiner_choice: joinerChoice,
           status: 'matched',
           matched_tx_hash: txHash.toLowerCase(),
           matched_block_number: blockNumber.toString(),
@@ -133,7 +243,7 @@ async function processGameJoined(log: any) {
       if (error) throw error;
     });
 
-    console.log(`✅ Game ${gameId} matched with joiner choice: ${choice}`);
+    console.log(`✅ Game ${gameId} matched - joiner choice: ${joinerChoice ? 'tails' : 'heads'}`);
   } catch (error) {
     console.error(`❌ Error processing GameJoined for game ${gameId}:`, error);
     throw error;
@@ -176,6 +286,12 @@ async function processGameResolved(log: any) {
       });
     }
 
+    // Calculate fee from actual payout (fee = totalPot - payout)
+    // This works regardless of fee percentage since payout is after fee deduction
+    const betAmount = BigInt(game.amount);
+    const totalPot = betAmount * BigInt(2);
+    const fee = totalPot - payout; // Actual fee taken by contract
+
     // Update game with retry (all fields atomically)
     await retryOperation(async () => {
       const { error } = await supabase
@@ -184,6 +300,7 @@ async function processGameResolved(log: any) {
           winner_address: winner.toLowerCase(),
           coin_result: coinResult,
           payout: payout.toString(),
+          fee: fee.toString(),
           status: 'resolved',
           resolved_tx_hash: txHash.toLowerCase(),
           resolved_block_number: blockNumber.toString(),
@@ -224,6 +341,54 @@ async function processGameCancelled(log: any) {
   }
 }
 
+// Process VrfTimeoutClaimed event
+// This occurs when a matched game's VRF request times out and players claim refund
+async function processVrfTimeoutClaimed(log: any) {
+  const { gameId, playerA, playerB, refundAmount } = log.args;
+  const blockNumber = log.blockNumber;
+  const txHash = log.transactionHash;
+
+  console.log(`⏰ VrfTimeoutClaimed: ID=${gameId}, PlayerA=${playerA}, PlayerB=${playerB}, Refund=${refundAmount}`);
+
+  const { error } = await supabase
+    .from('games')
+    .update({
+      status: 'cancelled',
+      cancelled_tx_hash: txHash.toLowerCase(),
+      cancelled_block_number: blockNumber.toString(),
+      cancelled_at: new Date().toISOString(),
+    })
+    .eq('id', gameId.toString());
+
+  if (error) {
+    console.error('❌ Error updating game for VRF timeout:', error);
+  }
+}
+
+// Process EmergencyRefund event
+// This occurs when admin issues emergency refund for stuck games
+async function processEmergencyRefund(log: any) {
+  const { gameId, playerA, playerB, totalRefund } = log.args;
+  const blockNumber = log.blockNumber;
+  const txHash = log.transactionHash;
+
+  console.log(`🚨 EmergencyRefund: ID=${gameId}, PlayerA=${playerA}, PlayerB=${playerB}, Refund=${totalRefund}`);
+
+  const { error } = await supabase
+    .from('games')
+    .update({
+      status: 'cancelled',
+      cancelled_tx_hash: txHash.toLowerCase(),
+      cancelled_block_number: blockNumber.toString(),
+      cancelled_at: new Date().toISOString(),
+    })
+    .eq('id', gameId.toString());
+
+  if (error) {
+    console.error('❌ Error updating game for emergency refund:', error);
+  }
+}
+
 // Main indexer function
 async function indexEvents(fromBlock: bigint, toBlock: bigint) {
   const CHUNK_SIZE = 10n; // Alchemy free tier limit
@@ -236,6 +401,8 @@ async function indexEvents(fromBlock: bigint, toBlock: bigint) {
   let allJoinedLogs: any[] = [];
   let allResolvedLogs: any[] = [];
   let allCancelledLogs: any[] = [];
+  let allVrfTimeoutLogs: any[] = [];
+  let allEmergencyRefundLogs: any[] = [];
 
   // Process in chunks to avoid rate limits
   for (let start = fromBlock; start <= toBlock; start += CHUNK_SIZE) {
@@ -245,7 +412,7 @@ async function indexEvents(fromBlock: bigint, toBlock: bigint) {
 
     try {
       // Fetch all events in parallel for this chunk
-      const [createdLogs, joinedLogs, resolvedLogs, cancelledLogs] = await Promise.all([
+      const [createdLogs, joinedLogs, resolvedLogs, cancelledLogs, vrfTimeoutLogs, emergencyRefundLogs] = await Promise.all([
         publicClient.getLogs({
           address: CONTRACT_ADDRESS,
           event: GAME_CREATED_EVENT,
@@ -270,12 +437,26 @@ async function indexEvents(fromBlock: bigint, toBlock: bigint) {
           fromBlock: start,
           toBlock: end,
         }),
+        publicClient.getLogs({
+          address: CONTRACT_ADDRESS,
+          event: VRF_TIMEOUT_EVENT,
+          fromBlock: start,
+          toBlock: end,
+        }),
+        publicClient.getLogs({
+          address: CONTRACT_ADDRESS,
+          event: EMERGENCY_REFUND_EVENT,
+          fromBlock: start,
+          toBlock: end,
+        }),
       ]);
 
       allCreatedLogs = [...allCreatedLogs, ...createdLogs];
       allJoinedLogs = [...allJoinedLogs, ...joinedLogs];
       allResolvedLogs = [...allResolvedLogs, ...resolvedLogs];
       allCancelledLogs = [...allCancelledLogs, ...cancelledLogs];
+      allVrfTimeoutLogs = [...allVrfTimeoutLogs, ...vrfTimeoutLogs];
+      allEmergencyRefundLogs = [...allEmergencyRefundLogs, ...emergencyRefundLogs];
 
       // Delay to avoid rate limiting
       await new Promise(resolve => setTimeout(resolve, CHUNK_DELAY));
@@ -297,6 +478,8 @@ async function indexEvents(fromBlock: bigint, toBlock: bigint) {
     ...allJoinedLogs.map(log => ({ ...log, type: 'joined' })),
     ...allResolvedLogs.map(log => ({ ...log, type: 'resolved' })),
     ...allCancelledLogs.map(log => ({ ...log, type: 'cancelled' })),
+    ...allVrfTimeoutLogs.map(log => ({ ...log, type: 'vrf_timeout' })),
+    ...allEmergencyRefundLogs.map(log => ({ ...log, type: 'emergency_refund' })),
   ].sort((a, b) => Number(a.blockNumber) - Number(b.blockNumber));
 
   // Process each event
@@ -314,6 +497,12 @@ async function indexEvents(fromBlock: bigint, toBlock: bigint) {
           break;
         case 'cancelled':
           await processGameCancelled(log);
+          break;
+        case 'vrf_timeout':
+          await processVrfTimeoutClaimed(log);
+          break;
+        case 'emergency_refund':
+          await processEmergencyRefund(log);
           break;
       }
     } catch (error) {
@@ -334,10 +523,14 @@ async function main() {
   const currentBlock = await publicClient.getBlockNumber();
   console.log(`📦 Current block: ${currentBlock}`);
 
+  // Sync contract configuration on startup
+  await syncContractConfig(currentBlock);
+
   // Load last processed block
   const state = await loadState();
-  // Start from 100 blocks ago on first run (to catch recent games)
-  const fromBlock = state.lastProcessedBlock === 0n ? currentBlock - 100n : state.lastProcessedBlock + 1n;
+  // Start from contract deployment block on first run to index all historical games
+  const DEPLOYMENT_BLOCK = 9917720n; // V2 contract deployed around this block
+  const fromBlock = state.lastProcessedBlock === 0n ? DEPLOYMENT_BLOCK : state.lastProcessedBlock + 1n;
 
   console.log(`⏮️  Last processed block: ${state.lastProcessedBlock}`);
   console.log(`▶️  Starting from block: ${fromBlock}`);

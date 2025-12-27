@@ -7,7 +7,7 @@ import { useRouter } from 'next/navigation';
 import { CoinFlip3D, CoinFlip2D } from './CoinFlip3D';
 import { Confetti } from '@/components/effects/Confetti';
 import { Game } from '@/types/game';
-import { formatCurrency } from '@/lib/utils';
+import { formatCurrency, formatGameId } from '@/lib/utils';
 import { invalidateGameQueries, removeGameFromPendingCache } from '@/lib/queryUtils';
 import { Loader2, Users, Trophy, Zap, AlertTriangle, Clock, XCircle } from 'lucide-react';
 import { useGameStore } from '@/store/gameStore';
@@ -303,7 +303,7 @@ export function GameSessionModal({ game, open, onClose, userAddress, modalType }
       <Dialog.Root open={open} onOpenChange={handleClose}>
       <Dialog.Content
         maxWidth="600px"
-        className="backdrop-blur-xl bg-slate-900/95 border-2 border-cyan-500/30 max-h-[90vh] overflow-y-auto mx-4"
+        className="backdrop-blur-xl bg-slate-900/95 border-2 border-cyan-500/30 max-h-[90vh] overflow-y-auto fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-50"
         aria-describedby={undefined}
       >
         <Dialog.Title>
@@ -318,7 +318,7 @@ export function GameSessionModal({ game, open, onClose, userAddress, modalType }
               {modalType !== 'expired' && game.status === 'cancelled' && 'Game Cancelled'}
             </Heading>
             <Text size="2" color="gray">
-              Game #{game.id}
+              Game {formatGameId(game.id)}
             </Text>
           </Flex>
         </Dialog.Title>
@@ -665,7 +665,7 @@ export function GameSessionModal({ game, open, onClose, userAddress, modalType }
                     <Flex direction="column" gap="3" p="4">
                       <Flex justify="between" align="center">
                         <Text size="2" color="gray">Game ID:</Text>
-                        <Text size="2" weight="bold">#{game.id}</Text>
+                        <Text size="2" weight="bold">{formatGameId(game.id)}</Text>
                       </Flex>
 
                       <Flex justify="between" align="center">
@@ -761,7 +761,7 @@ export function GameSessionModal({ game, open, onClose, userAddress, modalType }
                 <Flex direction="column" gap="3" p="4">
                   <Flex justify="between" align="center">
                     <Text size="2" color="gray">Game ID:</Text>
-                    <Text size="2" weight="bold">#{game.id}</Text>
+                    <Text size="2" weight="bold">{formatGameId(game.id)}</Text>
                   </Flex>
 
                   <Flex justify="between" align="center">

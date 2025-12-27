@@ -34,8 +34,9 @@ export interface Database {
           joiner_choice: boolean | null;
           status: string;
           winner_address: string | null;
-          random_number: string | null;
+          coin_result: boolean | null;
           payout: string | null;
+          fee: string | null;
           block_number: number;
           matched_tx_hash: string | null;
           matched_block_number: number | null;
@@ -48,6 +49,8 @@ export interface Database {
           resolved_at: string | null;
           cancelled_at: string | null;
           updated_at: string;
+          contract_address: string | null;
+          contract_version: number | null;
         };
         Insert: Omit<Database['public']['Tables']['games']['Row'], 'created_at' | 'updated_at'>;
         Update: Partial<Database['public']['Tables']['games']['Row']>;

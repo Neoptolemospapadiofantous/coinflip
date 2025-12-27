@@ -23,9 +23,12 @@ import { useTiers } from '@/hooks/useTiers';
 import { useCreatedGameTracking } from '@/hooks/useCreatedGameTracking';
 import { Info, Loader2, CheckCircle2, AlertCircle, Clock, Users, X, Plus, Gamepad2 } from 'lucide-react';
 import { parseError } from '@/lib/errors';
+import { formatGameId } from '@/lib/utils';
 import { Game } from '@/types/game';
 import { useQueryClient } from '@tanstack/react-query';
 import { invalidateGameQueries } from '@/lib/queryUtils';
+import { showToast } from '@/lib/toast';
+import { playSound } from '@/lib/sounds';
 
 enum GameStep {
   SELECT_TIER = 'select_tier',
@@ -84,6 +87,9 @@ export default function PlayPage() {
     console.log('🎮 Game found in database:', game.id);
     // Add to active games
     addActiveGame(game);
+    // Show toast and play sound
+    showToast.gameCreated(formatGameId(game.id));
+    playSound.success();
   }, [addActiveGame]);
 
   const handleGameMatched = useCallback((game: Game) => {
@@ -155,6 +161,9 @@ export default function PlayPage() {
 
       // Invalidate all game queries for real-time sync across pages
       invalidateGameQueries(queryClient, trackedGame.id);
+
+      // Show success toast
+      showToast.success('Game cancelled - bet refunded');
 
       cancelTracking();
       handleReset();
@@ -568,7 +577,7 @@ export default function PlayPage() {
                             <Flex direction="column" gap="3" p="4">
                               <Flex justify="between" align="center">
                                 <Text size="2" color="gray">Game ID:</Text>
-                                <Text size="2" weight="bold" className="font-mono">#{trackedGame.id}</Text>
+                                <Text size="2" weight="bold" className="font-mono">{formatGameId(trackedGame.id)}</Text>
                               </Flex>
                               <Flex justify="between" align="center">
                                 <Text size="2" color="gray">Your Choice:</Text>
