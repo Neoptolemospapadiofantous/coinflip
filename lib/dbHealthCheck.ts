@@ -139,10 +139,11 @@ async function checkTiersData(): Promise<HealthCheckResult> {
       };
     }
 
-    if (data.length < 5) {
+    // Contract supports up to 10 tiers (0-9), require at least 1 to be configured
+    if (data.length < 1) {
       return {
         success: false,
-        message: `Only ${data.length} tiers found, expected 5`,
+        message: 'No tiers configured - at least 1 tier required',
         details: { count: data.length, tiers: data },
       };
     }

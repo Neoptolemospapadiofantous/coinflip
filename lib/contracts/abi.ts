@@ -96,7 +96,7 @@ export const COINFLIP_ABI = [
   // =============================================================
 
   // Get game info - returns Game struct
-  // struct Game { playerA, playerB, tier, choiceA, state, createdBlock, vrfRequestId, coinResult, winner }
+  // struct Game { playerA, playerB, tier, choiceA, state, createdBlock, lockedBlock, vrfRequestId, coinResult, winner }
   {
     type: 'function',
     name: 'getGame',
@@ -113,6 +113,7 @@ export const COINFLIP_ABI = [
           { name: 'choiceA', type: 'bool' },
           { name: 'state', type: 'uint8' },
           { name: 'createdBlock', type: 'uint256' },
+          { name: 'lockedBlock', type: 'uint256' },
           { name: 'vrfRequestId', type: 'uint256' },
           { name: 'coinResult', type: 'bool' },
           { name: 'winner', type: 'address' },
@@ -259,13 +260,13 @@ export const COINFLIP_ABI = [
   },
 
   // Join an existing game
+  // Join a game - joiner automatically bets against creator's choice
   {
     type: 'function',
     name: 'joinGame',
     stateMutability: 'payable',
     inputs: [
       { name: 'gameId', type: 'uint256' },
-      { name: 'choice', type: 'bool' },
     ],
     outputs: [],
   },

@@ -84,10 +84,10 @@ describe("CoinFlip - Simple 2-Game Demo", function () {
     // Bob joins game
     console.log("📌 Step 2: Bob joins the game");
     console.log(`   Bet Amount: ${ethers.formatEther(betAmount)} ETH`);
-    console.log(`   Bob's Choice: TAILS`);
+    console.log(`   Bob's Choice: TAILS (automatic - opposite of creator)`);
 
     const bobBalanceBefore = await ethers.provider.getBalance(accounts[1].address);
-    const tx2 = await coinFlip.connect(accounts[1]).joinGame(0, true, { value: betAmount }); // true = tails
+    const tx2 = await coinFlip.connect(accounts[1]).joinGame(0, { value: betAmount }); // choice is automatic
     await tx2.wait();
 
     console.log(`   ✅ Bob joined!`);
@@ -140,9 +140,9 @@ describe("CoinFlip - Simple 2-Game Demo", function () {
     // Diana joins game
     console.log("📌 Step 2: Diana joins the game");
     console.log(`   Bet Amount: ${ethers.formatEther(betAmount)} ETH`);
-    console.log(`   Diana's Choice: HEADS`);
+    console.log(`   Diana's Choice: HEADS (automatic - opposite of creator)`);
 
-    const tx4 = await coinFlip.connect(accounts[3]).joinGame(1, false, { value: betAmount }); // false = heads
+    const tx4 = await coinFlip.connect(accounts[3]).joinGame(1, { value: betAmount }); // choice is automatic
     await tx4.wait();
 
     console.log(`   ✅ Diana joined!`);

@@ -112,7 +112,7 @@ describe('CoinFlip Contract', function () {
     });
 
     it('should allow another player to join', async function () {
-      const tx = await coinFlip.connect(player2).joinGame(1, true, {
+      const tx = await coinFlip.connect(player2).joinGame(1, {
         value: TIER_WAGER,
       });
 
@@ -125,23 +125,23 @@ describe('CoinFlip Contract', function () {
 
     it('should reject creator joining own game', async function () {
       await expect(
-        coinFlip.connect(player1).joinGame(1, true, { value: TIER_WAGER })
+        coinFlip.connect(player1).joinGame(1, { value: TIER_WAGER })
       ).to.be.revertedWith('Cannot join own game');
     });
 
     it('should reject joining with wrong wager', async function () {
       await expect(
-        coinFlip.connect(player2).joinGame(1, true, {
+        coinFlip.connect(player2).joinGame(1, {
           value: ethers.parseEther('0.02'),
         })
       ).to.be.revertedWith('Incorrect wager amount');
     });
 
     it('should reject joining non-pending game', async function () {
-      await coinFlip.connect(player2).joinGame(1, true, { value: TIER_WAGER });
+      await coinFlip.connect(player2).joinGame(1, { value: TIER_WAGER });
 
       await expect(
-        coinFlip.connect(owner).joinGame(1, false, { value: TIER_WAGER })
+        coinFlip.connect(owner).joinGame(1, { value: TIER_WAGER })
       ).to.be.revertedWith('Game not pending');
     });
   });
@@ -172,7 +172,7 @@ describe('CoinFlip Contract', function () {
     });
 
     it('should reject cancelling matched game', async function () {
-      await coinFlip.connect(player2).joinGame(1, true, { value: TIER_WAGER });
+      await coinFlip.connect(player2).joinGame(1, { value: TIER_WAGER });
 
       await expect(coinFlip.connect(player1).cancelGame(1)).to.be.revertedWith(
         'Game not pending'
@@ -183,7 +183,7 @@ describe('CoinFlip Contract', function () {
   describe('VRF Fulfillment', function () {
     beforeEach(async function () {
       await coinFlip.connect(player1).createGame(0, false, { value: TIER_WAGER });
-      await coinFlip.connect(player2).joinGame(1, true, { value: TIER_WAGER });
+      await coinFlip.connect(player2).joinGame(1, { value: TIER_WAGER });
     });
 
     it('should resolve game when VRF responds', async function () {
@@ -222,7 +222,7 @@ describe('CoinFlip Contract', function () {
   describe('Fee Collection', function () {
     it('should collect fees in contract', async function () {
       await coinFlip.connect(player1).createGame(0, false, { value: TIER_WAGER });
-      await coinFlip.connect(player2).joinGame(1, true, { value: TIER_WAGER });
+      await coinFlip.connect(player2).joinGame(1, { value: TIER_WAGER });
 
       const game = await coinFlip.getGame(1);
       await vrfCoordinator.fulfillRandomWords(game.vrfRequestId, await coinFlip.getAddress());
@@ -234,7 +234,7 @@ describe('CoinFlip Contract', function () {
 
     it('should allow owner to withdraw fees', async function () {
       await coinFlip.connect(player1).createGame(0, false, { value: TIER_WAGER });
-      await coinFlip.connect(player2).joinGame(1, true, { value: TIER_WAGER });
+      await coinFlip.connect(player2).joinGame(1, { value: TIER_WAGER });
 
       const game = await coinFlip.getGame(1);
       await vrfCoordinator.fulfillRandomWords(game.vrfRequestId, await coinFlip.getAddress());

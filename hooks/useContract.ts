@@ -92,6 +92,7 @@ export interface OnChainGame {
   choiceA: boolean;
   state: number;
   createdBlock: bigint;
+  lockedBlock: bigint;
   vrfRequestId: bigint;
   coinResult: boolean;
   winner: string;
@@ -176,6 +177,7 @@ export function useCreateGame() {
 }
 
 // Hook to join a game - uses wallet client directly for full gas control
+// Note: Joiner automatically bets against creator's choice (heads vs tails game)
 export function useJoinGame() {
   const chainId = useChainId();
   const contractAddress = getCoinFlipAddress(chainId);
@@ -195,7 +197,7 @@ export function useJoinGame() {
     setIsWriting(false);
   };
 
-  const joinGame = async (gameId: string, choice: boolean, amount: string) => {
+  const joinGame = async (gameId: string, amount: string) => {
     if (!walletClient) {
       setWriteError(new Error('Wallet not connected'));
       return;
@@ -221,7 +223,7 @@ export function useJoinGame() {
       const txData = encodeFunctionData({
         abi: COINFLIP_ABI,
         functionName: 'joinGame',
-        args: [gameIdValidation.value!, choice],
+        args: [gameIdValidation.value!],
       });
 
       console.log(`🚀 Sending joinGame tx with gas=${GAS_CAPS.joinGame}`);

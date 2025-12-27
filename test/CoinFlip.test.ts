@@ -90,9 +90,9 @@ describe("CoinFlip - Automated Scale Testing", function () {
     console.log("\n👥 Phase 2: Joining games...");
     for (let i = 0; i < 10; i++) {
       const { gameId, joiner } = games[i];
-      const choice = i % 2 !== 0; // Opposite choice
+      // Note: Joiner's choice is automatically opposite of creator's
 
-      const tx = await coinFlip.connect(joiner).joinGame(gameId, choice, { value: betAmount });
+      const tx = await coinFlip.connect(joiner).joinGame(gameId, { value: betAmount });
       const receipt = await tx.wait();
 
       console.log(`  ✓ Game ${i} joined by Account ${i + 10} (${joiner.address.slice(0, 6)}...)`);

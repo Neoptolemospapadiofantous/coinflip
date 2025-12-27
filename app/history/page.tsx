@@ -4,6 +4,7 @@ import { Layout } from '@/components/layout/Layout';
 import { Container, Section, Heading, Card, Flex, Text, Grid, Badge, Table, Button, Skeleton, Select } from '@radix-ui/themes';
 import { useAccount } from 'wagmi';
 import { usePlayerGames, usePlayerStats } from '@/hooks/useGames';
+import { useTiers } from '@/hooks/useTiers';
 import { formatCurrency, formatRelativeTime, formatGameId, getCoinSideLabel } from '@/lib/utils';
 import { useMemo, useState } from 'react';
 import {
@@ -27,6 +28,7 @@ import Link from 'next/link';
 export default function HistoryPage() {
   const { address } = useAccount();
   const { data: games = [], isLoading: isLoadingGames } = usePlayerGames(address, 100);
+  const { data: tiers = [] } = useTiers();
   const [chartFilter, setChartFilter] = useState<string>('10');
   const { data: playerStats, isLoading: isLoadingStats } = usePlayerStats(address);
 
@@ -59,15 +61,15 @@ export default function HistoryPage() {
     };
   }, [stats.wins, stats.losses, stats.totalWon, stats.totalLost]);
 
-  // Memoize chart data
+  // Memoize chart data - use dynamic tier labels from database
   const gamesByTier = useMemo(() => {
-    const tierLabels = ['$5', '$10', '$25', '$50', '$100'];
-    return tierLabels.map((label, tier) => ({
-      tier: label,
-      games: stats.gamesByTier[tier] || 0,
-      wins: stats.winsByTier[tier] || 0,
-    }));
-  }, [stats.gamesByTier, stats.winsByTier]);
+    // Generate labels from tiers data, fallback to tier index if not available
+    return tiers.map((tier, index) => ({
+      tier: tier.amountUsd ? `$${tier.amountUsd}` : `Tier ${index}`,
+      games: stats.gamesByTier[index] || 0,
+      wins: stats.winsByTier[index] || 0,
+    })).filter(t => t.games > 0 || t.wins > 0); // Only show tiers with activity
+  }, [stats.gamesByTier, stats.winsByTier, tiers]);
 
   // Filter out 0 values from pie chart to avoid overlap
   const winLossData = useMemo(() => [

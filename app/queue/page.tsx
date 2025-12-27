@@ -210,6 +210,7 @@ export default function QueuePage() {
 
   const handleConfirmJoin = useCallback(() => {
     if (selectedGame) {
+      // Joiner automatically gets opposite of creator's choice (contract enforces this)
       const joinerChoice = !selectedGame.creator_choice;
       setJoinedGameId(selectedGame.id);
 
@@ -223,7 +224,8 @@ export default function QueuePage() {
         status: 'pending', // Will update to 'matched' via subscription
       });
 
-      joinGame(selectedGame.id, joinerChoice, selectedGame.tierInfo.amount);
+      // Note: Contract doesn't take choice param - joiner always bets opposite
+      joinGame(selectedGame.id, selectedGame.tierInfo.amount);
     }
   }, [selectedGame, joinGame, addActiveGame, startJoiningGame]);
 

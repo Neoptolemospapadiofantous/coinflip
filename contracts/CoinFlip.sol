@@ -109,7 +109,8 @@ contract CoinFlip is ReentrancyGuard, Pausable, Ownable {
         uint8 tier;             // Tier ID
         bool choiceA;           // Creator's choice (false=heads, true=tails)
         GameState state;        // Current game state
-        uint256 createdBlock;   // Block when created
+        uint256 createdBlock;   // Block when game was created
+        uint256 lockedBlock;    // Block when game was locked (VRF requested)
         uint256 vrfRequestId;   // Chainlink VRF request ID
         bool coinResult;        // Result (false=heads, true=tails)
         address winner;         // Winner address
@@ -254,6 +255,7 @@ contract CoinFlip is ReentrancyGuard, Pausable, Ownable {
             choiceA: choice,
             state: GameState.OPEN,
             createdBlock: block.number,
+            lockedBlock: 0,
             vrfRequestId: 0,
             coinResult: false,
             winner: address(0)
@@ -267,10 +269,10 @@ contract CoinFlip is ReentrancyGuard, Pausable, Ownable {
 
     /**
      * @notice Join an existing open game
+     * @dev Joiner automatically bets against creator's choice (heads vs tails game)
      * @param gameId The game ID to join
-     * @param choice Player's prediction (false=heads, true=tails)
      */
-    function joinGame(uint256 gameId, bool choice)
+    function joinGame(uint256 gameId)
         external
         payable
         whenNotPaused
@@ -288,6 +290,7 @@ contract CoinFlip is ReentrancyGuard, Pausable, Ownable {
         // Update game state
         game.playerB = msg.sender;
         game.state = GameState.LOCKED;
+        game.lockedBlock = block.number;
 
         // Update statistics
         t.totalVolume += t.amount * 2;
@@ -345,7 +348,7 @@ contract CoinFlip is ReentrancyGuard, Pausable, Ownable {
 
     /**
      * @notice Claim refund for a LOCKED game where VRF failed to respond
-     * @dev Either player can call this after VRF_TIMEOUT_BLOCKS have passed
+     * @dev Either player can call this after VRF_TIMEOUT_BLOCKS have passed since game was locked
      * @param gameId The game ID to claim refund for
      */
     function claimVrfTimeout(uint256 gameId)
@@ -360,7 +363,8 @@ contract CoinFlip is ReentrancyGuard, Pausable, Ownable {
         if (msg.sender != game.playerA && msg.sender != game.playerB) {
             revert NotGameParticipant();
         }
-        if (block.number < game.createdBlock + VRF_TIMEOUT_BLOCKS) {
+        // Use lockedBlock (when VRF was requested) not createdBlock
+        if (block.number < game.lockedBlock + VRF_TIMEOUT_BLOCKS) {
             revert VrfTimeoutNotReached();
         }
 
@@ -396,13 +400,15 @@ contract CoinFlip is ReentrancyGuard, Pausable, Ownable {
         if (tierId >= MAX_TIERS) revert InvalidTier();
 
         Tier storage tier = tiers[tierId];
+        bool wasEnabled = tier.enabled;
+
         tier.amount = amount;
         tier.enabled = enabled;
 
-        // Update active tier count
-        if (enabled && tier.totalGames == 0) {
+        // Update active tier count based on state change
+        if (enabled && !wasEnabled) {
             activeTierCount++;
-        } else if (!enabled && tier.totalGames > 0) {
+        } else if (!enabled && wasEnabled) {
             activeTierCount--;
         }
 
@@ -569,7 +575,7 @@ contract CoinFlip is ReentrancyGuard, Pausable, Ownable {
     {
         Game storage game = games[gameId];
         return game.state == GameState.LOCKED &&
-               block.number >= game.createdBlock + VRF_TIMEOUT_BLOCKS;
+               block.number >= game.lockedBlock + VRF_TIMEOUT_BLOCKS;
     }
 
     /**
@@ -585,7 +591,7 @@ contract CoinFlip is ReentrancyGuard, Pausable, Ownable {
         Game storage game = games[gameId];
         if (game.state != GameState.LOCKED) return 0;
 
-        uint256 timeoutBlock = game.createdBlock + VRF_TIMEOUT_BLOCKS;
+        uint256 timeoutBlock = game.lockedBlock + VRF_TIMEOUT_BLOCKS;
         if (block.number >= timeoutBlock) return 0;
 
         return timeoutBlock - block.number;
