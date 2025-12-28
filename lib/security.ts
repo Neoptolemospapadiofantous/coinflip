@@ -290,10 +290,3 @@ export function isAllowedOrigin(origin: string | null, allowedOrigins: string[])
   if (!origin) return false;
   return allowedOrigins.includes(origin);
 }
-
-/**
- * Generate nonce for CSP
- */
-export function generateNonce(): string {
-  return generateSecureToken(16);
-}

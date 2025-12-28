@@ -9,6 +9,14 @@ export const showToast = {
     toast.error(message);
   },
 
+  info: (message: string) => {
+    toast(message, { icon: 'ℹ️' });
+  },
+
+  warning: (message: string) => {
+    toast(message, { icon: '⚠️' });
+  },
+
   loading: (message: string) => {
     return toast.loading(message);
   },

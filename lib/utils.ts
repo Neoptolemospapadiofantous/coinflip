@@ -85,11 +85,14 @@ export function formatTxHash(hash: string): string {
 // Get block explorer URL
 export function getBlockExplorerUrl(chainId: number, hash: string, type: 'tx' | 'address'): string {
   const explorers: Record<number, string> = {
-    137: 'https://polygonscan.com', // Polygon Mainnet
-    80001: 'https://mumbai.polygonscan.com', // Mumbai Testnet
+    1: 'https://etherscan.io',         // Ethereum Mainnet
+    11155111: 'https://sepolia.etherscan.io', // Sepolia Testnet
+    137: 'https://polygonscan.com',     // Polygon Mainnet
+    80001: 'https://mumbai.polygonscan.com', // Mumbai Testnet (deprecated)
+    80002: 'https://amoy.polygonscan.com',   // Amoy Testnet
   };
 
-  const baseUrl = explorers[chainId] || explorers[80001];
+  const baseUrl = explorers[chainId] || explorers[11155111]; // Default to Sepolia
   return `${baseUrl}/${type}/${hash}`;
 }
 
@@ -124,32 +127,19 @@ export function getCoinSideEmoji(side: boolean): string {
 }
 
 /**
- * Check if a pending game has timed out
- * Games timeout after 20 minutes of no activity
+ * Chainlink Automation auto-cancel timeout
+ * Contract uses TIMEOUT_BLOCKS = 25 (~5 minutes on Sepolia @ 12s/block)
  */
-export function isGameTimedOut(createdAt: string): boolean {
-  const TIMEOUT_MS = 20 * 60 * 1000; // 20 minutes
-  const now = new Date().getTime();
-  const created = new Date(createdAt).getTime();
-  return (now - created) > TIMEOUT_MS;
-}
+const AUTO_CANCEL_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes
 
 /**
- * Get remaining time until game timeout
+ * Check if a pending game is eligible for Chainlink auto-cancel
+ * (past the 5 minute threshold)
  */
-export function getTimeoutRemaining(createdAt: string): string {
-  const TIMEOUT_MS = 20 * 60 * 1000; // 20 minutes
+export function isGameAutoCancelEligible(createdAt: string): boolean {
   const now = new Date().getTime();
   const created = new Date(createdAt).getTime();
-  const elapsed = now - created;
-  const remaining = Math.max(0, TIMEOUT_MS - elapsed);
-
-  const minutes = Math.floor(remaining / 60000);
-  const seconds = Math.floor((remaining % 60000) / 1000);
-
-  if (remaining === 0) return 'Expired';
-  if (minutes > 0) return `${minutes}m ${seconds}s`;
-  return `${seconds}s`;
+  return (now - created) > AUTO_CANCEL_TIMEOUT_MS;
 }
 
 /**

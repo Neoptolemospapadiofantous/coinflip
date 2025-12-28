@@ -1,8 +1,21 @@
 // This file runs once when the server starts
-// Perfect place for global polyfills
+// Perfect place for global polyfills and environment validation
 
 export async function register() {
   if (typeof window === 'undefined') {
+    // Validate environment variables at startup (server-side only)
+    try {
+      const { validateEnv } = await import('@/lib/env');
+      validateEnv();
+      console.log('✅ Environment variables validated');
+    } catch (error) {
+      console.error('❌ Environment validation failed:', error);
+      // In production, fail fast. In development, warn but continue.
+      if (process.env.NODE_ENV === 'production') {
+        throw error;
+      }
+    }
+
     // Polyfill indexedDB for WalletConnect during SSR
     // These are minimal polyfills to prevent SSR errors
     // @ts-expect-error - Minimal polyfill for SSR compatibility
