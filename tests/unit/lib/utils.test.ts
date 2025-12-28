@@ -16,7 +16,7 @@ import {
   isValidAddress,
   formatTxHash,
   formatRelativeTime,
-  isGameTimedOut,
+  isGameAutoCancelEligible,
 } from '@/lib/utils';
 
 describe('lib/utils', () => {
@@ -168,15 +168,21 @@ describe('lib/utils', () => {
     });
   });
 
-  describe('isGameTimedOut', () => {
+  describe('isGameAutoCancelEligible', () => {
     it('should return false for recent game', () => {
       const recentDate = new Date().toISOString();
-      expect(isGameTimedOut(recentDate)).toBe(false);
+      expect(isGameAutoCancelEligible(recentDate)).toBe(false);
     });
 
-    it('should return true for old game (>20 min)', () => {
-      const oldDate = new Date(Date.now() - 25 * 60 * 1000).toISOString();
-      expect(isGameTimedOut(oldDate)).toBe(true);
+    it('should return true for game older than 5 minutes', () => {
+      const oldDate = new Date(Date.now() - 6 * 60 * 1000).toISOString();
+      expect(isGameAutoCancelEligible(oldDate)).toBe(true);
+    });
+
+    it('should return false for game exactly at 5 minutes', () => {
+      // At exactly 5 minutes, should still be false (need to be OVER 5 min)
+      const atLimitDate = new Date(Date.now() - 5 * 60 * 1000).toISOString();
+      expect(isGameAutoCancelEligible(atLimitDate)).toBe(false);
     });
   });
 });
