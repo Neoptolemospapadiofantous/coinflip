@@ -92,12 +92,49 @@ export function isValidGame(obj: unknown): obj is Game {
 }
 
 /**
+ * Normalize game object from database/realtime
+ * Converts numeric fields to strings where needed (Supabase sends numbers for bigint columns)
+ */
+function normalizeGame(obj: Record<string, unknown>): Record<string, unknown> {
+  const normalized = { ...obj };
+
+  // Convert numeric ID to string (Supabase realtime sends numbers)
+  if (typeof normalized.id === 'number') {
+    normalized.id = String(normalized.id);
+  }
+
+  // Convert numeric block numbers to strings
+  if (typeof normalized.block_number === 'number') {
+    normalized.block_number = String(normalized.block_number);
+  }
+  if (typeof normalized.matched_block_number === 'number') {
+    normalized.matched_block_number = String(normalized.matched_block_number);
+  }
+  if (typeof normalized.resolved_block_number === 'number') {
+    normalized.resolved_block_number = String(normalized.resolved_block_number);
+  }
+  if (typeof normalized.cancelled_block_number === 'number') {
+    normalized.cancelled_block_number = String(normalized.cancelled_block_number);
+  }
+
+  return normalized;
+}
+
+/**
  * Validate and cast an unknown object to Game
  * Returns the Game if valid, null otherwise
  */
 export function parseGame(obj: unknown): Game | null {
-  if (isValidGame(obj)) {
-    return obj;
+  if (typeof obj !== 'object' || obj === null) {
+    console.warn('Invalid game object received (not an object):', obj);
+    return null;
+  }
+
+  // Normalize the object first (convert numeric fields)
+  const normalized = normalizeGame(obj as Record<string, unknown>);
+
+  if (isValidGame(normalized)) {
+    return normalized;
   }
   console.warn('Invalid game object received:', obj);
   return null;
