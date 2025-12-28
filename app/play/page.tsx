@@ -55,7 +55,7 @@ export default function PlayPage() {
     isGameCancelling,
   } = useGameStore();
   const { createGame, isLoading, isSuccess, txHash, error, reset: resetCreateGame } = useCreateGame();
-  const { cancelGame, isLoading: isCancelling, error: cancelError, isSuccess: cancelSuccess, reset: resetCancelState } = useCancelGame();
+  const { cancelGame, isLoading: isCancelling, error: cancelError, isSuccess: cancelSuccess, wasRejected: cancelWasRejected, reset: resetCancelState } = useCancelGame();
   const { data: tiers } = useTiers();
   const activeGames = useActiveGamesList();
   const queryClient = useQueryClient();
@@ -65,6 +65,7 @@ export default function PlayPage() {
   const isMatchedRef = useRef(false);
   const mountedRef = useRef(true);
   const cancelTrackingRef = useRef<(() => void) | null>(null);
+  const cancellingGameIdRef = useRef<string | null>(null);
 
   const currentTier = tiers?.find((t) => t.id === selectedTier);
   const activeGamesCount = getActiveGamesCount();
@@ -155,29 +156,43 @@ export default function PlayPage() {
 
   // Handle cancel success/failure
   useEffect(() => {
-    if (cancelSuccess && mountedRef.current && trackedGame?.id) {
-      console.log('🎮 Game cancelled successfully');
-      finishCancellingGame(trackedGame.id, true);
+    if (cancelSuccess && mountedRef.current && cancellingGameIdRef.current) {
+      const gameId = cancellingGameIdRef.current;
+      console.log('🎮 Game cancelled successfully:', gameId);
+      finishCancellingGame(gameId, true);
 
       // Invalidate all game queries for real-time sync across pages
-      invalidateGameQueries(queryClient, trackedGame.id);
+      invalidateGameQueries(queryClient, gameId);
 
       // Show success toast
       showToast.success('Game cancelled - bet refunded');
 
+      cancellingGameIdRef.current = null;
       cancelTracking();
       handleReset();
     }
-  }, [cancelSuccess, cancelTracking, handleReset, finishCancellingGame, trackedGame?.id, queryClient]);
+  }, [cancelSuccess, cancelTracking, handleReset, finishCancellingGame, queryClient]);
 
   // Handle cancel error - revert optimistic update
   useEffect(() => {
-    if (cancelError && mountedRef.current && trackedGame?.id) {
+    if (cancelError && mountedRef.current && cancellingGameIdRef.current) {
       console.log('🎮 Game cancel failed, reverting');
-      finishCancellingGame(trackedGame.id, false);
+      finishCancellingGame(cancellingGameIdRef.current, false);
       isCancellingRef.current = false;
+      cancellingGameIdRef.current = null;
     }
-  }, [cancelError, finishCancellingGame, trackedGame?.id]);
+  }, [cancelError, finishCancellingGame]);
+
+  // Handle user rejection - silently revert without error
+  useEffect(() => {
+    if (cancelWasRejected && mountedRef.current && cancellingGameIdRef.current) {
+      console.log('🎮 Cancel rejected by user, reverting UI for game:', cancellingGameIdRef.current);
+      finishCancellingGame(cancellingGameIdRef.current, false);
+      isCancellingRef.current = false;
+      cancellingGameIdRef.current = null;
+      resetCancelState();
+    }
+  }, [cancelWasRejected, finishCancellingGame, resetCancelState]);
 
   // Reset matched ref when tracked game changes
   useEffect(() => {
@@ -218,6 +233,7 @@ export default function PlayPage() {
     }
 
     isCancellingRef.current = true;
+    cancellingGameIdRef.current = trackedGame.id;
     // Optimistic UI update - mark as cancelling immediately
     startCancellingGame(trackedGame.id);
     cancelGame(trackedGame.id);
@@ -623,7 +639,7 @@ export default function PlayPage() {
                               ) : (
                                 <X className="w-4 h-4 mr-2" />
                               )}
-                              Cancel Game
+                              Cancel & Refund
                             </Button>
                             {canCreate && (
                               <Button
@@ -659,10 +675,10 @@ export default function PlayPage() {
                           )}
 
                           {/* Info */}
-                          <Text size="1" color="gray" align="center" style={{ maxWidth: '300px' }}>
+                          <Text size="1" color="gray" align="center" style={{ maxWidth: '320px' }}>
                             {canCreate
-                              ? "Your game is live! Create more games while waiting, or wait for an opponent."
-                              : "Your game is live! When someone joins, the coin flip happens automatically."}
+                              ? "Cancel anytime for instant refund, or auto-refund in 5 min. Create more games while waiting!"
+                              : "Cancel anytime for instant refund. If no one joins, Chainlink auto-refunds after 5 minutes."}
                           </Text>
 
                           {/* Active Games Count */}

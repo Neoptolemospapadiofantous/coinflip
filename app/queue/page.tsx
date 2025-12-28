@@ -109,7 +109,7 @@ export default function QueuePage() {
   const { data: pendingGames, isLoading: isLoadingGames, refetch } = usePendingGames();
   const { data: gameStats } = useGameStats();
   const { joinGame, isLoading, isConfirming, isSuccess, txHash, error, reset: resetJoinState } = useJoinGame();
-  const { cancelGame, isLoading: isCanceling, isSuccess: isCancelSuccess, error: cancelError, reset: resetCancelState } = useCancelGame();
+  const { cancelGame, isLoading: isCanceling, isSuccess: isCancelSuccess, error: cancelError, wasRejected: cancelWasRejected, reset: resetCancelState } = useCancelGame();
   const { formatTimeRemaining } = useGameTimeout();
   const { isConnected: isLive, isConnecting } = useConnectionStatus();
   const [selectedGame, setSelectedGame] = useState<SelectedGame | null>(null);
@@ -191,6 +191,16 @@ export default function QueuePage() {
       invalidateGameQueries(queryClient);
     }
   }, [cancelError, cancelingGameId, resetCancelState, finishCancellingGame, queryClient]);
+
+  // Handle user rejection - silently revert without error
+  useEffect(() => {
+    if (cancelWasRejected && cancelingGameId) {
+      console.log('🎮 Cancel rejected by user, reverting UI for game:', cancelingGameId);
+      finishCancellingGame(cancelingGameId, false);
+      setCancelingGameId(null);
+      resetCancelState();
+    }
+  }, [cancelWasRejected, cancelingGameId, resetCancelState, finishCancellingGame]);
 
   // Separate user's games from other games, excluding games being cancelled or joined
   const myPendingGames = pendingGames?.filter(
@@ -404,13 +414,13 @@ export default function QueuePage() {
 
                           <Flex justify="between" align="center">
                             <Flex direction="column" gap="1">
+                              <Text size="1" color="gray">Your choice: {game.creator_choice ? 'Tails 🪙' : 'Heads 👑'}</Text>
                               <Flex align="center" gap="2">
-                                <Clock className="w-3 h-3 text-yellow-400" />
-                                <Text size="1" className="text-yellow-400" weight="bold">
-                                  Expires in: {formatTimeRemaining(game.id)}
+                                <Clock className="w-3 h-3 text-gray-400" />
+                                <Text size="1" color="gray">
+                                  Auto-refund in: {formatTimeRemaining(game.id)}
                                 </Text>
                               </Flex>
-                              <Text size="1" color="gray">Your choice: {game.creator_choice ? 'Tails 🪙' : 'Heads 👑'}</Text>
                             </Flex>
                             {cancelingGameId === game.id ? (
                               <Badge color="yellow" size="2">
@@ -426,15 +436,15 @@ export default function QueuePage() {
                                 disabled={isCanceling}
                               >
                                 <XCircle className="w-4 h-4" />
-                                Cancel Game
+                                Cancel Now
                               </Button>
                             )}
                           </Flex>
 
-                          <Card variant="surface" className="bg-blue-500/5 border border-blue-500/20">
+                          <Card variant="surface" className="bg-green-500/5 border border-green-500/20">
                             <Flex direction="column" gap="1" p="2">
-                              <Text size="1" color="blue">
-                                💡 Your game is visible to other players. You can cancel anytime for a full refund if no one has joined yet.
+                              <Text size="1" color="green">
+                                ✓ You can cancel immediately for a full refund. Or wait - Chainlink will auto-refund after 5 minutes if no one joins.
                               </Text>
                             </Flex>
                           </Card>

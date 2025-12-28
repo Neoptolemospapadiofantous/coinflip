@@ -5,7 +5,7 @@ import { Container, Section, Heading, Card, Flex, Text, Grid, Badge, Table, Butt
 import { useAccount } from 'wagmi';
 import { usePlayerGames, usePlayerStats } from '@/hooks/useGames';
 import { useTiers } from '@/hooks/useTiers';
-import { formatCurrency, formatRelativeTime, formatGameId, getCoinSideLabel } from '@/lib/utils';
+import { formatCurrency, formatRelativeTime, formatGameId, getCoinSideLabel, formatTxHash, getBlockExplorerUrl } from '@/lib/utils';
 import { useMemo, useState } from 'react';
 import {
   AreaChart,
@@ -22,11 +22,13 @@ import {
   Legend,
   ResponsiveContainer,
 } from 'recharts';
-import { TrendingUp, TrendingDown, Trophy, Target, DollarSign, Percent } from 'lucide-react';
+import { TrendingUp, TrendingDown, Trophy, Target, DollarSign, Percent, ExternalLink } from 'lucide-react';
+import { useChainId } from 'wagmi';
 import Link from 'next/link';
 
 export default function HistoryPage() {
   const { address } = useAccount();
+  const chainId = useChainId();
   const { data: games = [], isLoading: isLoadingGames } = usePlayerGames(address, 100);
   const { data: tiers = [] } = useTiers();
   const [chartFilter, setChartFilter] = useState<string>('10');
@@ -416,6 +418,7 @@ export default function HistoryPage() {
                           <Table.ColumnHeaderCell>Status</Table.ColumnHeaderCell>
                           <Table.ColumnHeaderCell>Amount</Table.ColumnHeaderCell>
                           <Table.ColumnHeaderCell>Result</Table.ColumnHeaderCell>
+                          <Table.ColumnHeaderCell>TX</Table.ColumnHeaderCell>
                           <Table.ColumnHeaderCell>Time</Table.ColumnHeaderCell>
                         </Table.Row>
                       </Table.Header>
@@ -426,6 +429,7 @@ export default function HistoryPage() {
                             <Table.Cell><Skeleton className="h-5 w-16 rounded-full" /></Table.Cell>
                             <Table.Cell><Skeleton className="h-4 w-20" /></Table.Cell>
                             <Table.Cell><Skeleton className="h-4 w-24" /></Table.Cell>
+                            <Table.Cell><Skeleton className="h-4 w-20" /></Table.Cell>
                             <Table.Cell><Skeleton className="h-4 w-16" /></Table.Cell>
                           </Table.Row>
                         ))}
@@ -452,6 +456,7 @@ export default function HistoryPage() {
                           <Table.ColumnHeaderCell>Status</Table.ColumnHeaderCell>
                           <Table.ColumnHeaderCell>Amount</Table.ColumnHeaderCell>
                           <Table.ColumnHeaderCell>Result</Table.ColumnHeaderCell>
+                          <Table.ColumnHeaderCell>TX</Table.ColumnHeaderCell>
                           <Table.ColumnHeaderCell>Time</Table.ColumnHeaderCell>
                         </Table.Row>
                       </Table.Header>
@@ -461,6 +466,8 @@ export default function HistoryPage() {
                             game.status === 'resolved' &&
                             game.winner_address?.toLowerCase() === address?.toLowerCase();
                           const isCreator = game.creator_address.toLowerCase() === address.toLowerCase();
+                          // Get the most relevant tx hash (resolved > matched > created)
+                          const txHash = game.resolved_tx_hash || game.matched_tx_hash || game.tx_hash;
 
                           return (
                             <Table.Row key={game.id}>
@@ -503,6 +510,21 @@ export default function HistoryPage() {
                                   </Flex>
                                 ) : (
                                   <Text color="gray">Pending</Text>
+                                )}
+                              </Table.Cell>
+                              <Table.Cell>
+                                {txHash ? (
+                                  <a
+                                    href={getBlockExplorerUrl(chainId, txHash, 'tx')}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="flex items-center gap-1 text-cyan-400 hover:text-cyan-300 transition-colors"
+                                  >
+                                    <code className="text-xs">{formatTxHash(txHash)}</code>
+                                    <ExternalLink className="w-3 h-3" />
+                                  </a>
+                                ) : (
+                                  <Text size="1" color="gray">-</Text>
                                 )}
                               </Table.Cell>
                               <Table.Cell>

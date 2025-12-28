@@ -17,7 +17,7 @@ import { Layout } from '@/components/layout/Layout';
 import Link from 'next/link';
 import { useGameStats } from '@/hooks/useGames';
 import { useTiers } from '@/hooks/useTiers';
-import { formatNumber } from '@/lib/utils';
+import { GlobalStatsGrid } from '@/components/stats/StatsCards';
 
 export default function Home() {
   const { data: gameStats } = useGameStats();
@@ -63,21 +63,15 @@ export default function Home() {
               </Button>
             </Flex>
 
-            {/* Stats */}
-            <Grid columns="3" gap="4" width="100%" className="max-w-2xl mt-8">
-              <StatCard
-                label="Total Volume"
-                value={gameStats?.total_payouts ? `${formatNumber(Number(gameStats.total_payouts) / 1e18)} ETH` : '...'}
+            {/* Global Stats Grid */}
+            <Box className="w-full max-w-4xl mt-8">
+              <GlobalStatsGrid
+                totalGames={gameStats?.total_games ?? 0}
+                activePlayers={gameStats?.unique_players ?? 0}
+                totalVolume={gameStats?.total_payouts?.toString() ?? '0'}
+                avgWinRate={50} // Coinflip is always 50/50
               />
-              <StatCard
-                label="Games Played"
-                value={gameStats?.total_games ? formatNumber(gameStats.total_games) : '...'}
-              />
-              <StatCard
-                label="Resolved"
-                value={gameStats?.resolved_count ? formatNumber(gameStats.resolved_count) : '...'}
-              />
-            </Grid>
+            </Box>
 
             {/* Features Grid */}
             <Grid columns={{ initial: '1', md: '3' }} gap="4" width="100%" className="mt-12">
@@ -140,21 +134,6 @@ export default function Home() {
         </Container>
       </Section>
     </Layout>
-  );
-}
-
-function StatCard({ label, value }: { label: string; value: string }) {
-  return (
-    <Card className="card-simple card-hover border-cyan-500/60 animate-slide-up">
-      <Flex direction="column" gap="1" p="3" align="center">
-        <Text size="1" color="gray" weight="medium">
-          {label}
-        </Text>
-        <Heading size="5" className="text-gradient-cyan-purple">
-          {value}
-        </Heading>
-      </Flex>
-    </Card>
   );
 }
 

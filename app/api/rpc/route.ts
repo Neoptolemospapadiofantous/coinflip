@@ -1,50 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { RateLimiter, sanitizeJson } from '@/lib/security';
 
 // =============================================================
-// RATE LIMITING
+// RATE LIMITING (using centralized RateLimiter from lib/security)
 // =============================================================
 
-// Simple in-memory rate limiter (for single-instance deployments)
-// For distributed systems, use Redis or similar
-const rateLimitMap = new Map<string, { count: number; resetTime: number }>();
-const RATE_LIMIT_WINDOW_MS = 60000; // 1 minute
-const RATE_LIMIT_MAX_REQUESTS = 100; // 100 requests per minute per IP
+// Create rate limiter: 100 requests per minute per IP
+const rateLimiter = new RateLimiter(100, 60000);
 
 // Cleanup old entries periodically (every 5 minutes)
-const CLEANUP_INTERVAL_MS = 300000;
-let lastCleanup = Date.now();
-
-function cleanupRateLimitMap() {
-  const now = Date.now();
-  if (now - lastCleanup < CLEANUP_INTERVAL_MS) return;
-
-  lastCleanup = now;
-  for (const [key, value] of rateLimitMap.entries()) {
-    if (now > value.resetTime) {
-      rateLimitMap.delete(key);
-    }
-  }
-}
-
-function isRateLimited(clientId: string): boolean {
-  cleanupRateLimitMap();
-
-  const now = Date.now();
-  const entry = rateLimitMap.get(clientId);
-
-  if (!entry || now > entry.resetTime) {
-    // New window
-    rateLimitMap.set(clientId, { count: 1, resetTime: now + RATE_LIMIT_WINDOW_MS });
-    return false;
-  }
-
-  entry.count++;
-  if (entry.count > RATE_LIMIT_MAX_REQUESTS) {
-    return true;
-  }
-
-  return false;
-}
+setInterval(() => rateLimiter.cleanup(), 300000);
 
 // Get client identifier (IP address)
 function getClientId(request: NextRequest): string {
@@ -144,9 +109,9 @@ function isValidJsonRpcResponse(data: unknown): data is { jsonrpc: string; id: u
 
 export async function POST(request: NextRequest) {
   try {
-    // Rate limiting check
+    // Rate limiting check using centralized RateLimiter
     const clientId = getClientId(request);
-    if (isRateLimited(clientId)) {
+    if (!rateLimiter.isAllowed(clientId)) {
       return addSecurityHeaders(NextResponse.json(
         { jsonrpc: '2.0', error: { code: -32005, message: 'Rate limit exceeded. Please try again later.' }, id: null },
         { status: 429 }
@@ -163,7 +128,16 @@ export async function POST(request: NextRequest) {
       ));
     }
 
-    const body = await request.json();
+    // Parse and sanitize JSON request body
+    const rawBody = await request.json();
+    const body = sanitizeJson(rawBody, 5); // Max depth of 5 for RPC requests
+
+    if (!body) {
+      return addSecurityHeaders(NextResponse.json(
+        { jsonrpc: '2.0', error: { code: -32600, message: 'Invalid JSON' }, id: null },
+        { status: 400 }
+      ));
+    }
 
     // Validate JSON-RPC request structure
     if (!isValidJsonRpcRequest(body)) {
