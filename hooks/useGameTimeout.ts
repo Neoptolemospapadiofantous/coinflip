@@ -1,50 +1,34 @@
 'use client';
 
-import { useEffect, useRef, useCallback, useMemo } from 'react';
+import { useCallback, useMemo, useEffect, useRef } from 'react';
 import { useAccount } from 'wagmi';
+import { useQueryClient } from '@tanstack/react-query';
 import { useGameStore } from '@/store/gameStore';
 import { Game } from '@/types/game';
 
-// Game timeout in milliseconds (20 minutes - matches contract TIMEOUT_BLOCKS = 100)
-// On Sepolia: ~12 sec/block × 100 blocks = ~20 minutes
-const GAME_TIMEOUT_MS = 20 * 60 * 1000;
-// Check interval (every 30 seconds)
-const CHECK_INTERVAL_MS = 30 * 1000;
+// Chainlink Automation auto-cancels after 5 minutes (25 blocks on Sepolia @ 12s/block)
+// This is for UI display purposes only - actual cancellation is on-chain
+const AUTO_CANCEL_MS = 5 * 60 * 1000;
 
-// Persist expired game IDs across component lifecycles to prevent duplicate modals
-// Limit size to prevent memory leak - oldest entries removed when over limit
-const MAX_EXPIRED_CACHE_SIZE = 50;
-const globalExpiredGameIds = new Set<string>();
-
-function addToExpiredCache(gameId: string) {
-  // If cache is full, remove oldest entries (first ones added)
-  if (globalExpiredGameIds.size >= MAX_EXPIRED_CACHE_SIZE) {
-    const iterator = globalExpiredGameIds.values();
-    const oldest = iterator.next().value;
-    if (oldest) globalExpiredGameIds.delete(oldest);
-  }
-  globalExpiredGameIds.add(gameId);
-}
-
-// TimeoutInfo interface for potential future use
-interface _TimeoutInfo {
-  gameId: string;
-  createdAt: Date;
-  timeoutAt: Date;
-}
+// Poll interval when games are past auto-cancel threshold (check if DB updated)
+const EXPIRED_POLL_INTERVAL_MS = 5000; // 5 seconds
 
 /**
- * Hook to monitor games that haven't been matched after 20 minutes
- * (matches contract TIMEOUT_BLOCKS = 100 blocks @ ~12 sec/block on Sepolia)
- * Shows a popup notification when a game expires (user must manually cancel)
+ * Hook to track time until Chainlink Automation auto-cancels pending games.
+ *
+ * NOTE: This hook is for UI display only. The actual auto-cancellation is
+ * handled by Chainlink Automation on-chain after TIMEOUT_BLOCKS (25 blocks).
+ *
+ * Creators can cancel their games immediately - no waiting required.
+ *
+ * When games pass the auto-cancel threshold, this hook polls for DB updates
+ * to ensure the UI reflects the on-chain state.
  */
 export function useGameTimeout() {
   const { address } = useAccount();
-  const { activeGames, queueModal, removeActiveGame: _removeActiveGame } = useGameStore();
-
-  // Use a ref instead of state to avoid re-render loops
-  const expiredGameIdsRef = useRef<Set<string>>(globalExpiredGameIds);
-  const mountedRef = useRef(true);
+  const { activeGames } = useGameStore();
+  const queryClient = useQueryClient();
+  const pollingRef = useRef<NodeJS.Timeout | null>(null);
 
   // Get user's pending games from active games (Map -> Array)
   const userPendingGames = useMemo(() => {
@@ -61,81 +45,33 @@ export function useGameTimeout() {
     return games;
   }, [activeGames, address]);
 
-  // Calculate pending timeouts from user pending games (pure transformation, use useMemo)
+  // Calculate pending timeouts from user pending games (for display only)
   const pendingTimeouts = useMemo(() => {
     return userPendingGames.map((game) => {
       const createdAt = new Date(game.created_at);
-      const timeoutAt = new Date(createdAt.getTime() + GAME_TIMEOUT_MS);
+      const autoCancelAt = new Date(createdAt.getTime() + AUTO_CANCEL_MS);
       return {
         gameId: game.id,
         createdAt,
-        timeoutAt,
+        autoCancelAt,
       };
     });
   }, [userPendingGames]);
 
-  // Check for expired games and show notification (no auto-cancel)
-  const checkExpiredGames = useCallback(() => {
-    if (!mountedRef.current) return;
-
-    const now = new Date();
-
-    for (const timeout of pendingTimeouts) {
-      // Skip if already notified about this game (check both local ref and global set)
-      if (expiredGameIdsRef.current.has(timeout.gameId)) continue;
-      if (globalExpiredGameIds.has(timeout.gameId)) continue;
-
-      if (now >= timeout.timeoutAt) {
-        console.log(`⏰ Game ${timeout.gameId} expired - showing notification`);
-
-        // Find the game to show in popup
-        const game = userPendingGames.find((g) => g.id === timeout.gameId);
-        if (game) {
-          // Mark as notified in both ref and global set (prevents duplicates across re-renders)
-          expiredGameIdsRef.current.add(timeout.gameId);
-          addToExpiredCache(timeout.gameId);
-
-          // Queue an expired modal (user needs to manually cancel for refund)
-          // Keep the original 'pending' status - don't fake it as cancelled
-          queueModal(game, 'expired');
-
-          // Don't remove from active games - user still needs to cancel
-          // removeActiveGame(timeout.gameId);
-        }
-      }
-    }
-  }, [pendingTimeouts, userPendingGames, queueModal]);
-
-  // Check for expired games periodically
-  useEffect(() => {
-    mountedRef.current = true;
-
-    // Initial check
-    checkExpiredGames();
-
-    // Set up interval
-    const interval = setInterval(checkExpiredGames, CHECK_INTERVAL_MS);
-
-    return () => {
-      mountedRef.current = false;
-      clearInterval(interval);
-    };
-  }, [checkExpiredGames]);
-
-  // Calculate time remaining for each pending game
+  // Calculate time remaining until Chainlink auto-cancel
   const getTimeRemaining = useCallback((gameId: string): number => {
     const timeout = pendingTimeouts.find((t) => t.gameId === gameId);
     if (!timeout) return 0;
 
     const now = new Date();
-    const remaining = timeout.timeoutAt.getTime() - now.getTime();
+    const remaining = timeout.autoCancelAt.getTime() - now.getTime();
     return Math.max(0, remaining);
   }, [pendingTimeouts]);
 
   // Format time remaining as string
   const formatTimeRemaining = useCallback((gameId: string): string => {
     const remaining = getTimeRemaining(gameId);
-    if (remaining <= 0) return 'Expired';
+    if (remaining <= 0) return 'Auto-cancelling...';
 
     const minutes = Math.floor(remaining / 60000);
     const seconds = Math.floor((remaining % 60000) / 1000);
@@ -146,10 +82,61 @@ export function useGameTimeout() {
     return `${seconds}s`;
   }, [getTimeRemaining]);
 
+  // Check if game is eligible for auto-cancel (past 5 min threshold)
+  const isAutoCancelEligible = useCallback((gameId: string): boolean => {
+    return getTimeRemaining(gameId) <= 0;
+  }, [getTimeRemaining]);
+
+  // Check if any games are past the auto-cancel threshold
+  const hasExpiredGames = useMemo(() => {
+    return pendingTimeouts.some(t => {
+      const now = new Date();
+      return now >= t.autoCancelAt;
+    });
+  }, [pendingTimeouts]);
+
+  // Poll for DB updates when games are past auto-cancel threshold
+  // This ensures UI updates even if realtime subscription misses the event
+  useEffect(() => {
+    if (!hasExpiredGames) {
+      // No expired games, stop polling
+      if (pollingRef.current) {
+        clearInterval(pollingRef.current);
+        pollingRef.current = null;
+      }
+      return;
+    }
+
+    // Start polling for DB updates
+    console.log('⏰ [useGameTimeout] Games past auto-cancel threshold, polling for updates...');
+
+    const poll = () => {
+      queryClient.invalidateQueries({ queryKey: ['games', 'pending'] });
+      queryClient.invalidateQueries({ queryKey: ['games', 'active'] });
+      if (address) {
+        queryClient.invalidateQueries({ queryKey: ['games', 'player', address] });
+      }
+    };
+
+    // Poll immediately
+    poll();
+
+    // Then poll every 5 seconds
+    pollingRef.current = setInterval(poll, EXPIRED_POLL_INTERVAL_MS);
+
+    return () => {
+      if (pollingRef.current) {
+        clearInterval(pollingRef.current);
+        pollingRef.current = null;
+      }
+    };
+  }, [hasExpiredGames, queryClient, address]);
+
   return {
     pendingTimeouts,
     getTimeRemaining,
     formatTimeRemaining,
-    expiredGameIds: expiredGameIdsRef.current,
+    isAutoCancelEligible,
+    hasExpiredGames,
   };
 }

@@ -3,6 +3,7 @@ import { COINFLIP_ABI, GameState } from '@/lib/contracts/abi';
 import { getCoinFlipAddress } from '@/lib/contracts/addresses';
 import { encodeFunctionData } from 'viem';
 import { useState, useRef, useEffect, useCallback } from 'react';
+import { isUserError } from '@/lib/errors';
 
 // Static gas limits - safe values that work on Sepolia
 const GAS_CAPS = {
@@ -159,8 +160,13 @@ export function useCreateGame() {
       console.log(`✅ Transaction sent: ${txHash.slice(0, 10)}...`);
       setHash(txHash);
     } catch (err) {
-      console.error('❌ Transaction failed:', err);
-      setWriteError(err as Error);
+      // Don't show error for user-initiated rejections
+      if (isUserError(err)) {
+        console.log('ℹ️ Transaction cancelled by user');
+      } else {
+        console.error('❌ Transaction failed:', err);
+        setWriteError(err as Error);
+      }
     } finally {
       setIsWriting(false);
     }
@@ -238,8 +244,13 @@ export function useJoinGame() {
       console.log(`✅ Transaction sent: ${txHash.slice(0, 10)}...`);
       setHash(txHash);
     } catch (err) {
-      console.error('❌ Transaction failed:', err);
-      setWriteError(err as Error);
+      // Don't show error for user-initiated rejections
+      if (isUserError(err)) {
+        console.log('ℹ️ Transaction cancelled by user');
+      } else {
+        console.error('❌ Transaction failed:', err);
+        setWriteError(err as Error);
+      }
     } finally {
       setIsWriting(false);
     }
@@ -269,6 +280,7 @@ export function useCancelGame() {
   const [isWriting, setIsWriting] = useState(false);
   const [writeError, setWriteError] = useState<Error | null>(null);
   const [isCooldown, setIsCooldown] = useState(false);
+  const [wasRejected, setWasRejected] = useState(false);
   const cooldownTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const mountedRef = useRef(true);
 
@@ -292,6 +304,7 @@ export function useCancelGame() {
     setHash(undefined);
     setWriteError(null);
     setIsWriting(false);
+    setWasRejected(false);
     // Don't reset cooldown on manual reset - it should expire naturally
   }, []);
 
@@ -348,8 +361,14 @@ export function useCancelGame() {
       console.log(`✅ Transaction sent: ${txHash.slice(0, 10)}...`);
       setHash(txHash);
     } catch (err) {
-      console.error('❌ Transaction failed:', err);
-      setWriteError(err as Error);
+      // Don't show error for user-initiated rejections
+      if (isUserError(err)) {
+        console.log('ℹ️ Transaction cancelled by user');
+        setWasRejected(true);
+      } else {
+        console.error('❌ Transaction failed:', err);
+        setWriteError(err as Error);
+      }
     } finally {
       setIsWriting(false);
     }
@@ -361,6 +380,7 @@ export function useCancelGame() {
     isSuccess,
     txHash: hash,
     error: writeError,
+    wasRejected,
     reset,
     isCooldown,
   };
@@ -420,8 +440,13 @@ export function useClaimVrfTimeout() {
       console.log(`✅ Transaction sent: ${txHash.slice(0, 10)}...`);
       setHash(txHash);
     } catch (err) {
-      console.error('❌ Transaction failed:', err);
-      setWriteError(err as Error);
+      // Don't show error for user-initiated rejections
+      if (isUserError(err)) {
+        console.log('ℹ️ Transaction cancelled by user');
+      } else {
+        console.error('❌ Transaction failed:', err);
+        setWriteError(err as Error);
+      }
     } finally {
       setIsWriting(false);
     }
