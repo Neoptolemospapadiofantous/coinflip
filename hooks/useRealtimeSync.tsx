@@ -148,6 +148,11 @@ export function useRealtimeSync() {
           } else if (!wasInPendingCache && isPending) {
             // Game became pending, refetch the list
             queryClientRef.current.invalidateQueries({ queryKey: ['games', 'pending'] });
+          } else if (!isPending && (game.status === 'cancelled' || game.status === 'matched' || game.status === 'resolved')) {
+            // Fallback: if game left pending state but wasn't in our cache, invalidate to refresh
+            // This handles cases where our cache was stale
+            console.log('🔄 [RealtimeSync] Game status changed, invalidating pending list:', game.id, '→', game.status);
+            queryClientRef.current.invalidateQueries({ queryKey: ['games', 'pending'] });
           }
 
           // Always update active games list on status change
