@@ -1,13 +1,14 @@
 'use client';
 
-import { useMemo } from 'react';
+import { useMemo, useState, useEffect } from 'react';
 import { Card, Flex, Heading, Text, Badge, ScrollArea } from '@radix-ui/themes';
 import { useActiveGamesList, useGameStore, MAX_CONCURRENT_GAMES } from '@/store/gameStore';
 import { Game } from '@/types/game';
-import { Users, Loader2, Trophy, ChevronRight, Wifi, WifiOff } from 'lucide-react';
+import { Users, Loader2, Trophy, ChevronRight, Wifi, WifiOff, Clock } from 'lucide-react';
 import { formatCurrency, formatGameId } from '@/lib/utils';
 import { useAccount } from 'wagmi';
 import { useConnectionStatus } from '@/hooks/useRealtimeSync';
+import { formatGameTimeRemaining, isGameWarning, isGameExpired } from '@/hooks/useGameTimeout';
 
 interface ActiveGameCardProps {
   game: Game;
@@ -20,10 +21,17 @@ function ActiveGameCard({ game, onViewGame, userAddress }: ActiveGameCardProps) 
   const isWinner = game.winner_address?.toLowerCase() === userAddress?.toLowerCase();
   const userChoice = isCreator ? game.creator_choice : game.joiner_choice;
 
+  // Time-based states for pending games
+  const warning = game.status === 'pending' && isGameWarning(game);
+  const expired = game.status === 'pending' && isGameExpired(game);
+
   const getStatusColor = () => {
+    if (game.status === 'pending') {
+      if (expired) return 'red';
+      if (warning) return 'orange';
+      return 'yellow';
+    }
     switch (game.status) {
-      case 'pending':
-        return 'yellow';
       case 'matched':
         return 'cyan';
       case 'resolved':
@@ -59,11 +67,16 @@ function ActiveGameCard({ game, onViewGame, userAddress }: ActiveGameCardProps) 
     }
   };
 
+  const getBorderClass = () => {
+    if (game.status === 'resolved' && isWinner) return 'border-green-500/50';
+    if (expired) return 'border-red-500/50';
+    if (warning) return 'border-yellow-500/50';
+    return '';
+  };
+
   return (
     <Card
-      className={`card-simple cursor-pointer hover:border-cyan-500/50 transition-all ${
-        game.status === 'resolved' && isWinner ? 'border-green-500/50' : ''
-      }`}
+      className={`card-simple cursor-pointer hover:border-cyan-500/50 transition-all ${getBorderClass()}`}
       onClick={() => onViewGame(game)}
     >
       <Flex direction="column" gap="2" p="3">
@@ -89,6 +102,16 @@ function ActiveGameCard({ game, onViewGame, userAddress }: ActiveGameCardProps) 
           <ChevronRight className="w-4 h-4 text-gray-500" />
         </Flex>
 
+        {/* Countdown timer for pending games */}
+        {game.status === 'pending' && (
+          <Flex align="center" gap="1">
+            <Clock className={`w-3 h-3 ${expired ? 'text-red-400' : warning ? 'text-yellow-400' : 'text-gray-400'}`} />
+            <Text size="1" className={expired ? 'text-red-400' : warning ? 'text-yellow-400' : 'text-gray-400'}>
+              {formatGameTimeRemaining(game)}
+            </Text>
+          </Flex>
+        )}
+
         {game.status === 'resolved' && (
           <Text size="1" className={isWinner ? 'text-green-400' : 'text-red-400'}>
             {isWinner ? `+${formatCurrency(BigInt(game.payout || 0))}` : `-${formatCurrency(BigInt(game.amount))}`}
@@ -104,6 +127,15 @@ export function ActiveGamesPanel() {
   const activeGames = useActiveGamesList();
   const { queueModal } = useGameStore();
   const { isConnected, isConnecting } = useConnectionStatus();
+  const [, setTick] = useState(0);
+
+  // Force re-render every second to update countdown timers
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setTick(t => t + 1);
+    }, 1000);
+    return () => clearInterval(interval);
+  }, []);
 
   // Real-time updates are handled centrally by useRealtimeSync (in Providers)
   // This component just displays the games from the Zustand store
