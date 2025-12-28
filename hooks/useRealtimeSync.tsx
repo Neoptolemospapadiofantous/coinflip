@@ -129,35 +129,41 @@ export function useRealtimeSync() {
             game.joiner_address?.toLowerCase() === userAddress
           );
 
+          // Get cached data BEFORE updating (to detect status changes)
+          const cachedGame = queryClientRef.current.getQueryData(['game', game.id]) as Game | undefined;
+          const cachedPendingGames = queryClientRef.current.getQueryData(['games', 'pending']) as Game[] | undefined;
+          const cachedStatus = cachedGame?.status || oldGame?.status;
+
           // Update specific game in cache
           queryClientRef.current.setQueryData(['game', game.id], game);
-
-          // Check if pending status changed
-          const wasPending = oldGame?.status === 'pending';
+          const wasInPendingCache = cachedPendingGames?.some(g => g.id === game.id) ?? false;
           const isPending = game.status === 'pending';
 
-          if (wasPending && !isPending) {
-            // Immediately remove from pending games cache (faster than invalidate)
+          // If game was in pending cache but is no longer pending, remove it immediately
+          if (wasInPendingCache && !isPending) {
+            console.log('🔄 [RealtimeSync] Removing game from pending cache:', game.id, '→', game.status);
             queryClientRef.current.setQueryData(['games', 'pending'], (old: Game[] | undefined) =>
               old?.filter(g => g.id !== game.id) || []
             );
-          } else if (!wasPending && isPending) {
+          } else if (!wasInPendingCache && isPending) {
             // Game became pending, refetch the list
             queryClientRef.current.invalidateQueries({ queryKey: ['games', 'pending'] });
           }
 
           // Always update active games list on status change
-          if (oldGame?.status !== game.status) {
-            queryClientRef.current.invalidateQueries({ queryKey: ['games', 'active'] });
-          }
+          queryClientRef.current.invalidateQueries({ queryKey: ['games', 'active'] });
 
           // If user is involved in this game
           if (isUserGame) {
+            // cachedStatus was read before cache update above
+            const statusChanged = cachedStatus !== game.status;
+
             // Update in store
             actionsRef.current.updateActiveGame(game);
 
             // Handle status transitions
-            if (oldGame?.status !== game.status) {
+            if (statusChanged) {
+              console.log('🔄 [RealtimeSync] User game status changed:', game.id, cachedStatus, '→', game.status);
               if (game.status === 'matched') {
                 actionsRef.current.queueModal(game, 'matched');
               } else if (game.status === 'resolved') {
