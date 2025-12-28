@@ -108,6 +108,7 @@ export function useCreateGame() {
   const [hash, setHash] = useState<`0x${string}` | undefined>();
   const [isWriting, setIsWriting] = useState(false);
   const [writeError, setWriteError] = useState<Error | null>(null);
+  const [wasRejected, setWasRejected] = useState(false);
 
   const { isLoading: isConfirming, isSuccess } = useWaitForTransactionReceipt({
     hash,
@@ -117,6 +118,7 @@ export function useCreateGame() {
     setHash(undefined);
     setWriteError(null);
     setIsWriting(false);
+    setWasRejected(false);
   };
 
   const createGame = async (tier: number, choice: boolean, amount: string) => {
@@ -163,6 +165,7 @@ export function useCreateGame() {
       // Don't show error for user-initiated rejections
       if (isUserError(err)) {
         console.log('ℹ️ Transaction cancelled by user');
+        setWasRejected(true);
       } else {
         console.error('❌ Transaction failed:', err);
         setWriteError(err as Error);
@@ -178,6 +181,7 @@ export function useCreateGame() {
     isSuccess,
     txHash: hash,
     error: writeError,
+    wasRejected,
     reset,
   };
 }

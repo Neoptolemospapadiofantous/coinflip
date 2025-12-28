@@ -30,7 +30,7 @@ import { useGameStore } from '@/store/gameStore';
 import { useGameTimeout } from '@/hooks/useGameTimeout';
 import { useConnectionStatus } from '@/hooks/useRealtimeSync';
 import { useQueryClient } from '@tanstack/react-query';
-import { invalidateGameQueries } from '@/lib/queryUtils';
+import { invalidateGameQueries, removeGameFromPendingCache } from '@/lib/queryUtils';
 import { showToast } from '@/lib/toast';
 import { playSound } from '@/lib/sounds';
 import { Game } from '@/types/game';
@@ -197,10 +197,12 @@ export default function QueuePage() {
     if (cancelWasRejected && cancelingGameId) {
       console.log('🎮 Cancel rejected by user, reverting UI for game:', cancelingGameId);
       finishCancellingGame(cancelingGameId, false);
+      // Refetch pending games to restore the optimistically removed game
+      invalidateGameQueries(queryClient, cancelingGameId);
       setCancelingGameId(null);
       resetCancelState();
     }
-  }, [cancelWasRejected, cancelingGameId, resetCancelState, finishCancellingGame]);
+  }, [cancelWasRejected, cancelingGameId, resetCancelState, finishCancellingGame, queryClient]);
 
   // Separate user's games from other games, excluding games being cancelled or joined
   const myPendingGames = pendingGames?.filter(
@@ -255,8 +257,10 @@ export default function QueuePage() {
     setCancelingGameId(gameId);
     // Optimistic UI update
     startCancellingGame(gameId);
+    // Optimistically remove from pending games cache for instant UI update
+    removeGameFromPendingCache(queryClient, gameId);
     cancelGame(gameId);
-  }, [cancelGame, resetCancelState, startCancellingGame, isGameCancelling, cancelingGameId]);
+  }, [cancelGame, resetCancelState, startCancellingGame, isGameCancelling, cancelingGameId, queryClient]);
 
   const handleDialogClose = useCallback((resetJoinedGame = true) => {
     setIsDialogOpen(false);
