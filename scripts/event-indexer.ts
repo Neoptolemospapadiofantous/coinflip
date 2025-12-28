@@ -144,6 +144,7 @@ const GAME_CREATED_EVENT = parseAbiItem('event GameCreated(uint256 indexed gameI
 const GAME_MATCHED_EVENT = parseAbiItem('event GameJoined(uint256 indexed gameId, address indexed joiner, uint256 totalPot)');
 const GAME_RESOLVED_EVENT = parseAbiItem('event GameResolved(uint256 indexed gameId, address indexed winner, address indexed loser, bool coinResult, uint256 payout)');
 const GAME_CANCELLED_EVENT = parseAbiItem('event GameCancelled(uint256 indexed gameId, address indexed creator, uint256 refundAmount)');
+const GAME_AUTO_CANCELLED_EVENT = parseAbiItem('event GameAutoCancelled(uint256 indexed gameId, address indexed creator, uint256 refundAmount, address indexed cancelledBy)');
 const VRF_TIMEOUT_EVENT = parseAbiItem('event VrfTimeoutClaimed(uint256 indexed gameId, address indexed playerA, address indexed playerB, uint256 refundAmount)');
 const EMERGENCY_REFUND_EVENT = parseAbiItem('event EmergencyRefund(uint256 indexed gameId, address indexed playerA, address indexed playerB, uint256 totalRefund)');
 
@@ -318,13 +319,36 @@ async function processGameResolved(log: any) {
   }
 }
 
-// Process GameCancelled event
+// Process GameCancelled event (manual cancel by creator)
 async function processGameCancelled(log: any) {
   const { gameId, creator } = log.args;
   const blockNumber = log.blockNumber;
   const txHash = log.transactionHash;
 
   console.log(`❌ GameCancelled: ID=${gameId}, Creator=${creator}`);
+
+  const { error } = await supabase
+    .from('games')
+    .update({
+      status: 'cancelled',
+      cancelled_tx_hash: txHash.toLowerCase(),
+      cancelled_block_number: blockNumber.toString(),
+      cancelled_at: new Date().toISOString(),
+    })
+    .eq('id', gameId.toString());
+
+  if (error) {
+    console.error('❌ Error updating game:', error);
+  }
+}
+
+// Process GameAutoCancelled event (Chainlink Automation auto-cancel after 5 min)
+async function processGameAutoCancelled(log: any) {
+  const { gameId, creator } = log.args;
+  const blockNumber = log.blockNumber;
+  const txHash = log.transactionHash;
+
+  console.log(`🤖 GameAutoCancelled (Chainlink): ID=${gameId}, Creator=${creator}`);
 
   const { error } = await supabase
     .from('games')
@@ -401,6 +425,7 @@ async function indexEvents(fromBlock: bigint, toBlock: bigint) {
   let allJoinedLogs: any[] = [];
   let allResolvedLogs: any[] = [];
   let allCancelledLogs: any[] = [];
+  let allAutoCancelledLogs: any[] = [];
   let allVrfTimeoutLogs: any[] = [];
   let allEmergencyRefundLogs: any[] = [];
 
@@ -412,7 +437,7 @@ async function indexEvents(fromBlock: bigint, toBlock: bigint) {
 
     try {
       // Fetch all events in parallel for this chunk
-      const [createdLogs, joinedLogs, resolvedLogs, cancelledLogs, vrfTimeoutLogs, emergencyRefundLogs] = await Promise.all([
+      const [createdLogs, joinedLogs, resolvedLogs, cancelledLogs, autoCancelledLogs, vrfTimeoutLogs, emergencyRefundLogs] = await Promise.all([
         publicClient.getLogs({
           address: CONTRACT_ADDRESS,
           event: GAME_CREATED_EVENT,
@@ -439,6 +464,12 @@ async function indexEvents(fromBlock: bigint, toBlock: bigint) {
         }),
         publicClient.getLogs({
           address: CONTRACT_ADDRESS,
+          event: GAME_AUTO_CANCELLED_EVENT,
+          fromBlock: start,
+          toBlock: end,
+        }),
+        publicClient.getLogs({
+          address: CONTRACT_ADDRESS,
           event: VRF_TIMEOUT_EVENT,
           fromBlock: start,
           toBlock: end,
@@ -455,6 +486,7 @@ async function indexEvents(fromBlock: bigint, toBlock: bigint) {
       allJoinedLogs = [...allJoinedLogs, ...joinedLogs];
       allResolvedLogs = [...allResolvedLogs, ...resolvedLogs];
       allCancelledLogs = [...allCancelledLogs, ...cancelledLogs];
+      allAutoCancelledLogs = [...allAutoCancelledLogs, ...autoCancelledLogs];
       allVrfTimeoutLogs = [...allVrfTimeoutLogs, ...vrfTimeoutLogs];
       allEmergencyRefundLogs = [...allEmergencyRefundLogs, ...emergencyRefundLogs];
 
@@ -478,6 +510,7 @@ async function indexEvents(fromBlock: bigint, toBlock: bigint) {
     ...allJoinedLogs.map(log => ({ ...log, type: 'joined' })),
     ...allResolvedLogs.map(log => ({ ...log, type: 'resolved' })),
     ...allCancelledLogs.map(log => ({ ...log, type: 'cancelled' })),
+    ...allAutoCancelledLogs.map(log => ({ ...log, type: 'auto_cancelled' })),
     ...allVrfTimeoutLogs.map(log => ({ ...log, type: 'vrf_timeout' })),
     ...allEmergencyRefundLogs.map(log => ({ ...log, type: 'emergency_refund' })),
   ].sort((a, b) => Number(a.blockNumber) - Number(b.blockNumber));
@@ -497,6 +530,9 @@ async function indexEvents(fromBlock: bigint, toBlock: bigint) {
           break;
         case 'cancelled':
           await processGameCancelled(log);
+          break;
+        case 'auto_cancelled':
+          await processGameAutoCancelled(log);
           break;
         case 'vrf_timeout':
           await processVrfTimeoutClaimed(log);

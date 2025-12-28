@@ -9,8 +9,12 @@
 // BLOCKCHAIN CONSTANTS (from smart contract)
 // ============================================
 
-/** Number of blocks before an unmatched game can be cancelled (~20 min on Sepolia at 12s/block) */
-export const TIMEOUT_BLOCKS = 100;
+/**
+ * Number of blocks before Chainlink Automation auto-cancels unmatched games.
+ * Note: Creator can cancel immediately - this is only for auto-cancel.
+ * ~5 min on Sepolia at 12s/block
+ */
+export const TIMEOUT_BLOCKS = 25;
 
 /** Number of blocks before VRF timeout can be claimed (~40 min on Sepolia) */
 export const VRF_TIMEOUT_BLOCKS = 200;
@@ -22,8 +26,11 @@ export const AVG_BLOCK_TIME_SECONDS = 12;
 // GAME TIMEOUT CONSTANTS
 // ============================================
 
-/** Game timeout in milliseconds (20 minutes) - matches TIMEOUT_BLOCKS */
-export const GAME_TIMEOUT_MS = 20 * 60 * 1000;
+/**
+ * Auto-cancel timeout in milliseconds (5 minutes) - matches TIMEOUT_BLOCKS.
+ * Creator can cancel immediately; Chainlink auto-cancels after this time.
+ */
+export const GAME_TIMEOUT_MS = 5 * 60 * 1000;
 
 /** Game timeout in seconds */
 export const GAME_TIMEOUT_SECONDS = GAME_TIMEOUT_MS / 1000;
@@ -90,16 +97,6 @@ export const GAS_LIMITS = {
 // ============================================
 // HELPER FUNCTIONS
 // ============================================
-
-/** Convert blocks to approximate time in milliseconds */
-export function blocksToMs(blocks: number): number {
-  return blocks * AVG_BLOCK_TIME_SECONDS * 1000;
-}
-
-/** Convert milliseconds to approximate blocks */
-export function msToBlocks(ms: number): number {
-  return Math.ceil(ms / (AVG_BLOCK_TIME_SECONDS * 1000));
-}
 
 /** Format milliseconds to human-readable time string */
 export function formatTimeRemaining(ms: number): string {
