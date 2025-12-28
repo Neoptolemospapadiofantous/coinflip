@@ -27,7 +27,7 @@ import Link from 'next/link';
 import { StatusBadge } from '@/components/game/StatusBadge';
 import { useCancelGame } from '@/hooks/useContract';
 import { useGameStore } from '@/store/gameStore';
-import { useGameTimeout } from '@/hooks/useGameTimeout';
+import { useGameTimeout, formatGameTimeRemaining, isGameWarning, isGameExpired } from '@/hooks/useGameTimeout';
 import { useConnectionStatus } from '@/hooks/useRealtimeSync';
 import { useQueryClient } from '@tanstack/react-query';
 import { invalidateGameQueries, removeGameFromPendingCache } from '@/lib/queryUtils';
@@ -51,7 +51,7 @@ function formatTimeAgo(createdAt: string, now: number): string {
 }
 
 // Helper to parse join game errors into user-friendly messages
-function parseJoinError(error: Error | null): { title: string; message: string } {
+function parseJoinError(error: Error | null): { title: string; message: string; isExpired?: boolean } {
   if (!error) return { title: '', message: '' };
 
   const msg = error.message.toLowerCase();
@@ -64,11 +64,20 @@ function parseJoinError(error: Error | null): { title: string; message: string }
     };
   }
 
+  // Game cancelled/expired (auto-cancel by Chainlink)
+  if (msg.includes('gamecancelled') || msg.includes('game cancelled') || msg.includes('game expired')) {
+    return {
+      title: 'Game Expired',
+      message: 'This game was auto-cancelled because no one joined in time. Try another game!',
+      isExpired: true,
+    };
+  }
+
   // Game already matched (someone else joined)
   if (msg.includes('invalidgamestate') || msg.includes('game state') || msg.includes('not open')) {
     return {
       title: 'Game No Longer Available',
-      message: 'This game was joined by another player. Try joining a different game.',
+      message: 'This game was joined by another player or cancelled. Try joining a different game.',
     };
   }
 
@@ -84,7 +93,7 @@ function parseJoinError(error: Error | null): { title: string; message: string }
   if (msg.includes('gas') || msg.includes('execution reverted')) {
     return {
       title: 'Transaction Failed',
-      message: 'The game may have already been joined by another player.',
+      message: 'The game may have been joined by another player or auto-cancelled.',
     };
   }
 
@@ -525,7 +534,7 @@ export default function QueuePage() {
                         <Table.ColumnHeaderCell>Tier</Table.ColumnHeaderCell>
                         <Table.ColumnHeaderCell>Amount</Table.ColumnHeaderCell>
                         <Table.ColumnHeaderCell>Creator</Table.ColumnHeaderCell>
-                        <Table.ColumnHeaderCell>Time</Table.ColumnHeaderCell>
+                        <Table.ColumnHeaderCell>Time Left</Table.ColumnHeaderCell>
                         <Table.ColumnHeaderCell>Action</Table.ColumnHeaderCell>
                       </Table.Row>
                     </Table.Header>
@@ -533,11 +542,19 @@ export default function QueuePage() {
                     <Table.Body>
                       {otherPendingGames.map((game, index) => {
                         const tier = tiers?.find((t) => t.id === game.tier);
+                        const expired = isGameExpired(game);
+                        const warning = isGameWarning(game);
 
                         return (
                           <Table.Row
                             key={game.id}
-                            className="animate-fade-in hover:bg-slate-700/30 transition-colors"
+                            className={`animate-fade-in transition-colors ${
+                              expired
+                                ? 'bg-red-500/10 hover:bg-red-500/20 opacity-75'
+                                : warning
+                                  ? 'bg-yellow-500/10 hover:bg-yellow-500/20'
+                                  : 'hover:bg-slate-700/30'
+                            }`}
                             style={{ animationDelay: `${index * 0.05}s` }}
                           >
                             <Table.Cell>
@@ -561,12 +578,18 @@ export default function QueuePage() {
                               </Text>
                             </Table.Cell>
                             <Table.Cell>
-                              <Flex align="center" gap="1">
-                                <Clock className="w-3 h-3 text-gray-500" />
-                                <Text size="2" color="gray">
-                                  {formatTimeAgo(game.created_at, now)}
-                                </Text>
-                              </Flex>
+                              {(() => {
+                                const expired = isGameExpired(game);
+                                const warning = isGameWarning(game);
+                                return (
+                                  <Flex align="center" gap="1">
+                                    <Clock className={`w-3 h-3 ${expired ? 'text-red-400' : warning ? 'text-yellow-400' : 'text-gray-500'}`} />
+                                    <Text size="2" className={expired ? 'text-red-400' : warning ? 'text-yellow-400' : 'text-gray-400'}>
+                                      {formatGameTimeRemaining(game)}
+                                    </Text>
+                                  </Flex>
+                                );
+                              })()}
                             </Table.Cell>
                             <Table.Cell>
                               {joinedGameId === game.id ? (
@@ -574,13 +597,18 @@ export default function QueuePage() {
                                   <Loader2 className="w-3 h-3 animate-spin" />
                                   Joining...
                                 </Badge>
+                              ) : expired ? (
+                                <Badge color="red" size="2" variant="soft">
+                                  Expiring...
+                                </Badge>
                               ) : (
                                 <Button
                                   size="2"
                                   onClick={() => handleJoinClick(game, tier!)}
                                   disabled={isLoading || isConfirming}
+                                  color={warning ? 'yellow' : undefined}
                                 >
-                                  Join Game
+                                  {warning ? 'Join Now!' : 'Join Game'}
                                 </Button>
                               )}
                             </Table.Cell>
@@ -635,6 +663,23 @@ export default function QueuePage() {
                 </Flex>
               </Flex>
             </Card>
+
+            {/* Expiry Warning */}
+            {!isSuccess && !isLoading && selectedGame && isGameWarning(selectedGame) && (
+              <Card variant="surface" className="bg-yellow-500/10 border border-yellow-500/30">
+                <Flex align="center" gap="2" p="3">
+                  <Clock className="w-4 h-4 text-yellow-400" />
+                  <Flex direction="column" gap="1">
+                    <Text size="2" weight="bold" className="text-yellow-400">
+                      This game expires soon!
+                    </Text>
+                    <Text size="1" color="gray">
+                      Time remaining: {formatGameTimeRemaining(selectedGame)}. Join quickly before it&apos;s auto-cancelled.
+                    </Text>
+                  </Flex>
+                </Flex>
+              </Card>
+            )}
 
             {/* Coin Sides - Show automatic assignment */}
             {!isSuccess && !isLoading && selectedGame && (

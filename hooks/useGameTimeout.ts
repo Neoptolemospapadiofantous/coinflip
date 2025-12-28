@@ -8,10 +8,54 @@ import { Game } from '@/types/game';
 
 // Chainlink Automation auto-cancels after 5 minutes (25 blocks on Sepolia @ 12s/block)
 // This is for UI display purposes only - actual cancellation is on-chain
-const AUTO_CANCEL_MS = 5 * 60 * 1000;
+export const AUTO_CANCEL_MS = 5 * 60 * 1000;
+
+// Warning threshold - show warning when less than this time remaining
+export const WARNING_THRESHOLD_MS = 60 * 1000; // 1 minute
 
 // Poll interval when games are past auto-cancel threshold (check if DB updated)
 const EXPIRED_POLL_INTERVAL_MS = 5000; // 5 seconds
+
+/**
+ * Calculate time remaining for any game based on created_at
+ */
+export function getGameTimeRemaining(game: Game): number {
+  const createdAt = new Date(game.created_at);
+  const autoCancelAt = createdAt.getTime() + AUTO_CANCEL_MS;
+  const now = Date.now();
+  return Math.max(0, autoCancelAt - now);
+}
+
+/**
+ * Format time remaining as a string
+ */
+export function formatGameTimeRemaining(game: Game): string {
+  const remaining = getGameTimeRemaining(game);
+  if (remaining <= 0) return 'Expiring...';
+
+  const minutes = Math.floor(remaining / 60000);
+  const seconds = Math.floor((remaining % 60000) / 1000);
+
+  if (minutes > 0) {
+    return `${minutes}m ${seconds}s`;
+  }
+  return `${seconds}s`;
+}
+
+/**
+ * Check if a game is in warning state (< 1 minute remaining)
+ */
+export function isGameWarning(game: Game): boolean {
+  const remaining = getGameTimeRemaining(game);
+  return remaining > 0 && remaining <= WARNING_THRESHOLD_MS;
+}
+
+/**
+ * Check if a game is expired (past auto-cancel time)
+ */
+export function isGameExpired(game: Game): boolean {
+  return getGameTimeRemaining(game) <= 0;
+}
 
 /**
  * Hook to track time until Chainlink Automation auto-cancels pending games.
@@ -58,7 +102,7 @@ export function useGameTimeout() {
     });
   }, [userPendingGames]);
 
-  // Calculate time remaining until Chainlink auto-cancel
+  // Calculate time remaining until Chainlink auto-cancel (for user's games)
   const getTimeRemaining = useCallback((gameId: string): number => {
     const timeout = pendingTimeouts.find((t) => t.gameId === gameId);
     if (!timeout) return 0;
@@ -68,7 +112,7 @@ export function useGameTimeout() {
     return Math.max(0, remaining);
   }, [pendingTimeouts]);
 
-  // Format time remaining as string
+  // Format time remaining as string (for user's games)
   const formatTimeRemaining = useCallback((gameId: string): string => {
     const remaining = getTimeRemaining(gameId);
     if (remaining <= 0) return 'Auto-cancelling...';
