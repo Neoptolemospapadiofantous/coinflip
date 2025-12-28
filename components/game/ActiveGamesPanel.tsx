@@ -1,14 +1,16 @@
 'use client';
 
 import { useMemo, useState, useEffect } from 'react';
-import { Card, Flex, Heading, Text, Badge, ScrollArea } from '@radix-ui/themes';
+import { Card, Flex, Heading, Text, Badge, ScrollArea, IconButton } from '@radix-ui/themes';
 import { useActiveGamesList, useGameStore, MAX_CONCURRENT_GAMES } from '@/store/gameStore';
 import { Game } from '@/types/game';
-import { Users, Loader2, Trophy, ChevronRight, Wifi, WifiOff, Clock } from 'lucide-react';
+import { Users, Loader2, Trophy, ChevronRight, Wifi, WifiOff, Clock, ChevronDown, ChevronUp } from 'lucide-react';
 import { formatCurrency, formatGameId } from '@/lib/utils';
 import { useAccount } from 'wagmi';
 import { useConnectionStatus } from '@/hooks/useRealtimeSync';
 import { formatGameTimeRemaining, isGameWarning, isGameExpired } from '@/hooks/useGameTimeout';
+
+const PANEL_COLLAPSED_KEY = 'coinflip_active_games_collapsed';
 
 interface ActiveGameCardProps {
   game: Game;
@@ -128,6 +130,10 @@ export function ActiveGamesPanel() {
   const { queueModal } = useGameStore();
   const { isConnected, isConnecting } = useConnectionStatus();
   const [, setTick] = useState(0);
+  const [isCollapsed, setIsCollapsed] = useState(() => {
+    if (typeof window === 'undefined') return false;
+    return localStorage.getItem(PANEL_COLLAPSED_KEY) === 'true';
+  });
 
   // Force re-render every second to update countdown timers
   useEffect(() => {
@@ -136,6 +142,15 @@ export function ActiveGamesPanel() {
     }, 1000);
     return () => clearInterval(interval);
   }, []);
+
+  // Persist collapse state
+  const toggleCollapsed = () => {
+    setIsCollapsed(prev => {
+      const newValue = !prev;
+      localStorage.setItem(PANEL_COLLAPSED_KEY, String(newValue));
+      return newValue;
+    });
+  };
 
   // Real-time updates are handled centrally by useRealtimeSync (in Providers)
   // This component just displays the games from the Zustand store
@@ -165,46 +180,61 @@ export function ActiveGamesPanel() {
   }
 
   return (
-    <Card className="card-solid border-purple-500/30 fixed bottom-4 right-4 z-40 w-72 max-h-80">
+    <Card className="card-solid border-purple-500/30 fixed bottom-4 right-4 z-40 w-72">
       <Flex direction="column" gap="3" p="3">
         <Flex justify="between" align="center">
-          <Heading size="3">Active Games</Heading>
-          <Badge size="1" color="cyan">
-            {visibleGames.length}/{MAX_CONCURRENT_GAMES}
-          </Badge>
-        </Flex>
-
-        <ScrollArea style={{ maxHeight: '200px' }}>
-          <Flex direction="column" gap="2">
-            {visibleGames.map((game) => (
-              <ActiveGameCard
-                key={game.id}
-                game={game}
-                onViewGame={handleViewGame}
-                userAddress={address}
-              />
-            ))}
+          <Flex align="center" gap="2">
+            <Heading size="3">Active Games</Heading>
+            <Badge size="1" color="cyan">
+              {visibleGames.length}/{MAX_CONCURRENT_GAMES}
+            </Badge>
           </Flex>
-        </ScrollArea>
-
-        <Flex align="center" justify="center" gap="2">
-          {isConnected ? (
-            <>
-              <Wifi className="w-3 h-3 text-green-400" />
-              <Text size="1" className="text-green-400">Live</Text>
-            </>
-          ) : isConnecting ? (
-            <>
-              <Loader2 className="w-3 h-3 text-yellow-400 animate-spin" />
-              <Text size="1" className="text-yellow-400">Connecting...</Text>
-            </>
-          ) : (
-            <>
-              <WifiOff className="w-3 h-3 text-red-400" />
-              <Text size="1" className="text-red-400">Offline</Text>
-            </>
-          )}
+          <IconButton
+            size="1"
+            variant="ghost"
+            color="gray"
+            onClick={toggleCollapsed}
+            title={isCollapsed ? 'Expand' : 'Collapse'}
+          >
+            {isCollapsed ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+          </IconButton>
         </Flex>
+
+        {!isCollapsed && (
+          <>
+            <ScrollArea style={{ maxHeight: '200px' }}>
+              <Flex direction="column" gap="2">
+                {visibleGames.map((game) => (
+                  <ActiveGameCard
+                    key={game.id}
+                    game={game}
+                    onViewGame={handleViewGame}
+                    userAddress={address}
+                  />
+                ))}
+              </Flex>
+            </ScrollArea>
+
+            <Flex align="center" justify="center" gap="2">
+              {isConnected ? (
+                <>
+                  <Wifi className="w-3 h-3 text-green-400" />
+                  <Text size="1" className="text-green-400">Live</Text>
+                </>
+              ) : isConnecting ? (
+                <>
+                  <Loader2 className="w-3 h-3 text-yellow-400 animate-spin" />
+                  <Text size="1" className="text-yellow-400">Connecting...</Text>
+                </>
+              ) : (
+                <>
+                  <WifiOff className="w-3 h-3 text-red-400" />
+                  <Text size="1" className="text-red-400">Offline</Text>
+                </>
+              )}
+            </Flex>
+          </>
+        )}
       </Flex>
     </Card>
   );
