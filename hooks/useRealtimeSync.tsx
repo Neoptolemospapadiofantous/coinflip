@@ -106,10 +106,11 @@ export function useRealtimeSync() {
           queryClientRef.current.invalidateQueries({ queryKey: ['games', 'pending'] });
           queryClientRef.current.invalidateQueries({ queryKey: ['games', 'active'] });
 
-          // If this is the user's game, add to active games
+          // If this is the user's game, add to active games (if not already tracked)
           const userAddress = addressRef.current?.toLowerCase();
           if (userAddress && game.creator_address?.toLowerCase() === userAddress) {
-            actionsRef.current.addActiveGame(game);
+            // Use updateActiveGame instead - it won't overwrite addedAt if exists
+            actionsRef.current.updateActiveGame(game);
           }
 
           // Update stats

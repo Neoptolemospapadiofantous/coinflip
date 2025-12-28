@@ -115,10 +115,17 @@ export function ActiveGamesPanel() {
   };
 
   // Filter to only show pending/matched games (resolved ones auto-close)
-  const visibleGames = useMemo(() =>
-    activeGames.filter((g) => g.status === 'pending' || g.status === 'matched'),
-    [activeGames]
-  );
+  // Also deduplicate by ID as a safeguard against race conditions
+  const visibleGames = useMemo(() => {
+    const seen = new Set<string>();
+    return activeGames
+      .filter((g) => g.status === 'pending' || g.status === 'matched')
+      .filter((g) => {
+        if (seen.has(g.id)) return false;
+        seen.add(g.id);
+        return true;
+      });
+  }, [activeGames]);
 
   // Don't render if no visible games
   if (visibleGames.length === 0) {
