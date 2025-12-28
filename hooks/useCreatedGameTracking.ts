@@ -173,8 +173,9 @@ export function useCreatedGameTracking({
       onGameCancelledRef.current?.(game);
     }
 
-    // If game is still pending, subscribe to status changes
-    if (game.status === 'pending') {
+    // Subscribe to status changes if game is still active (pending or matched)
+    // We need to track matched games to catch the resolved status
+    if (game.status === 'pending' || game.status === 'matched') {
       console.log(`📡 Subscribing to status changes for game ${game.id}`);
       subscriptionRef.current = supabase
         .channel(`game-tracking-${game.id}`)
@@ -210,9 +211,9 @@ export function useCreatedGameTracking({
               onGameCancelledRef.current?.(updatedGame);
             }
 
-            // Game left pending state - cleanup subscription since we no longer need updates
-            if (updatedGame.status !== 'pending' && subscriptionRef.current) {
-              console.log(`📡 Game ${game.id} left pending state - cleaning up subscription`);
+            // Game is now resolved or cancelled - cleanup subscription
+            if ((updatedGame.status === 'resolved' || updatedGame.status === 'cancelled') && subscriptionRef.current) {
+              console.log(`📡 Game ${game.id} finished (${updatedGame.status}) - cleaning up subscription`);
               supabase.removeChannel(subscriptionRef.current);
               subscriptionRef.current = null;
             }
