@@ -667,7 +667,7 @@ export function GameSessionModal({ game, open, onClose, userAddress, modalType }
                       No Opponent Found
                     </Heading>
                     <Text size="3" color="gray" align="center">
-                      Your game has been waiting for 20 minutes without being matched.
+                      Your game has been waiting for 5 minutes without being matched.
                     </Text>
                   </Flex>
 
