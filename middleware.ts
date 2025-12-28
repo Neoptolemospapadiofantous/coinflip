@@ -1,8 +1,8 @@
 /**
- * Next.js Proxy - Security Headers & Protection
+ * Next.js Middleware - Security Headers & Protection
  *
  * Implements security headers, CSP, rate limiting, and request validation
- * Note: In Next.js 16+, this is called "proxy" instead of "middleware"
+ * Runs on every request matching the config.matcher patterns
  */
 
 import { NextResponse } from 'next/server';
@@ -162,9 +162,9 @@ function isValidOrigin(request: NextRequest): boolean {
 }
 
 /**
- * Proxy entry point (Next.js 16+ convention)
+ * Middleware entry point
  */
-export function proxy(request: NextRequest) {
+export function middleware(request: NextRequest) {
   const response = NextResponse.next();
 
   // 1. Apply security headers
