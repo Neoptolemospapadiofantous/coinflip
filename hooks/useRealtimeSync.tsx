@@ -90,9 +90,19 @@ export function useRealtimeSync() {
             console.warn('🆕 [RealtimeSync] Received invalid game payload on INSERT');
             return;
           }
-          console.log('🆕 [RealtimeSync] Game created:', game.id);
+          console.log('🆕 [RealtimeSync] Game created:', game.id, 'status:', game.status);
 
-          // Invalidate pending games list
+          // Add new pending game directly to cache for instant UI update
+          if (game.status === 'pending') {
+            queryClientRef.current.setQueryData(['games', 'pending'], (old: Game[] | undefined) => {
+              if (!old) return [game];
+              // Avoid duplicates
+              if (old.some(g => g.id === game.id)) return old;
+              return [game, ...old]; // Add to front (newest first)
+            });
+          }
+
+          // Also invalidate to ensure consistency
           queryClientRef.current.invalidateQueries({ queryKey: ['games', 'pending'] });
           queryClientRef.current.invalidateQueries({ queryKey: ['games', 'active'] });
 
