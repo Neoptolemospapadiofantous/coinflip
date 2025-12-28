@@ -72,7 +72,7 @@ export function isValidGame(obj: unknown): obj is Game {
   // Status must be valid
   if (!VALID_STATUSES.includes(game.status as typeof VALID_STATUSES[number])) return false;
 
-  // Optional string fields (must be string or null)
+  // Optional string fields (must be string, null, or undefined)
   const optionalStrings = [
     'joiner_address', 'winner_address', 'payout', 'fee',
     'matched_tx_hash', 'matched_block_number',
@@ -81,19 +81,21 @@ export function isValidGame(obj: unknown): obj is Game {
     'matched_at', 'resolved_at', 'cancelled_at'
   ];
   for (const field of optionalStrings) {
-    if (game[field] !== null && typeof game[field] !== 'string') return false;
+    const value = game[field];
+    if (value !== null && value !== undefined && typeof value !== 'string') return false;
   }
 
-  // Optional boolean fields (must be boolean or null)
-  if (game.joiner_choice !== null && typeof game.joiner_choice !== 'boolean') return false;
-  if (game.coin_result !== null && typeof game.coin_result !== 'boolean') return false;
+  // Optional boolean fields (must be boolean, null, or undefined)
+  if (game.joiner_choice !== null && game.joiner_choice !== undefined && typeof game.joiner_choice !== 'boolean') return false;
+  if (game.coin_result !== null && game.coin_result !== undefined && typeof game.coin_result !== 'boolean') return false;
 
   return true;
 }
 
 /**
  * Normalize game object from database/realtime
- * Converts numeric fields to strings where needed (Supabase sends numbers for bigint columns)
+ * - Converts numeric fields to strings where needed (Supabase sends numbers for bigint columns)
+ * - Converts undefined to null for optional fields
  */
 function normalizeGame(obj: Record<string, unknown>): Record<string, unknown> {
   const normalized = { ...obj };
@@ -115,6 +117,21 @@ function normalizeGame(obj: Record<string, unknown>): Record<string, unknown> {
   }
   if (typeof normalized.cancelled_block_number === 'number') {
     normalized.cancelled_block_number = String(normalized.cancelled_block_number);
+  }
+
+  // Normalize optional fields: convert undefined to null for consistency
+  const optionalFields = [
+    'joiner_address', 'winner_address', 'payout', 'fee',
+    'matched_tx_hash', 'matched_block_number',
+    'resolved_tx_hash', 'resolved_block_number',
+    'cancelled_tx_hash', 'cancelled_block_number',
+    'matched_at', 'resolved_at', 'cancelled_at',
+    'joiner_choice', 'coin_result'
+  ];
+  for (const field of optionalFields) {
+    if (normalized[field] === undefined) {
+      normalized[field] = null;
+    }
   }
 
   return normalized;

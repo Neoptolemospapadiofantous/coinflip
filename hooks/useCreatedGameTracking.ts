@@ -133,7 +133,8 @@ export function useCreatedGameTracking({
         return null;
       }
 
-      return data;
+      // Normalize the game data (converts numeric IDs to strings)
+      return data ? parseGame(data) : null;
     } catch (err) {
       console.error('Error in fetchGameFromDB:', err);
       return null;

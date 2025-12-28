@@ -1,6 +1,17 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
-import { Game } from '@/types/game';
+import { Game, parseGame } from '@/types/game';
+
+/**
+ * Normalize an array of games from Supabase
+ * Filters out any invalid games and ensures all IDs are strings
+ */
+function normalizeGames(data: unknown[] | null): Game[] {
+  if (!data) return [];
+  return data
+    .map(item => parseGame(item))
+    .filter((game): game is Game => game !== null);
+}
 
 /**
  * Game data hooks
@@ -25,7 +36,7 @@ export function useGames() {
         throw new Error(`Failed to fetch games: ${error.message}`);
       }
 
-      return data || [];
+      return normalizeGames(data);
     },
     staleTime: 60000, // 1 minute - central sync handles freshness
     refetchInterval: false, // Disabled - central sync invalidates when needed
@@ -49,7 +60,7 @@ export function usePendingGames() {
         throw new Error(`Failed to fetch pending games: ${error.message}`);
       }
 
-      return data || [];
+      return normalizeGames(data);
     },
     staleTime: 30000, // 30 seconds
     refetchInterval: false, // Disabled - central sync handles updates
@@ -72,7 +83,7 @@ export function useActiveGames() {
         throw new Error(`Failed to fetch active games: ${error.message}`);
       }
 
-      return data || [];
+      return normalizeGames(data);
     },
     staleTime: 30000, // 30 seconds
     refetchInterval: false, // Disabled - central sync handles updates
@@ -102,7 +113,7 @@ export function usePlayerGames(address: string | undefined, limit: number = 50) 
         throw new Error(`Failed to fetch player games: ${error.message}`);
       }
 
-      return data || [];
+      return normalizeGames(data);
     },
     enabled: !!address,
     staleTime: 30000, // 30 seconds
@@ -211,7 +222,7 @@ export function useGame(gameId: string | null) {
         return null;
       }
 
-      return data;
+      return data ? parseGame(data) : null;
     },
     enabled: !!gameId,
     staleTime: 60000, // 1 minute
