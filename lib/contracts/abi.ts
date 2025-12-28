@@ -47,6 +47,16 @@ export const COINFLIP_ABI = [
   },
   {
     type: 'event',
+    name: 'GameAutoCancelled',
+    inputs: [
+      { name: 'gameId', type: 'uint256', indexed: true },
+      { name: 'creator', type: 'address', indexed: true },
+      { name: 'refundAmount', type: 'uint256', indexed: false },
+      { name: 'cancelledBy', type: 'address', indexed: true },
+    ],
+  },
+  {
+    type: 'event',
     name: 'VrfTimeoutClaimed',
     inputs: [
       { name: 'gameId', type: 'uint256', indexed: true },
@@ -242,6 +252,41 @@ export const COINFLIP_ABI = [
     inputs: [],
     outputs: [{ name: '', type: 'address' }],
   },
+  // Chainlink Automation - get open games count
+  {
+    type: 'function',
+    name: 'getOpenGamesCount',
+    stateMutability: 'view',
+    inputs: [],
+    outputs: [{ name: '', type: 'uint256' }],
+  },
+  // Chainlink Automation - get all open game IDs
+  {
+    type: 'function',
+    name: 'getOpenGameIds',
+    stateMutability: 'view',
+    inputs: [],
+    outputs: [{ name: '', type: 'uint256[]' }],
+  },
+  // Chainlink Automation - check upkeep
+  {
+    type: 'function',
+    name: 'checkUpkeep',
+    stateMutability: 'view',
+    inputs: [{ name: 'checkData', type: 'bytes' }],
+    outputs: [
+      { name: 'upkeepNeeded', type: 'bool' },
+      { name: 'performData', type: 'bytes' },
+    ],
+  },
+  // Chainlink Automation - perform upkeep
+  {
+    type: 'function',
+    name: 'performUpkeep',
+    stateMutability: 'nonpayable',
+    inputs: [{ name: 'performData', type: 'bytes' }],
+    outputs: [],
+  },
 
   // =============================================================
   //                      WRITE FUNCTIONS
@@ -379,9 +424,10 @@ export const TIER_AMOUNTS_USD = {
 // Fee percentage (3%)
 export const FEE_PERCENTAGE = 3;
 
-// Timeout blocks
-export const TIMEOUT_BLOCKS = 100; // ~20 min on Sepolia
-export const VRF_TIMEOUT_BLOCKS = 200; // ~40 min on Sepolia
+// Timeout blocks - matches contract constants
+// Creator can cancel immediately. Chainlink Automation auto-cancels after this.
+export const TIMEOUT_BLOCKS = 25; // ~5 min on Sepolia (25 blocks × 12 sec)
+export const VRF_TIMEOUT_BLOCKS = 200; // ~40 min on Sepolia (for stuck VRF refunds)
 
 // Calculate win amount after fee
 export function calculateWinAmount(betAmount: number): number {

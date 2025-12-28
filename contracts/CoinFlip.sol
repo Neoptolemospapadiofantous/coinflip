@@ -6,13 +6,15 @@ import "@openzeppelin/contracts/utils/Pausable.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@chainlink/contracts/src/v0.8/vrf/dev/interfaces/IVRFCoordinatorV2Plus.sol";
 import "@chainlink/contracts/src/v0.8/vrf/dev/libraries/VRFV2PlusClient.sol";
+import "@chainlink/contracts/src/v0.8/automation/interfaces/AutomationCompatibleInterface.sol";
 
 /**
  * @title CoinFlip
  * @notice Provably fair peer-to-peer coin flip gambling using Chainlink VRF V2.5
  * @dev Non-custodial game where two players bet on a coin flip outcome
+ *      Uses Chainlink Automation for automatic cancellation of expired games
  */
-contract CoinFlip is ReentrancyGuard, Pausable, Ownable {
+contract CoinFlip is ReentrancyGuard, Pausable, Ownable, AutomationCompatibleInterface {
 
     // =============================================================
     //                        CONSTANTS
@@ -27,8 +29,8 @@ contract CoinFlip is ReentrancyGuard, Pausable, Ownable {
     /// @notice Platform fee in basis points (300 = 3%)
     uint16 public constant FEE_BASIS_POINTS = 300;
 
-    /// @notice Blocks before game can be cancelled (timeout)
-    uint256 public constant TIMEOUT_BLOCKS = 100;
+    /// @notice Blocks before game can be cancelled (timeout ~5 min on Sepolia)
+    uint256 public constant TIMEOUT_BLOCKS = 25;
 
     /// @notice Blocks before LOCKED game can be refunded if VRF fails (~40 min on Sepolia)
     uint256 public constant VRF_TIMEOUT_BLOCKS = 200;
@@ -38,6 +40,9 @@ contract CoinFlip is ReentrancyGuard, Pausable, Ownable {
 
     /// @notice VRF request confirmations
     uint16 public constant VRF_REQUEST_CONFIRMATIONS = 3;
+
+    /// @notice Maximum games to cancel in a single performUpkeep call
+    uint8 public constant MAX_BATCH_CANCEL = 10;
 
     /// @notice Number of random words requested from VRF
     uint32 public constant VRF_NUM_WORDS = 1;
@@ -79,6 +84,12 @@ contract CoinFlip is ReentrancyGuard, Pausable, Ownable {
 
     /// @notice Total fees collected and available for withdrawal
     uint256 public collectedFees;
+
+    /// @notice Array of open game IDs for efficient iteration by Chainlink Automation
+    uint256[] public openGameIds;
+
+    /// @notice Mapping of game ID to its index in openGameIds array (+ 1 to distinguish from 0)
+    mapping(uint256 => uint256) public openGameIndex;
 
     // =============================================================
     //                      ENUMS
@@ -146,6 +157,13 @@ contract CoinFlip is ReentrancyGuard, Pausable, Ownable {
         uint256 indexed gameId,
         address indexed creator,
         uint256 refundAmount
+    );
+
+    event GameAutoCancelled(
+        uint256 indexed gameId,
+        address indexed creator,
+        uint256 refundAmount,
+        address indexed cancelledBy
     );
 
     event VrfTimeoutClaimed(
@@ -264,6 +282,10 @@ contract CoinFlip is ReentrancyGuard, Pausable, Ownable {
         // Update statistics
         t.totalGames++;
 
+        // Track open game for Chainlink Automation
+        openGameIndex[gameId] = openGameIds.length + 1; // +1 to distinguish from 0
+        openGameIds.push(gameId);
+
         emit GameCreated(gameId, msg.sender, tier, t.amount, choice);
     }
 
@@ -291,6 +313,9 @@ contract CoinFlip is ReentrancyGuard, Pausable, Ownable {
         game.playerB = msg.sender;
         game.state = GameState.LOCKED;
         game.lockedBlock = block.number;
+
+        // Remove from open games array (game is now locked)
+        _removeFromOpenGames(gameId);
 
         // Update statistics
         t.totalVolume += t.amount * 2;
@@ -320,7 +345,7 @@ contract CoinFlip is ReentrancyGuard, Pausable, Ownable {
 
     /**
      * @notice Cancel an open game and receive full refund
-     * @dev Creator can cancel immediately - no timeout required
+     * @dev Creator can cancel immediately, anyone can cancel after TIMEOUT_BLOCKS
      * @param gameId The game ID to cancel
      */
     function cancelGame(uint256 gameId)
@@ -332,8 +357,17 @@ contract CoinFlip is ReentrancyGuard, Pausable, Ownable {
         // Validations
         if (game.state == GameState.NONE) revert GameDoesNotExist();
         if (game.state != GameState.OPEN) revert InvalidGameState();
-        if (msg.sender != game.playerA) revert NotGameCreator();
-        // No timeout required - creator can cancel immediately
+
+        // Creator can cancel immediately, others must wait for timeout
+        bool isCreator = msg.sender == game.playerA;
+        bool isTimedOut = block.number >= game.createdBlock + TIMEOUT_BLOCKS;
+
+        if (!isCreator && !isTimedOut) {
+            revert TimeoutNotReached();
+        }
+
+        // Remove from open games array
+        _removeFromOpenGames(gameId);
 
         // Update state first (CEI pattern)
         game.state = GameState.CANCELLED;
@@ -343,7 +377,12 @@ contract CoinFlip is ReentrancyGuard, Pausable, Ownable {
         (bool success, ) = game.playerA.call{value: refundAmount}("");
         if (!success) revert TransferFailed();
 
-        emit GameCancelled(gameId, game.playerA, refundAmount);
+        // Emit appropriate event
+        if (isCreator) {
+            emit GameCancelled(gameId, game.playerA, refundAmount);
+        } else {
+            emit GameAutoCancelled(gameId, game.playerA, refundAmount, msg.sender);
+        }
     }
 
     /**
@@ -505,6 +544,101 @@ contract CoinFlip is ReentrancyGuard, Pausable, Ownable {
     }
 
     // =============================================================
+    //                    CHAINLINK AUTOMATION
+    // =============================================================
+
+    /**
+     * @notice Check if there are expired games that need cancellation
+     * @dev Called by Chainlink Automation nodes to check if performUpkeep should be called
+     * @return upkeepNeeded True if there are expired games
+     * @return performData Encoded array of expired game IDs
+     */
+    function checkUpkeep(bytes calldata /* checkData */)
+        external
+        view
+        override
+        returns (bool upkeepNeeded, bytes memory performData)
+    {
+        uint256[] memory expiredGameIds = new uint256[](MAX_BATCH_CANCEL);
+        uint256 count = 0;
+
+        // Iterate through open games to find expired ones
+        for (uint256 i = 0; i < openGameIds.length && count < MAX_BATCH_CANCEL; i++) {
+            uint256 gameId = openGameIds[i];
+            Game storage game = games[gameId];
+
+            // Check if game is still OPEN and has timed out
+            if (game.state == GameState.OPEN &&
+                block.number >= game.createdBlock + TIMEOUT_BLOCKS) {
+                expiredGameIds[count] = gameId;
+                count++;
+            }
+        }
+
+        if (count > 0) {
+            // Resize array to actual count
+            uint256[] memory result = new uint256[](count);
+            for (uint256 i = 0; i < count; i++) {
+                result[i] = expiredGameIds[i];
+            }
+            return (true, abi.encode(result));
+        }
+
+        return (false, "");
+    }
+
+    /**
+     * @notice Cancel expired games automatically
+     * @dev Called by Chainlink Automation when checkUpkeep returns true
+     * @param performData Encoded array of game IDs to cancel
+     */
+    function performUpkeep(bytes calldata performData) external override {
+        uint256[] memory gameIdsToCancel = abi.decode(performData, (uint256[]));
+
+        for (uint256 i = 0; i < gameIdsToCancel.length; i++) {
+            uint256 gameId = gameIdsToCancel[i];
+            Game storage game = games[gameId];
+
+            // Re-validate before cancelling (state may have changed)
+            if (game.state == GameState.OPEN &&
+                block.number >= game.createdBlock + TIMEOUT_BLOCKS) {
+
+                // Remove from open games array
+                _removeFromOpenGames(gameId);
+
+                // Update state
+                game.state = GameState.CANCELLED;
+
+                // Refund creator
+                uint256 refundAmount = tiers[game.tier].amount;
+                (bool success, ) = game.playerA.call{value: refundAmount}("");
+
+                if (success) {
+                    emit GameAutoCancelled(gameId, game.playerA, refundAmount, msg.sender);
+                }
+                // Note: If refund fails, game is still cancelled but funds are stuck
+                // This is rare and can be handled via emergencyRefund if needed
+            }
+        }
+    }
+
+    /**
+     * @notice Get the number of open games
+     * @return Number of games in OPEN state
+     */
+    function getOpenGamesCount() external view returns (uint256) {
+        return openGameIds.length;
+    }
+
+    /**
+     * @notice Get all open game IDs
+     * @return Array of open game IDs
+     */
+    function getOpenGameIds() external view returns (uint256[] memory) {
+        return openGameIds;
+    }
+
+    // =============================================================
     //                    VIEW FUNCTIONS
     // =============================================================
 
@@ -662,5 +796,29 @@ contract CoinFlip is ReentrancyGuard, Pausable, Ownable {
         if (!success) revert TransferFailed();
 
         emit GameResolved(gameId, winner, loser, coinResult, payout);
+    }
+
+    /**
+     * @notice Remove a game from the openGameIds array
+     * @dev Uses swap-and-pop for O(1) removal
+     * @param gameId The game ID to remove
+     */
+    function _removeFromOpenGames(uint256 gameId) internal {
+        uint256 indexPlusOne = openGameIndex[gameId];
+        if (indexPlusOne == 0) return; // Not in array
+
+        uint256 index = indexPlusOne - 1;
+        uint256 lastIndex = openGameIds.length - 1;
+
+        // If not the last element, swap with the last
+        if (index != lastIndex) {
+            uint256 lastGameId = openGameIds[lastIndex];
+            openGameIds[index] = lastGameId;
+            openGameIndex[lastGameId] = indexPlusOne; // Update moved element's index
+        }
+
+        // Remove the last element
+        openGameIds.pop();
+        delete openGameIndex[gameId];
     }
 }
