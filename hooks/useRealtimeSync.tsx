@@ -24,6 +24,7 @@ const FALLBACK_POLL_INTERVALS = [3000, 5000, 10000, 15000]; // 3s, 5s, 10s, 15s 
  */
 // Global connection state for components to access
 let globalConnectionStatus: 'disconnected' | 'connecting' | 'SUBSCRIBED' | 'CHANNEL_ERROR' | 'TIMED_OUT' | 'CLOSED' = 'disconnected';
+let globalIsPolling = false;
 let globalListeners: Array<() => void> = [];
 
 // Subscribe to connection status changes
@@ -244,6 +245,8 @@ export function useRealtimeSync() {
             fallbackIntervalRef.current = null;
           }
           fallbackRetryCountRef.current = 0; // Reset backoff
+          globalIsPolling = false;
+          notifyListeners();
           console.log('✅ [RealtimeSync] WebSocket connected - real-time updates active');
         } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
           setIsConnected(false);
@@ -255,6 +258,8 @@ export function useRealtimeSync() {
               clearTimeout(fallbackIntervalRef.current);
             }
 
+            globalIsPolling = true;
+            notifyListeners();
             fallbackPoll();
 
             // Get next interval with backoff
@@ -310,14 +315,17 @@ export function getRealtimeStatus() {
 // Hook to get current connection status with automatic re-render on changes
 export function useConnectionStatus() {
   const [status, setStatus] = useState(globalConnectionStatus);
+  const [isPolling, setIsPolling] = useState(globalIsPolling);
 
   useEffect(() => {
     // Initial sync
     setStatus(globalConnectionStatus);
+    setIsPolling(globalIsPolling);
 
     // Subscribe to changes
     const unsubscribe = subscribeToConnectionStatus(() => {
       setStatus(globalConnectionStatus);
+      setIsPolling(globalIsPolling);
     });
 
     return unsubscribe;
@@ -328,6 +336,7 @@ export function useConnectionStatus() {
     isConnected: status === 'SUBSCRIBED',
     isConnecting: status === 'connecting',
     isDisconnected: status === 'disconnected' || status === 'CLOSED' || status === 'CHANNEL_ERROR' || status === 'TIMED_OUT',
+    isPolling,
   };
 }
 

@@ -4,13 +4,44 @@ import { useMemo, useState, useEffect } from 'react';
 import { Card, Flex, Heading, Text, Badge, ScrollArea, IconButton } from '@radix-ui/themes';
 import { useActiveGamesList, useGameStore, MAX_CONCURRENT_GAMES } from '@/store/gameStore';
 import { Game } from '@/types/game';
-import { Users, Loader2, Trophy, ChevronRight, Wifi, WifiOff, Clock, ChevronDown, ChevronUp } from 'lucide-react';
+import { Users, Loader2, Trophy, ChevronRight, Wifi, WifiOff, Clock, ChevronDown, ChevronUp, RefreshCw } from 'lucide-react';
 import { formatCurrency, formatGameId } from '@/lib/utils';
 import { useAccount } from 'wagmi';
 import { useConnectionStatus } from '@/hooks/useRealtimeSync';
 import { formatGameTimeRemaining, isGameWarning, isGameExpired } from '@/hooks/useGameTimeout';
 
 const PANEL_COLLAPSED_KEY = 'coinflip_active_games_collapsed';
+
+// Connection status indicator component
+function ConnectionStatusIndicator() {
+  const { isConnected, isConnecting, isPolling } = useConnectionStatus();
+
+  return (
+    <Flex align="center" justify="center" gap="2">
+      {isConnected ? (
+        <>
+          <Wifi className="w-3 h-3 text-green-400" />
+          <Text size="1" className="text-green-400">Live</Text>
+        </>
+      ) : isConnecting ? (
+        <>
+          <Loader2 className="w-3 h-3 text-yellow-400 animate-spin" />
+          <Text size="1" className="text-yellow-400">Connecting...</Text>
+        </>
+      ) : isPolling ? (
+        <>
+          <RefreshCw className="w-3 h-3 text-yellow-400 animate-spin" />
+          <Text size="1" className="text-yellow-400">Polling</Text>
+        </>
+      ) : (
+        <>
+          <WifiOff className="w-3 h-3 text-red-400" />
+          <Text size="1" className="text-red-400">Offline</Text>
+        </>
+      )}
+    </Flex>
+  );
+}
 
 interface ActiveGameCardProps {
   game: Game;
@@ -128,7 +159,6 @@ export function ActiveGamesPanel() {
   const { address } = useAccount();
   const activeGames = useActiveGamesList();
   const { queueModal } = useGameStore();
-  const { isConnected, isConnecting } = useConnectionStatus();
   const [, setTick] = useState(0);
   const [isCollapsed, setIsCollapsed] = useState(() => {
     if (typeof window === 'undefined') return false;
@@ -215,24 +245,7 @@ export function ActiveGamesPanel() {
               </Flex>
             </ScrollArea>
 
-            <Flex align="center" justify="center" gap="2">
-              {isConnected ? (
-                <>
-                  <Wifi className="w-3 h-3 text-green-400" />
-                  <Text size="1" className="text-green-400">Live</Text>
-                </>
-              ) : isConnecting ? (
-                <>
-                  <Loader2 className="w-3 h-3 text-yellow-400 animate-spin" />
-                  <Text size="1" className="text-yellow-400">Connecting...</Text>
-                </>
-              ) : (
-                <>
-                  <WifiOff className="w-3 h-3 text-red-400" />
-                  <Text size="1" className="text-red-400">Offline</Text>
-                </>
-              )}
-            </Flex>
+            <ConnectionStatusIndicator />
           </>
         )}
       </Flex>
