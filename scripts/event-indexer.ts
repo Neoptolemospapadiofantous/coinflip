@@ -212,10 +212,10 @@ async function processGameJoined(log: any) {
   console.log(`🤝 GameJoined: ID=${gameId}, Joiner=${joiner}`);
 
   try {
-    // First, fetch the game to get creator's choice
+    // Fetch the game to get creator's choice and validate state
     const { data: game, error: fetchError } = await supabase
       .from('games')
-      .select('creator_choice')
+      .select('creator_choice, status')
       .eq('id', gameId.toString())
       .single();
 
@@ -224,12 +224,18 @@ async function processGameJoined(log: any) {
       return;
     }
 
+    // Idempotency check: skip if already processed
+    if (game.status === 'matched' || game.status === 'resolved') {
+      console.log(`⏭️ Game ${gameId} already matched/resolved, skipping`);
+      return;
+    }
+
     // Joiner always gets the opposite choice of creator
     const joinerChoice = !game.creator_choice;
 
-    // Update game with retry
+    // Update game with retry - only if still in pending state (conditional update)
     await retryOperation(async () => {
-      const { error } = await supabase
+      const { data, error } = await supabase
         .from('games')
         .update({
           joiner_address: joiner.toLowerCase(),
@@ -239,9 +245,16 @@ async function processGameJoined(log: any) {
           matched_block_number: blockNumber.toString(),
           matched_at: new Date().toISOString(),
         })
-        .eq('id', gameId.toString());
+        .eq('id', gameId.toString())
+        .eq('status', 'pending') // Only update if still pending (idempotent)
+        .select();
 
       if (error) throw error;
+
+      // Check if update actually happened
+      if (!data || data.length === 0) {
+        console.log(`⏭️ Game ${gameId} was not in pending state, skipping update`);
+      }
     });
 
     console.log(`✅ Game ${gameId} matched - joiner choice: ${joinerChoice ? 'tails' : 'heads'}`);
@@ -272,19 +285,27 @@ async function processGameResolved(log: any) {
       return;
     }
 
-    // Validate winner matches coin result
-    const winnerIsCreator = winner.toLowerCase() === game.creator_address.toLowerCase();
-    const expectedChoice = coinResult; // Winner's choice should match coin result
-    const actualWinnerChoice = winnerIsCreator ? game.creator_choice : game.joiner_choice;
+    // Idempotency check: skip if already resolved
+    if (game.status === 'resolved') {
+      console.log(`⏭️ Game ${gameId} already resolved, skipping`);
+      return;
+    }
 
-    if (actualWinnerChoice !== expectedChoice) {
-      console.error(`❌ CRITICAL: Winner choice mismatch for game ${gameId}!`, {
-        winner: winner.toLowerCase(),
-        coinResult,
-        winnerIsCreator,
-        actualWinnerChoice,
-        expectedChoice,
-      });
+    // Validate winner matches coin result (only if joiner_choice is set)
+    if (game.joiner_choice !== null) {
+      const winnerIsCreator = winner.toLowerCase() === game.creator_address.toLowerCase();
+      const expectedChoice = coinResult; // Winner's choice should match coin result
+      const actualWinnerChoice = winnerIsCreator ? game.creator_choice : game.joiner_choice;
+
+      if (actualWinnerChoice !== expectedChoice) {
+        console.error(`❌ CRITICAL: Winner choice mismatch for game ${gameId}!`, {
+          winner: winner.toLowerCase(),
+          coinResult,
+          winnerIsCreator,
+          actualWinnerChoice,
+          expectedChoice,
+        });
+      }
     }
 
     // Calculate fee from actual payout (fee = totalPot - payout)
@@ -293,9 +314,9 @@ async function processGameResolved(log: any) {
     const totalPot = betAmount * BigInt(2);
     const fee = totalPot - payout; // Actual fee taken by contract
 
-    // Update game with retry (all fields atomically)
+    // Update game with retry - only if in matched state (conditional update)
     await retryOperation(async () => {
-      const { error } = await supabase
+      const { data, error } = await supabase
         .from('games')
         .update({
           winner_address: winner.toLowerCase(),
@@ -307,9 +328,16 @@ async function processGameResolved(log: any) {
           resolved_block_number: blockNumber.toString(),
           resolved_at: new Date().toISOString(),
         })
-        .eq('id', gameId.toString());
+        .eq('id', gameId.toString())
+        .eq('status', 'matched') // Only update if in matched state (idempotent)
+        .select();
 
       if (error) throw error;
+
+      // Check if update actually happened
+      if (!data || data.length === 0) {
+        console.log(`⏭️ Game ${gameId} was not in matched state, skipping update`);
+      }
     });
 
     console.log(`✅ Game ${gameId} resolved successfully`);
@@ -327,7 +355,8 @@ async function processGameCancelled(log: any) {
 
   console.log(`❌ GameCancelled: ID=${gameId}, Creator=${creator}`);
 
-  const { error } = await supabase
+  // Conditional update - only if not already cancelled (idempotent)
+  const { data, error } = await supabase
     .from('games')
     .update({
       status: 'cancelled',
@@ -335,10 +364,14 @@ async function processGameCancelled(log: any) {
       cancelled_block_number: blockNumber.toString(),
       cancelled_at: new Date().toISOString(),
     })
-    .eq('id', gameId.toString());
+    .eq('id', gameId.toString())
+    .neq('status', 'cancelled') // Only update if not already cancelled
+    .select();
 
   if (error) {
     console.error('❌ Error updating game:', error);
+  } else if (!data || data.length === 0) {
+    console.log(`⏭️ Game ${gameId} already cancelled, skipping`);
   }
 }
 
@@ -350,7 +383,8 @@ async function processGameAutoCancelled(log: any) {
 
   console.log(`🤖 GameAutoCancelled (Chainlink): ID=${gameId}, Creator=${creator}`);
 
-  const { error } = await supabase
+  // Conditional update - only if not already cancelled (idempotent)
+  const { data, error } = await supabase
     .from('games')
     .update({
       status: 'cancelled',
@@ -358,10 +392,14 @@ async function processGameAutoCancelled(log: any) {
       cancelled_block_number: blockNumber.toString(),
       cancelled_at: new Date().toISOString(),
     })
-    .eq('id', gameId.toString());
+    .eq('id', gameId.toString())
+    .neq('status', 'cancelled')
+    .select();
 
   if (error) {
     console.error('❌ Error updating game:', error);
+  } else if (!data || data.length === 0) {
+    console.log(`⏭️ Game ${gameId} already cancelled, skipping`);
   }
 }
 
@@ -374,7 +412,8 @@ async function processVrfTimeoutClaimed(log: any) {
 
   console.log(`⏰ VrfTimeoutClaimed: ID=${gameId}, PlayerA=${playerA}, PlayerB=${playerB}, Refund=${refundAmount}`);
 
-  const { error } = await supabase
+  // Conditional update - only if not already cancelled (idempotent)
+  const { data, error } = await supabase
     .from('games')
     .update({
       status: 'cancelled',
@@ -382,10 +421,14 @@ async function processVrfTimeoutClaimed(log: any) {
       cancelled_block_number: blockNumber.toString(),
       cancelled_at: new Date().toISOString(),
     })
-    .eq('id', gameId.toString());
+    .eq('id', gameId.toString())
+    .neq('status', 'cancelled')
+    .select();
 
   if (error) {
     console.error('❌ Error updating game for VRF timeout:', error);
+  } else if (!data || data.length === 0) {
+    console.log(`⏭️ Game ${gameId} already cancelled, skipping`);
   }
 }
 
@@ -398,7 +441,8 @@ async function processEmergencyRefund(log: any) {
 
   console.log(`🚨 EmergencyRefund: ID=${gameId}, PlayerA=${playerA}, PlayerB=${playerB}, Refund=${totalRefund}`);
 
-  const { error } = await supabase
+  // Conditional update - only if not already cancelled (idempotent)
+  const { data, error } = await supabase
     .from('games')
     .update({
       status: 'cancelled',
@@ -406,10 +450,14 @@ async function processEmergencyRefund(log: any) {
       cancelled_block_number: blockNumber.toString(),
       cancelled_at: new Date().toISOString(),
     })
-    .eq('id', gameId.toString());
+    .eq('id', gameId.toString())
+    .neq('status', 'cancelled')
+    .select();
 
   if (error) {
     console.error('❌ Error updating game for emergency refund:', error);
+  } else if (!data || data.length === 0) {
+    console.log(`⏭️ Game ${gameId} already cancelled, skipping`);
   }
 }
 

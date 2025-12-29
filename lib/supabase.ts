@@ -69,19 +69,8 @@ export interface Database {
         Insert: Omit<Database['public']['Tables']['tiers']['Row'], 'created_at'>;
         Update: Partial<Database['public']['Tables']['tiers']['Row']>;
       };
-      queue: {
-        Row: {
-          id: string;
-          game_id: string;
-          tier: number;
-          player_address: string;
-          choice: boolean;
-          joined_at: string;
-          expires_at: string;
-        };
-        Insert: Omit<Database['public']['Tables']['queue']['Row'], 'joined_at'>;
-        Update: Partial<Database['public']['Tables']['queue']['Row']>;
-      };
+      // Note: Queue functionality is handled by the games table with status='pending'
+      // No separate queue table exists - games with pending status serve as the queue
     };
   };
 }

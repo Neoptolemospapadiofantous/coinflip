@@ -62,7 +62,7 @@ export function usePendingGames() {
 
       return normalizeGames(data);
     },
-    staleTime: 30000, // 30 seconds
+    staleTime: 15000, // 15 seconds - kept short for active game updates
     refetchInterval: false, // Disabled - central sync handles updates
     retry: 2,
   });
@@ -85,7 +85,7 @@ export function useActiveGames() {
 
       return normalizeGames(data);
     },
-    staleTime: 30000, // 30 seconds
+    staleTime: 15000, // 15 seconds - kept short for active game updates
     refetchInterval: false, // Disabled - central sync handles updates
     retry: 2,
   });

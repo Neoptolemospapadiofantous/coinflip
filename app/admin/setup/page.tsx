@@ -271,7 +271,7 @@ export default function SetupPage() {
 
                     {(!health.tables.tiers.success ||
                       !health.tables.games.success ||
-                      !health.tables.queue.success) && (
+                      !health.tables.indexer_state.success) && (
                       <Callout.Root color="yellow">
                         <Callout.Icon>
                           <AlertTriangle className="w-4 h-4" />

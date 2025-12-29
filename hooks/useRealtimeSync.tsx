@@ -7,8 +7,8 @@ import { useGameStore } from '@/store/gameStore';
 import { Game, parseGame } from '@/types/game';
 import { useAccount } from 'wagmi';
 
-// Fallback polling with exponential backoff
-const FALLBACK_POLL_INTERVALS = [5000, 10000, 20000, 30000]; // 5s, 10s, 20s, 30s max
+// Fallback polling with exponential backoff (capped at 15s for better UX)
+const FALLBACK_POLL_INTERVALS = [3000, 5000, 10000, 15000]; // 3s, 5s, 10s, 15s max
 
 /**
  * Centralized real-time sync manager

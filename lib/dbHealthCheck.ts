@@ -20,7 +20,7 @@ export interface DatabaseHealth {
   tables: {
     tiers: HealthCheckResult;
     games: HealthCheckResult;
-    queue: HealthCheckResult;
+    indexer_state: HealthCheckResult;
   };
   data: {
     tiersCount: HealthCheckResult;
@@ -310,7 +310,7 @@ export async function runDatabaseHealthCheck(): Promise<DatabaseHealth> {
   const tablesCheck = {
     tiers: { success: false, message: 'Skipped - connection failed' } as HealthCheckResult,
     games: { success: false, message: 'Skipped - connection failed' } as HealthCheckResult,
-    queue: { success: false, message: 'Skipped - connection failed' } as HealthCheckResult,
+    indexer_state: { success: false, message: 'Skipped - connection failed' } as HealthCheckResult,
   };
 
   let tiersCount = {
@@ -334,8 +334,8 @@ export async function runDatabaseHealthCheck(): Promise<DatabaseHealth> {
     tablesCheck.games = await checkTable('games');
     console.log('  Games table:', tablesCheck.games.success ? '✅' : '❌', tablesCheck.games.message);
 
-    tablesCheck.queue = await checkTable('queue');
-    console.log('  Queue table:', tablesCheck.queue.success ? '✅' : '❌', tablesCheck.queue.message);
+    tablesCheck.indexer_state = await checkTable('indexer_state');
+    console.log('  Indexer state:', tablesCheck.indexer_state.success ? '✅' : '❌', tablesCheck.indexer_state.message);
 
     // Check tiers data if table exists
     if (tablesCheck.tiers.success) {
@@ -353,7 +353,7 @@ export async function runDatabaseHealthCheck(): Promise<DatabaseHealth> {
     migrations.success &&
     tablesCheck.tiers.success &&
     tablesCheck.games.success &&
-    tablesCheck.queue.success &&
+    tablesCheck.indexer_state.success &&
     tiersCount.success &&
     realtime.success;
 

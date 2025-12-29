@@ -22,7 +22,7 @@ import {
   Legend,
   ResponsiveContainer,
 } from 'recharts';
-import { TrendingUp, TrendingDown, Trophy, Target, DollarSign, Percent, ExternalLink } from 'lucide-react';
+import { TrendingUp, TrendingDown, Trophy, Target, DollarSign, Percent, ExternalLink, Filter } from 'lucide-react';
 import { useChainId } from 'wagmi';
 import Link from 'next/link';
 
@@ -32,6 +32,7 @@ export default function HistoryPage() {
   const { data: games = [], isLoading: isLoadingGames } = usePlayerGames(address, 100);
   const { data: tiers = [] } = useTiers();
   const [chartFilter, setChartFilter] = useState<string>('10');
+  const [statusFilter, setStatusFilter] = useState<string>('all');
   const { data: playerStats, isLoading: isLoadingStats } = usePlayerStats(address);
 
   const isLoading = isLoadingGames || isLoadingStats;
@@ -100,6 +101,18 @@ export default function HistoryPage() {
       };
     });
   }, [games, address, chartFilter]);
+
+  // Filter games for table display
+  const filteredGames = useMemo(() => {
+    if (statusFilter === 'all') return games;
+    if (statusFilter === 'won') {
+      return games.filter(g => g.status === 'resolved' && g.winner_address?.toLowerCase() === address?.toLowerCase());
+    }
+    if (statusFilter === 'lost') {
+      return games.filter(g => g.status === 'resolved' && g.winner_address?.toLowerCase() !== address?.toLowerCase());
+    }
+    return games.filter(g => g.status === statusFilter);
+  }, [games, statusFilter, address]);
 
   if (!address) {
     return (
@@ -221,7 +234,7 @@ export default function HistoryPage() {
                       <Heading size="7" className="text-orange-400">
                         {formatCurrency(stats.totalFees)}
                       </Heading>
-                      <Text size="1" color="gray">5% on wins</Text>
+                      <Text size="1" color="gray">3% platform fee</Text>
                     </Flex>
                   </Card>
                 </>
@@ -407,7 +420,23 @@ export default function HistoryPage() {
             {/* Recent Games Table */}
             <Card className="card-simple">
               <Flex direction="column" gap="4" p="6">
-                <Heading size="5">Recent Games</Heading>
+                <Flex justify="between" align="center">
+                  <Heading size="5">Recent Games</Heading>
+                  <Flex align="center" gap="2">
+                    <Filter className="w-4 h-4 text-gray-400" />
+                    <Select.Root value={statusFilter} onValueChange={setStatusFilter}>
+                      <Select.Trigger placeholder="Filter" />
+                      <Select.Content>
+                        <Select.Item value="all">All Games</Select.Item>
+                        <Select.Item value="won">Wins Only</Select.Item>
+                        <Select.Item value="lost">Losses Only</Select.Item>
+                        <Select.Item value="pending">Pending</Select.Item>
+                        <Select.Item value="matched">Matched</Select.Item>
+                        <Select.Item value="cancelled">Cancelled</Select.Item>
+                      </Select.Content>
+                    </Select.Root>
+                  </Flex>
+                </Flex>
 
                 {isLoading ? (
                   <div className="overflow-x-auto">
@@ -436,16 +465,18 @@ export default function HistoryPage() {
                       </Table.Body>
                     </Table.Root>
                   </div>
-                ) : games.length === 0 ? (
+                ) : filteredGames.length === 0 ? (
                   <Flex direction="column" align="center" gap="3" py="8">
                     <Text size="5" color="gray">
-                      No games played yet
+                      {games.length === 0 ? 'No games played yet' : 'No games match filter'}
                     </Text>
-                    <Link href="/play">
-                      <Button size="3" className="cursor-pointer">
-                        Start Playing
-                      </Button>
-                    </Link>
+                    {games.length === 0 && (
+                      <Link href="/play">
+                        <Button size="3" className="cursor-pointer">
+                          Start Playing
+                        </Button>
+                      </Link>
+                    )}
                   </Flex>
                 ) : (
                   <div className="overflow-x-auto">
@@ -461,7 +492,7 @@ export default function HistoryPage() {
                         </Table.Row>
                       </Table.Header>
                       <Table.Body>
-                        {games.slice(0, 20).map((game) => {
+                        {filteredGames.slice(0, 50).map((game) => {
                           const isWin =
                             game.status === 'resolved' &&
                             game.winner_address?.toLowerCase() === address?.toLowerCase();
@@ -483,6 +514,8 @@ export default function HistoryPage() {
                                         : 'red'
                                       : game.status === 'matched'
                                       ? 'blue'
+                                      : game.status === 'cancelled'
+                                      ? 'gray'
                                       : 'yellow'
                                   }
                                 >
@@ -490,7 +523,11 @@ export default function HistoryPage() {
                                     ? isWin
                                       ? 'Won'
                                       : 'Lost'
-                                    : game.status}
+                                    : game.status === 'cancelled'
+                                    ? 'Cancelled'
+                                    : game.status === 'matched'
+                                    ? 'Matched'
+                                    : 'Pending'}
                                 </Badge>
                               </Table.Cell>
                               <Table.Cell>{formatCurrency(game.amount)}</Table.Cell>
@@ -508,8 +545,10 @@ export default function HistoryPage() {
                                       </Text>
                                     )}
                                   </Flex>
+                                ) : game.status === 'cancelled' ? (
+                                  <Text color="gray">Refunded</Text>
                                 ) : (
-                                  <Text color="gray">Pending</Text>
+                                  <Text color="gray">{getCoinSideLabel(game.creator_choice)}</Text>
                                 )}
                               </Table.Cell>
                               <Table.Cell>

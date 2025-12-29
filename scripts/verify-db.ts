@@ -68,7 +68,7 @@ async function main() {
       console.log('      - NEXT_PUBLIC_SUPABASE_ANON_KEY\n');
     }
 
-    if (!health.tables.tiers.success || !health.tables.games.success || !health.tables.queue.success) {
+    if (!health.tables.tiers.success || !health.tables.games.success || !health.tables.indexer_state.success) {
       console.log('   2. Run the SQL schema in Supabase:');
       console.log('      See SETUP_SUPABASE.md for complete SQL\n');
     }
@@ -81,7 +81,7 @@ async function main() {
     if (!health.realtime.success) {
       console.log('   4. Enable Realtime in Supabase:');
       console.log('      Dashboard → Database → Replication');
-      console.log('      Enable for: tiers, games, queue\n');
+      console.log('      Enable for: games, indexer_state\n');
     }
 
     console.log('   📖 Full setup guide: ./SETUP_SUPABASE.md\n');
