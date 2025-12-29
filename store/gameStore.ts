@@ -47,6 +47,7 @@ interface GameState {
   addActiveGame: (game: Game) => void;
   updateActiveGame: (game: Game) => void;
   removeActiveGame: (gameId: string) => void;
+  clearAllActiveGames: () => void;
   getActiveGame: (gameId: string) => Game | undefined;
   getActiveGamesCount: () => number;
   canCreateNewGame: () => boolean;
@@ -128,6 +129,21 @@ export const useGameStore = create<GameState>((set, get) => ({
       const newMap = new Map(state.activeGames);
       newMap.delete(gameId);
       return { activeGames: newMap };
+    }),
+
+  clearAllActiveGames: () =>
+    set({
+      activeGames: new Map(),
+      cancellingGames: new Set(),
+      joiningGames: new Set(),
+      modalQueue: [],
+      currentModalGame: null,
+      currentModalType: null,
+      showGameModal: false,
+      // Legacy
+      activeGame: null,
+      activeGameId: null,
+      showMatchModal: false,
     }),
 
   getActiveGame: (gameId) => {
