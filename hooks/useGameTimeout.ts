@@ -5,6 +5,7 @@ import { useAccount } from 'wagmi';
 import { useQueryClient } from '@tanstack/react-query';
 import { useGameStore } from '@/store/gameStore';
 import { Game } from '@/types/game';
+import { playSound } from '@/lib/sounds';
 
 // Chainlink Automation auto-cancels after 5 minutes (25 blocks on Sepolia @ 12s/block)
 // This is for UI display purposes only - actual cancellation is on-chain
@@ -70,9 +71,11 @@ export function isGameExpired(game: Game): boolean {
  */
 export function useGameTimeout() {
   const { address } = useAccount();
-  const { activeGames } = useGameStore();
+  const { activeGames, queueModal } = useGameStore();
   const queryClient = useQueryClient();
   const pollingRef = useRef<NodeJS.Timeout | null>(null);
+  // Track which games have already shown expired modal to avoid duplicates
+  const expiredModalShownRef = useRef<Set<string>>(new Set());
 
   // Get user's pending games from active games (Map -> Array)
   const userPendingGames = useMemo(() => {
@@ -138,6 +141,31 @@ export function useGameTimeout() {
       return now >= t.autoCancelAt;
     });
   }, [pendingTimeouts]);
+
+  // Auto-trigger expired modal when games expire
+  useEffect(() => {
+    userPendingGames.forEach((game) => {
+      const remaining = getGameTimeRemaining(game);
+
+      // Game has expired and we haven't shown modal yet
+      if (remaining <= 0 && !expiredModalShownRef.current.has(game.id)) {
+        console.log(`⏰ [useGameTimeout] Game ${game.id} expired, showing modal`);
+        expiredModalShownRef.current.add(game.id);
+        playSound.error();
+        queueModal(game, 'expired');
+      }
+    });
+  }, [userPendingGames, queueModal]);
+
+  // Clean up expired modal tracking when games are removed
+  useEffect(() => {
+    const activeGameIds = new Set(userPendingGames.map(g => g.id));
+    expiredModalShownRef.current.forEach((gameId) => {
+      if (!activeGameIds.has(gameId)) {
+        expiredModalShownRef.current.delete(gameId);
+      }
+    });
+  }, [userPendingGames]);
 
   // Poll for DB updates when games are past auto-cancel threshold
   // This ensures UI updates even if realtime subscription misses the event
