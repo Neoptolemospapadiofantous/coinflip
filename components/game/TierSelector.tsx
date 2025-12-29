@@ -54,7 +54,7 @@ export function TierSelector() {
       {/* Network Indicator */}
       <NetworkIndicator />
 
-      <Grid columns={{ initial: '2', md: '5' }} gap="3">
+      <Grid columns={{ initial: '2', sm: '3', md: '5' }} gap={{ initial: '2', sm: '3' }}>
         {tiers?.map((tier) => {
           const tierAmount = BigInt(tier.amount); // tier.amount is already in wei
           const canAfford = balance ? balance.value >= tierAmount : false;
@@ -64,21 +64,21 @@ export function TierSelector() {
             <Button
               key={tier.id}
               variant={isSelected ? 'solid' : 'soft'}
-              size="4"
-              className={`cursor-pointer transition-all ${
+              size={{ initial: '3', sm: '4' }}
+              className={`cursor-pointer transition-all touch-target ${
                 !canAfford ? 'opacity-50 cursor-not-allowed' : ''
               } ${isSelected ? 'ring-2 ring-cyan-500' : ''}`}
               onClick={() => canAfford && setSelectedTier(tier.id)}
               disabled={!canAfford}
             >
-              <Flex direction="column" gap="2" align="center" py="3" className="w-full">
+              <Flex direction="column" gap={{ initial: '1', sm: '2' }} align="center" py={{ initial: '2', sm: '3' }} className="w-full">
                 {/* Amount */}
-                <Text size="6" weight="bold" className="text-white">
+                <Text size={{ initial: '5', sm: '6' }} weight="bold" className="text-white">
                   ${tier.amountUsd}
                 </Text>
 
                 {/* Win Amount */}
-                <Text size="1" color="gray">
+                <Text size="1" color="gray" className="whitespace-nowrap">
                   Win ${tier.winAmountUsd}
                 </Text>
 
@@ -86,7 +86,8 @@ export function TierSelector() {
                 {tier.playersInQueue > 0 && (
                   <Badge color="green" variant="soft" size="1">
                     <Users className="w-3 h-3" />
-                    {tier.playersInQueue} waiting
+                    <span className="hidden sm:inline">{tier.playersInQueue} waiting</span>
+                    <span className="sm:hidden">{tier.playersInQueue}</span>
                   </Badge>
                 )}
 
@@ -94,7 +95,8 @@ export function TierSelector() {
                 {!canAfford && (
                   <Badge color="red" variant="soft" size="1">
                     <Lock className="w-3 h-3" />
-                    Low balance
+                    <span className="hidden sm:inline">Low balance</span>
+                    <span className="sm:hidden">Low</span>
                   </Badge>
                 )}
               </Flex>
@@ -111,7 +113,7 @@ export function TierSelector() {
             </Text>
             <Text size="1" color="gray">
               You'll pay ${tiers?.[selectedTier]?.amountUsd} and can win up to $
-              {tiers?.[selectedTier]?.winAmountUsd} (95% of pot, 5% fee)
+              {tiers?.[selectedTier]?.winAmountUsd} (97% of pot, 3% fee)
             </Text>
           </Flex>
         </Card>
