@@ -363,12 +363,16 @@ export function GameSessionModal({ game, open, onClose, userAddress, modalType }
                         <Text size="1" weight="bold">{formatTime(vrfElapsedSeconds)}</Text>
                       </Flex>
                       <Text size="1" color="gray">
-                        {vrfElapsedSeconds < 10 && 'Starting...'}
-                        {vrfElapsedSeconds >= 10 && vrfElapsedSeconds < 30 && 'Almost there...'}
-                        {vrfElapsedSeconds >= 30 && vrfElapsedSeconds < 60 && 'Taking longer than usual'}
-                        {vrfElapsedSeconds >= 60 && 'Please wait...'}
+                        {vrfElapsedSeconds < 10 && 'Requesting...'}
+                        {vrfElapsedSeconds >= 10 && vrfElapsedSeconds < 20 && 'Processing...'}
+                        {vrfElapsedSeconds >= 20 && vrfElapsedSeconds < 30 && 'Almost there...'}
+                        {vrfElapsedSeconds >= 30 && vrfElapsedSeconds < 60 && 'Taking longer...'}
+                        {vrfElapsedSeconds >= 60 && 'Network busy...'}
                       </Text>
                     </Flex>
+                    <Text size="1" color="gray" align="center">
+                      Typical: ~15-30 seconds
+                    </Text>
                   </Flex>
                 </>
               ) : (
@@ -398,6 +402,17 @@ export function GameSessionModal({ game, open, onClose, userAddress, modalType }
                       </Text>
                     </Flex>
                   </Card>
+
+                  {/* Manual refresh button */}
+                  <Button
+                    size="2"
+                    variant="soft"
+                    onClick={() => refetchGame()}
+                    className="touch-target"
+                  >
+                    <Loader2 className="w-4 h-4" />
+                    Check Status
+                  </Button>
                 </>
               )}
 
