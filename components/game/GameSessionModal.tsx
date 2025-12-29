@@ -8,6 +8,7 @@ import { CoinFlip2D } from './CoinFlip3D';
 import { Confetti } from '@/components/effects/Confetti';
 import { Game } from '@/types/game';
 import { formatCurrency, formatGameId } from '@/lib/utils';
+import { CopyableGameId } from '@/components/ui/CopyableGameId';
 import { invalidateGameQueries, removeGameFromPendingCache } from '@/lib/queryUtils';
 import { Loader2, Users, Trophy, Zap, AlertTriangle, Clock, XCircle } from 'lucide-react';
 import { useGameStore } from '@/store/gameStore';
@@ -313,40 +314,38 @@ export function GameSessionModal({ game, open, onClose, userAddress, modalType }
       <Dialog.Root open={open} onOpenChange={handleClose}>
       <Dialog.Content
         maxWidth="600px"
-        className="backdrop-blur-xl bg-slate-900/95 border-2 border-cyan-500/30 max-h-[90vh] overflow-y-auto fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-50"
+        className="backdrop-blur-xl bg-slate-900/95 border-2 border-cyan-500/30 max-h-[90vh] overflow-y-auto fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-50 w-[calc(100vw-2rem)] sm:w-auto"
         aria-describedby={undefined}
       >
         <Dialog.Title>
           <Flex direction="column" gap="2" align="center">
-            <Heading size="7" className="text-gradient-rainbow">
-              {modalType === 'expired' && 'Game Expired - Action Required'}
+            <Heading size={{ initial: '5', sm: '7' }} className="text-gradient-rainbow text-center">
+              {modalType === 'expired' && 'Game Expired'}
               {modalType !== 'expired' && game.status === 'matched' && !vrfTimedOut && 'Game Matched!'}
-              {modalType !== 'expired' && game.status === 'matched' && vrfTimedOut && 'VRF Taking Longer Than Expected'}
+              {modalType !== 'expired' && game.status === 'matched' && vrfTimedOut && 'VRF Delayed'}
               {modalType !== 'expired' && game.status === 'resolved' && !validation.valid && !showResult && 'Finalizing...'}
-              {modalType !== 'expired' && game.status === 'resolved' && validation.valid && !showResult && 'Flipping Coin...'}
+              {modalType !== 'expired' && game.status === 'resolved' && validation.valid && !showResult && 'Flipping...'}
               {modalType !== 'expired' && game.status === 'resolved' && showResult && (isWinner ? 'You Won!' : 'Better Luck Next Time')}
               {modalType !== 'expired' && game.status === 'cancelled' && 'Game Cancelled'}
             </Heading>
-            <Text size="2" color="gray">
-              Game {formatGameId(game.id)}
-            </Text>
+            <CopyableGameId gameId={game.id} size={{ initial: '1', sm: '2' }} />
           </Flex>
         </Dialog.Title>
 
         <Flex direction="column" gap="6" mt="4">
           {/* Game Status: Matched - Waiting for VRF */}
           {game.status === 'matched' && (
-            <Flex direction="column" gap="5" align="center" py="6">
+            <Flex direction="column" gap={{ initial: '4', sm: '5' }} align="center" py={{ initial: '4', sm: '6' }}>
               {!vrfTimedOut ? (
                 <>
-                  <Loader2 className="w-20 h-20 text-cyan-400 animate-spin glow-cyan" />
+                  <Loader2 className="w-16 h-16 sm:w-20 sm:h-20 text-cyan-400 animate-spin glow-cyan" />
 
-                  <Flex direction="column" gap="2" align="center">
-                    <Heading size="5" className="text-gradient-cyan-purple">
+                  <Flex direction="column" gap="2" align="center" className="px-2">
+                    <Heading size={{ initial: '4', sm: '5' }} className="text-gradient-cyan-purple text-center">
                       Requesting Random Number...
                     </Heading>
-                    <Text size="3" color="gray" align="center">
-                      Chainlink VRF is generating a provably fair random number
+                    <Text size={{ initial: '2', sm: '3' }} color="gray" align="center">
+                      Chainlink VRF is generating a provably fair result
                     </Text>
                   </Flex>
 
@@ -547,29 +546,31 @@ export function GameSessionModal({ game, open, onClose, userAddress, modalType }
 
           {/* Game Status: Resolved - Show Result */}
           {game.status === 'resolved' && showResult && (
-            <Flex direction="column" gap="5" align="center">
+            <Flex direction="column" gap={{ initial: '4', sm: '5' }} align="center">
               {/* Result Display */}
               <Flex
                 direction="column"
                 align="center"
                 justify="center"
-                gap="4"
-                className="w-full py-8 bg-gradient-to-b from-slate-900/50 to-slate-950/50 rounded-lg border border-cyan-500/20"
+                gap={{ initial: '3', sm: '4' }}
+                className={`w-full py-6 sm:py-8 bg-gradient-to-b from-slate-900/50 to-slate-950/50 rounded-lg border ${
+                  isWinner ? 'border-green-500/40 animate-win-glow' : 'border-red-500/20'
+                } ${isWinner ? 'animate-win-entrance' : 'animate-lose-entrance'}`}
               >
-                <div className="text-7xl sm:text-8xl md:text-9xl animate-pulse-slow">
+                <div className={`text-6xl sm:text-7xl md:text-8xl ${isWinner ? 'animate-result-emoji' : 'animate-defeat-fade'}`}>
                   {result ? '🪙' : '👑'}
                 </div>
-                <Heading size="6" className={isWinner ? 'text-gradient-gold' : 'text-gray-400'}>
+                <Heading size={{ initial: '5', sm: '6' }} className={isWinner ? 'animate-victory-shimmer' : 'text-gray-400'}>
                   Result: {result ? 'Tails' : 'Heads'}
                 </Heading>
               </Flex>
 
               {/* Winner Card */}
-              <Card className={`card-solid w-full ${isWinner ? 'border-green-500/60 glow-resolved' : 'border-red-500/30'}`}>
-                <Flex direction="column" gap="4" p="5">
+              <Card className={`card-solid w-full ${isWinner ? 'border-green-500/60 animate-win-glow' : 'border-red-500/30 animate-lose-entrance'}`}>
+                <Flex direction="column" gap={{ initial: '3', sm: '4' }} p={{ initial: '3', sm: '5' }}>
                   <Flex align="center" gap="2">
-                    <Trophy className={`w-5 h-5 ${isWinner ? 'text-green-400' : 'text-gray-500'}`} />
-                    <Heading size="4" className={isWinner ? 'text-green-400' : 'text-gray-400'}>
+                    <Trophy className={`w-5 h-5 ${isWinner ? 'text-green-400 animate-trophy-bounce' : 'text-gray-500'}`} />
+                    <Heading size="4" className={isWinner ? 'animate-victory-shimmer' : 'text-gray-400'}>
                       {isWinner ? 'Victory!' : 'Defeat'}
                     </Heading>
                   </Flex>
@@ -613,22 +614,22 @@ export function GameSessionModal({ game, open, onClose, userAddress, modalType }
               </Card>
 
               {/* Action Buttons */}
-              <Flex gap="3" style={{ width: '100%' }}>
+              <Flex gap={{ initial: '2', sm: '3' }} className="w-full" direction={{ initial: 'column', sm: 'row' }}>
                 <Button
-                  size="3"
+                  size={{ initial: '2', sm: '3' }}
                   variant="soft"
                   onClick={handleClose}
-                  className="flex-1"
+                  className="flex-1 touch-target"
                 >
                   Close
                 </Button>
                 <Button
-                  size="3"
+                  size={{ initial: '2', sm: '3' }}
                   onClick={() => {
                     handleClose();
                     router.push('/play');
                   }}
-                  className="flex-1 glow-cyan hover:scale-105 transition-transform"
+                  className="flex-1 glow-cyan hover:scale-105 transition-transform touch-target"
                 >
                   Play Again
                 </Button>
@@ -675,7 +676,7 @@ export function GameSessionModal({ game, open, onClose, userAddress, modalType }
                     <Flex direction="column" gap="3" p="4">
                       <Flex justify="between" align="center">
                         <Text size="2" color="gray">Game ID:</Text>
-                        <Text size="2" weight="bold">{formatGameId(game.id)}</Text>
+                        <CopyableGameId gameId={game.id} size="2" showLabel={false} />
                       </Flex>
 
                       <Flex justify="between" align="center">
@@ -771,7 +772,7 @@ export function GameSessionModal({ game, open, onClose, userAddress, modalType }
                 <Flex direction="column" gap="3" p="4">
                   <Flex justify="between" align="center">
                     <Text size="2" color="gray">Game ID:</Text>
-                    <Text size="2" weight="bold">{formatGameId(game.id)}</Text>
+                    <CopyableGameId gameId={game.id} size="2" showLabel={false} />
                   </Flex>
 
                   <Flex justify="between" align="center">
