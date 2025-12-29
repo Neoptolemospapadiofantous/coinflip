@@ -459,7 +459,7 @@ export default function PlayPage() {
                         </Flex>
                         <Flex justify="between">
                           <Text size="1" color="gray">Platform Fee:</Text>
-                          <Text size="1" color="gray">5% (included)</Text>
+                          <Text size="1" color="gray">3% on wins</Text>
                         </Flex>
                       </Flex>
 
