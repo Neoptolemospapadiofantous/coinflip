@@ -10,7 +10,7 @@
 
 import { config } from 'dotenv';
 import { resolve } from 'path';
-import { createPublicClient, http, parseAbiItem } from 'viem';
+import { createPublicClient, http, webSocket, parseAbiItem, fallback } from 'viem';
 import { sepolia } from 'viem/chains';
 import { createClient } from '@supabase/supabase-js';
 import { COINFLIP_ABI } from '../lib/contracts/abi';
@@ -23,14 +23,34 @@ const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
 const CONTRACT_ADDRESS = process.env.NEXT_PUBLIC_COINFLIP_CONTRACT_ADDRESS_SEPOLIA! as `0x${string}`;
 const RPC_URL = process.env.SEPOLIA_RPC_URL || 'https://rpc.sepolia.org';
+const WSS_URL = process.env.SEPOLIA_WSS_URL; // Optional WebSocket URL for real-time events
 
-// Initialize clients
+// Determine if WebSocket is available
+const useWebSocket = !!WSS_URL;
+
+// Initialize clients with WebSocket support (fallback to HTTP if WSS not available)
 const publicClient = createPublicClient({
   chain: sepolia,
-  transport: http(RPC_URL),
+  transport: useWebSocket
+    ? fallback([
+        webSocket(WSS_URL!, {
+          reconnect: {
+            attempts: 10,
+            delay: 1000,
+          },
+        }),
+        http(RPC_URL), // Fallback to HTTP if WebSocket fails
+      ])
+    : http(RPC_URL),
 });
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
+
+// Log transport mode
+console.log(`🔌 Transport: ${useWebSocket ? 'WebSocket (real-time)' : 'HTTP (polling)'}`);
+if (useWebSocket) {
+  console.log(`   WSS URL: ${WSS_URL?.replace(/\/\/.*@/, '//<redacted>@')}`);
+}
 
 // Retry helper for database operations
 async function retryOperation<T>(
@@ -597,6 +617,166 @@ async function indexEvents(fromBlock: bigint, toBlock: bigint) {
   console.log(`✅ Processed ${allLogs.length} events`);
 }
 
+// Watch contract events in real-time using WebSocket
+function watchContractEvents(state: IndexerState) {
+  console.log('⚡ Setting up real-time event watchers...');
+
+  // Watch GameCreated events
+  const unwatchCreated = publicClient.watchContractEvent({
+    address: CONTRACT_ADDRESS,
+    abi: COINFLIP_ABI,
+    eventName: 'GameCreated',
+    onLogs: async (logs) => {
+      for (const log of logs) {
+        console.log(`⚡ [LIVE] GameCreated event received`);
+        await processGameCreated(log);
+        if (log.blockNumber && log.blockNumber > state.lastProcessedBlock) {
+          state.lastProcessedBlock = log.blockNumber;
+          await saveState(state);
+        }
+      }
+    },
+    onError: (error) => console.error('❌ GameCreated watch error:', error),
+  });
+
+  // Watch GameJoined events
+  const unwatchJoined = publicClient.watchContractEvent({
+    address: CONTRACT_ADDRESS,
+    abi: COINFLIP_ABI,
+    eventName: 'GameJoined',
+    onLogs: async (logs) => {
+      for (const log of logs) {
+        console.log(`⚡ [LIVE] GameJoined event received`);
+        await processGameJoined(log);
+        if (log.blockNumber && log.blockNumber > state.lastProcessedBlock) {
+          state.lastProcessedBlock = log.blockNumber;
+          await saveState(state);
+        }
+      }
+    },
+    onError: (error) => console.error('❌ GameJoined watch error:', error),
+  });
+
+  // Watch GameResolved events
+  const unwatchResolved = publicClient.watchContractEvent({
+    address: CONTRACT_ADDRESS,
+    abi: COINFLIP_ABI,
+    eventName: 'GameResolved',
+    onLogs: async (logs) => {
+      for (const log of logs) {
+        console.log(`⚡ [LIVE] GameResolved event received`);
+        await processGameResolved(log);
+        if (log.blockNumber && log.blockNumber > state.lastProcessedBlock) {
+          state.lastProcessedBlock = log.blockNumber;
+          await saveState(state);
+        }
+      }
+    },
+    onError: (error) => console.error('❌ GameResolved watch error:', error),
+  });
+
+  // Watch GameCancelled events
+  const unwatchCancelled = publicClient.watchContractEvent({
+    address: CONTRACT_ADDRESS,
+    abi: COINFLIP_ABI,
+    eventName: 'GameCancelled',
+    onLogs: async (logs) => {
+      for (const log of logs) {
+        console.log(`⚡ [LIVE] GameCancelled event received`);
+        await processGameCancelled(log);
+        if (log.blockNumber && log.blockNumber > state.lastProcessedBlock) {
+          state.lastProcessedBlock = log.blockNumber;
+          await saveState(state);
+        }
+      }
+    },
+    onError: (error) => console.error('❌ GameCancelled watch error:', error),
+  });
+
+  // Watch GameAutoCancelled events
+  const unwatchAutoCancelled = publicClient.watchContractEvent({
+    address: CONTRACT_ADDRESS,
+    abi: COINFLIP_ABI,
+    eventName: 'GameAutoCancelled',
+    onLogs: async (logs) => {
+      for (const log of logs) {
+        console.log(`⚡ [LIVE] GameAutoCancelled event received`);
+        await processGameAutoCancelled(log);
+        if (log.blockNumber && log.blockNumber > state.lastProcessedBlock) {
+          state.lastProcessedBlock = log.blockNumber;
+          await saveState(state);
+        }
+      }
+    },
+    onError: (error) => console.error('❌ GameAutoCancelled watch error:', error),
+  });
+
+  // Watch VrfTimeoutClaimed events
+  const unwatchVrfTimeout = publicClient.watchContractEvent({
+    address: CONTRACT_ADDRESS,
+    abi: COINFLIP_ABI,
+    eventName: 'VrfTimeoutClaimed',
+    onLogs: async (logs) => {
+      for (const log of logs) {
+        console.log(`⚡ [LIVE] VrfTimeoutClaimed event received`);
+        await processVrfTimeoutClaimed(log);
+        if (log.blockNumber && log.blockNumber > state.lastProcessedBlock) {
+          state.lastProcessedBlock = log.blockNumber;
+          await saveState(state);
+        }
+      }
+    },
+    onError: (error) => console.error('❌ VrfTimeoutClaimed watch error:', error),
+  });
+
+  // Watch EmergencyRefund events
+  const unwatchEmergency = publicClient.watchContractEvent({
+    address: CONTRACT_ADDRESS,
+    abi: COINFLIP_ABI,
+    eventName: 'EmergencyRefund',
+    onLogs: async (logs) => {
+      for (const log of logs) {
+        console.log(`⚡ [LIVE] EmergencyRefund event received`);
+        await processEmergencyRefund(log);
+        if (log.blockNumber && log.blockNumber > state.lastProcessedBlock) {
+          state.lastProcessedBlock = log.blockNumber;
+          await saveState(state);
+        }
+      }
+    },
+    onError: (error) => console.error('❌ EmergencyRefund watch error:', error),
+  });
+
+  console.log('✅ Real-time event watchers active\n');
+
+  // Return cleanup function
+  return () => {
+    unwatchCreated();
+    unwatchJoined();
+    unwatchResolved();
+    unwatchCancelled();
+    unwatchAutoCancelled();
+    unwatchVrfTimeout();
+    unwatchEmergency();
+  };
+}
+
+// Fallback: Poll for new blocks (used when WebSocket not available)
+function watchBlocksPolling(state: IndexerState) {
+  console.log('📡 Using block polling (WebSocket not available)...');
+
+  publicClient.watchBlockNumber({
+    onBlockNumber: async (blockNumber) => {
+      if (blockNumber > state.lastProcessedBlock) {
+        await indexEvents(state.lastProcessedBlock + 1n, blockNumber);
+        state.lastProcessedBlock = blockNumber;
+        await saveState(state);
+      }
+    },
+    pollingInterval: 6_000, // 6 seconds for faster updates
+  });
+}
+
 // Run indexer
 async function main() {
   console.log('🚀 Starting CoinFlip Event Indexer...');
@@ -619,7 +799,7 @@ async function main() {
   console.log(`⏮️  Last processed block: ${state.lastProcessedBlock}`);
   console.log(`▶️  Starting from block: ${fromBlock}`);
 
-  // Catch up on past events
+  // Catch up on past events (always use getLogs for historical data)
   if (fromBlock < currentBlock) {
     await indexEvents(fromBlock, currentBlock);
     state.lastProcessedBlock = currentBlock;
@@ -629,16 +809,13 @@ async function main() {
   // Watch for new events
   console.log('\n👀 Watching for new events...\n');
 
-  publicClient.watchBlockNumber({
-    onBlockNumber: async (blockNumber) => {
-      if (blockNumber > state.lastProcessedBlock) {
-        await indexEvents(state.lastProcessedBlock + 1n, blockNumber);
-        state.lastProcessedBlock = blockNumber;
-        await saveState(state);
-      }
-    },
-    pollingInterval: 12_000, // 12 seconds (Ethereum block time)
-  });
+  if (useWebSocket) {
+    // Use real-time WebSocket event watching
+    watchContractEvents(state);
+  } else {
+    // Fallback to block polling
+    watchBlocksPolling(state);
+  }
 }
 
 // Handle graceful shutdown
