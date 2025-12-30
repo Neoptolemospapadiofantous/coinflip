@@ -174,22 +174,38 @@ function ActiveGameCard({ game, onViewGame, userAddress }: ActiveGameCardProps) 
   );
 }
 
+// Maximum time to wait for optimistic game confirmation (2 minutes)
+const OPTIMISTIC_TIMEOUT_MS = 2 * 60 * 1000;
+
 export function ActiveGamesPanel() {
   const { address } = useAccount();
   const activeGames = useActiveGamesList();
-  const { queueModal } = useGameStore();
+  const { queueModal, removeActiveGame } = useGameStore();
   const [, setTick] = useState(0);
   const [isCollapsed, setIsCollapsed] = useState(() => {
     return safeStorage.getItem(PANEL_COLLAPSED_KEY) === 'true';
   });
 
   // Force re-render every second to update countdown timers
+  // Also cleanup stale optimistic games
   useEffect(() => {
     const interval = setInterval(() => {
       setTick(t => t + 1);
+
+      // Cleanup stale optimistic games (those pending for > 2 minutes)
+      const now = Date.now();
+      activeGames.forEach(game => {
+        if (game.id.startsWith('optimistic-')) {
+          const createdTime = new Date(game.created_at).getTime();
+          if (now - createdTime > OPTIMISTIC_TIMEOUT_MS) {
+            console.log(`🧹 Removing stale optimistic game: ${game.id}`);
+            removeActiveGame(game.id);
+          }
+        }
+      });
     }, 1000);
     return () => clearInterval(interval);
-  }, []);
+  }, [activeGames, removeActiveGame]);
 
   // Persist collapse state
   const toggleCollapsed = () => {

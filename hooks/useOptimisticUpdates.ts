@@ -30,10 +30,11 @@ export function useOptimisticUpdates() {
   ) => {
     if (!address) return null;
 
-    // Create optimistic game with temporary ID
+    // Create optimistic game with temporary ID (use lowercase to match DB format)
+    const lowerTxHash = txHash.toLowerCase();
     const optimisticGame: Game = {
-      id: `optimistic-${txHash.slice(0, 10)}`,
-      tx_hash: txHash.toLowerCase(),
+      id: `optimistic-${lowerTxHash.slice(0, 10)}`,
+      tx_hash: lowerTxHash,
       tier,
       amount,
       creator_address: address.toLowerCase(),
@@ -84,7 +85,7 @@ export function useOptimisticUpdates() {
    * Called by RealtimeSync when INSERT with matching tx_hash is received
    */
   const removeOptimisticGame = useCallback((txHash: string) => {
-    const optimisticId = `optimistic-${txHash.slice(0, 10)}`;
+    const optimisticId = `optimistic-${txHash.toLowerCase().slice(0, 10)}`;
 
     devLog.log(`⚡ [Optimistic] Removing optimistic game: ${optimisticId}`);
 
@@ -159,7 +160,7 @@ export function useOptimisticUpdates() {
    * Rollback optimistic create if transaction fails
    */
   const rollbackOptimisticCreate = useCallback((txHash: string) => {
-    const optimisticId = `optimistic-${txHash.slice(0, 10)}`;
+    const optimisticId = `optimistic-${txHash.toLowerCase().slice(0, 10)}`;
 
     devLog.log(`⚡ [Optimistic] Rolling back create: ${optimisticId}`);
 

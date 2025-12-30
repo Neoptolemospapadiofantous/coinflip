@@ -104,8 +104,8 @@ export function useRealtimeSync() {
             }
             devLog.log('🆕 [RealtimeSync] Game created:', game.id, 'status:', game.status);
 
-            // Remove any optimistic game with matching tx_hash
-            const txHashPrefix = game.tx_hash?.slice(0, 10) || '';
+            // Remove any optimistic game with matching tx_hash (ensure lowercase match)
+            const txHashPrefix = game.tx_hash?.toLowerCase().slice(0, 10) || '';
             const optimisticId = txHashPrefix ? `optimistic-${txHashPrefix}` : '';
 
             // Add new pending game directly to cache for instant UI update
