@@ -26,10 +26,21 @@ export interface PendingTransaction {
   startedAt: number;
 }
 
+// Quick re-bet settings from last game
+export interface LastGameSettings {
+  tier: number;
+  choice: boolean; // false = heads, true = tails
+  wasWin: boolean;
+  amount: string; // For display purposes
+}
+
 interface GameState {
   // Current game creation flow
   selectedTier: number | null;
   coinChoice: boolean | null; // false = heads, true = tails
+
+  // Quick re-bet from last game
+  lastGameSettings: LastGameSettings | null;
 
   // Multiple active games tracking
   activeGames: Map<string, ActiveGameEntry>;
@@ -57,6 +68,11 @@ interface GameState {
   setSelectedTier: (tier: number | null) => void;
   setCoinChoice: (choice: boolean | null) => void;
   resetGameCreation: () => void;
+
+  // Actions - Quick re-bet
+  saveLastGameSettings: (tier: number, choice: boolean, wasWin: boolean, amount: string) => void;
+  setupQuickRebet: () => void; // Sets tier/choice from last game
+  clearLastGameSettings: () => void;
 
   // Actions - Active games management
   addActiveGame: (game: Game) => void;
@@ -105,6 +121,7 @@ export const useGameStore = create<GameState>((set, get) => ({
   // Initial state
   selectedTier: null,
   coinChoice: null,
+  lastGameSettings: null,
   activeGames: new Map(),
   cancellingGames: new Set(),
   joiningGames: new Set(),
@@ -128,6 +145,24 @@ export const useGameStore = create<GameState>((set, get) => ({
       selectedTier: null,
       coinChoice: null,
     }),
+
+  // Quick re-bet actions
+  saveLastGameSettings: (tier, choice, wasWin, amount) =>
+    set({
+      lastGameSettings: { tier, choice, wasWin, amount },
+    }),
+
+  setupQuickRebet: () => {
+    const { lastGameSettings } = get();
+    if (lastGameSettings) {
+      set({
+        selectedTier: lastGameSettings.tier,
+        coinChoice: lastGameSettings.choice,
+      });
+    }
+  },
+
+  clearLastGameSettings: () => set({ lastGameSettings: null }),
 
   // Active games management
   addActiveGame: (game) =>
@@ -161,6 +196,7 @@ export const useGameStore = create<GameState>((set, get) => ({
       activeGames: new Map(),
       cancellingGames: new Set(),
       joiningGames: new Set(),
+      pendingTransactions: new Map(), // Clear pending transactions on wallet change
       modalQueue: [],
       currentModalGame: null,
       currentModalType: null,

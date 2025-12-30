@@ -203,6 +203,9 @@ export default function QueuePage() {
     if (isCancelSuccess && cancelingGameId) {
       finishCancellingGame(cancelingGameId, true);
 
+      // Clear any pending create transaction (in case it wasn't cleared)
+      removePendingTransaction('create-game');
+
       // Immediately invalidate all game queries for real-time sync
       invalidateGameQueries(queryClient, cancelingGameId);
 
@@ -212,7 +215,7 @@ export default function QueuePage() {
       setCancelingGameId(null);
       resetCancelState();
     }
-  }, [isCancelSuccess, cancelingGameId, resetCancelState, finishCancellingGame, queryClient]);
+  }, [isCancelSuccess, cancelingGameId, resetCancelState, finishCancellingGame, queryClient, removePendingTransaction]);
 
   useEffect(() => {
     if (cancelError && cancelingGameId) {

@@ -47,7 +47,7 @@ export function GameSessionModal({ game, open, onClose, userAddress, modalType }
   const [expiredElapsedSeconds, setExpiredElapsedSeconds] = useState(0);
   const [alwaysSkipAnimation, setAlwaysSkipAnimation] = useState(false);
   const [currentRetryCount, setCurrentRetryCount] = useState(0);
-  const { resetGame, updateActiveGame, removeActiveGame, startCancellingGame, finishCancellingGame, modalQueue } = useGameStore();
+  const { resetGame, updateActiveGame, removeActiveGame, startCancellingGame, finishCancellingGame, modalQueue, saveLastGameSettings, setupQuickRebet } = useGameStore();
 
   // Use refs to prevent duplicate sounds/toasts (more reliable than state)
   const hasPlayedMatchSoundRef = useRef(false);
@@ -308,10 +308,18 @@ export function GameSessionModal({ game, open, onClose, userAddress, modalType }
     await cancelGame(game.id);
   };
 
-  // Extracted: Play result effects (sound, confetti, toast)
+  /// Extracted: Play result effects (sound, confetti, toast)
   const playResultEffects = useCallback(() => {
     if (hasPlayedResultSoundRef.current || !isParticipant) return;
     hasPlayedResultSoundRef.current = true;
+
+    // Save game settings for quick re-bet
+    if (game) {
+      const userChoice = isCreator ? game.creator_choice : game.joiner_choice;
+      if (userChoice !== undefined && userChoice !== null && game.tier !== undefined) {
+        saveLastGameSettings(game.tier, userChoice, isWinner, game.amount);
+      }
+    }
 
     if (isWinner) {
       playSound.win();
@@ -321,7 +329,7 @@ export function GameSessionModal({ game, open, onClose, userAddress, modalType }
       playSound.loss();
       showToast.gameLost();
     }
-  }, [isParticipant, isWinner, game?.payout]);
+  }, [isParticipant, isWinner, isCreator, game, saveLastGameSettings]);
 
   const handleFlipComplete = useCallback(() => {
     setShowResult(true);
@@ -354,6 +362,13 @@ export function GameSessionModal({ game, open, onClose, userAddress, modalType }
     }
     resetGame();
     onClose();
+  };
+
+  // Quick re-bet: same tier and choice, navigate to play page
+  const handleQuickRebet = () => {
+    setupQuickRebet();
+    handleClose();
+    router.push('/play?quickRebet=true');
   };
 
   const formatTime = (seconds: number): string => {
@@ -781,13 +796,11 @@ export function GameSessionModal({ game, open, onClose, userAddress, modalType }
                 </Button>
                 <Button
                   size={{ initial: '2', sm: '3' }}
-                  onClick={() => {
-                    handleClose();
-                    router.push('/play');
-                  }}
-                  className="flex-1 glow-cyan hover:scale-105 transition-transform touch-target"
+                  onClick={handleQuickRebet}
+                  className={`flex-1 hover:scale-105 transition-transform touch-target ${isWinner ? 'glow-resolved bg-green-600 hover:bg-green-500' : 'glow-cyan'}`}
                 >
-                  Play Again
+                  <Zap className="w-4 h-4 mr-1" />
+                  {isWinner ? 'Play Again & Win More!' : 'Try Again - Same Bet'}
                 </Button>
               </Flex>
 
