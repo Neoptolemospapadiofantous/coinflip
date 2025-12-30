@@ -25,13 +25,14 @@ const FALLBACK_POLL_INTERVALS = [3000, 5000, 10000, 15000]; // 3s, 5s, 10s, 15s 
 // Global connection state for components to access
 let globalConnectionStatus: 'disconnected' | 'connecting' | 'SUBSCRIBED' | 'CHANNEL_ERROR' | 'TIMED_OUT' | 'CLOSED' = 'disconnected';
 let globalIsPolling = false;
-let globalListeners: Array<() => void> = [];
+// Use Set to prevent duplicate listeners and ensure O(1) removal
+const globalListeners = new Set<() => void>();
 
 // Subscribe to connection status changes
 export function subscribeToConnectionStatus(callback: () => void) {
-  globalListeners.push(callback);
+  globalListeners.add(callback);
   return () => {
-    globalListeners = globalListeners.filter((l) => l !== callback);
+    globalListeners.delete(callback);
   };
 }
 
@@ -94,14 +95,17 @@ export function useRealtimeSync() {
           console.log('🆕 [RealtimeSync] Game created:', game.id, 'status:', game.status);
 
           // Remove any optimistic game with matching tx_hash
-          const optimisticId = `optimistic-${game.tx_hash.slice(0, 10)}`;
+          const txHashPrefix = game.tx_hash?.slice(0, 10) || '';
+          const optimisticId = txHashPrefix ? `optimistic-${txHashPrefix}` : '';
 
           // Add new pending game directly to cache for instant UI update
           if (game.status === 'pending') {
             queryClientRef.current.setQueryData(['games', 'pending'], (old: Game[] | undefined) => {
               if (!old) return [game];
-              // Remove optimistic version and avoid duplicates
-              const filtered = old.filter(g => g.id !== optimisticId && g.id !== game.id);
+              // Remove optimistic version (if exists) and avoid duplicates
+              const filtered = old.filter(g =>
+                (optimisticId ? g.id !== optimisticId : true) && g.id !== game.id
+              );
               return [game, ...filtered]; // Add real game to front
             });
           }
@@ -113,8 +117,10 @@ export function useRealtimeSync() {
           // If this is the user's game, update active games (replace optimistic with real)
           const userAddress = addressRef.current?.toLowerCase();
           if (userAddress && game.creator_address?.toLowerCase() === userAddress) {
-            // Remove optimistic game from active games
-            actionsRef.current.removeActiveGame(optimisticId);
+            // Remove optimistic game from active games (if exists)
+            if (optimisticId) {
+              actionsRef.current.removeActiveGame(optimisticId);
+            }
             // Add the real game
             actionsRef.current.updateActiveGame(game);
           }

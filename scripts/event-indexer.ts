@@ -809,20 +809,28 @@ async function main() {
   // Watch for new events
   console.log('\n👀 Watching for new events...\n');
 
+  let cleanupWatchers: (() => void) | undefined;
+
   if (useWebSocket) {
     // Use real-time WebSocket event watching
-    watchContractEvents(state);
+    cleanupWatchers = watchContractEvents(state);
   } else {
     // Fallback to block polling
     watchBlocksPolling(state);
   }
-}
 
-// Handle graceful shutdown
-process.on('SIGINT', () => {
-  console.log('\n👋 Shutting down indexer...');
-  process.exit(0);
-});
+  // Handle graceful shutdown
+  process.on('SIGINT', async () => {
+    console.log('\n👋 Shutting down indexer...');
+    if (cleanupWatchers) {
+      console.log('🧹 Cleaning up event watchers...');
+      cleanupWatchers();
+    }
+    await saveState(state);
+    console.log('✅ State saved. Goodbye!');
+    process.exit(0);
+  });
+}
 
 // Run
 main().catch((error) => {

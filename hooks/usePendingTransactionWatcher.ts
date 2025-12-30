@@ -24,11 +24,20 @@ export function usePendingTransactionWatcher() {
 
   const watchingRef = useRef<Set<string>>(new Set());
   const hadPendingBeforeBlurRef = useRef<Set<string>>(new Set());
+  const focusTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const mountedRef = useRef(true);
 
   // Cleanup pending transactions that were waiting before blur and still have no txHash
   const checkPendingAfterFocus = useCallback(() => {
+    // Clear any existing timeout
+    if (focusTimeoutRef.current) {
+      clearTimeout(focusTimeoutRef.current);
+    }
+
     // Small delay to allow any in-flight confirmations to arrive
-    setTimeout(() => {
+    focusTimeoutRef.current = setTimeout(() => {
+      if (!mountedRef.current) return;
+
       const currentPendingTransactions = useGameStore.getState().pendingTransactions;
 
       for (const key of hadPendingBeforeBlurRef.current) {
@@ -47,6 +56,7 @@ export function usePendingTransactionWatcher() {
       }
 
       hadPendingBeforeBlurRef.current.clear();
+      focusTimeoutRef.current = null;
     }, 300); // 300ms delay for wallet UI to settle
   }, [removePendingTransaction]);
 
@@ -73,12 +83,19 @@ export function usePendingTransactionWatcher() {
 
   // Listen for window focus/blur events to detect wallet interactions
   useEffect(() => {
+    mountedRef.current = true;
     window.addEventListener('blur', handleBlur);
     window.addEventListener('focus', handleFocus);
 
     return () => {
+      mountedRef.current = false;
       window.removeEventListener('blur', handleBlur);
       window.removeEventListener('focus', handleFocus);
+      // Clear any pending timeout
+      if (focusTimeoutRef.current) {
+        clearTimeout(focusTimeoutRef.current);
+        focusTimeoutRef.current = null;
+      }
     };
   }, [handleBlur, handleFocus]);
 
@@ -102,6 +119,12 @@ export function usePendingTransactionWatcher() {
       // Watch the transaction
       publicClient.waitForTransactionReceipt({ hash: tx.txHash })
         .then((receipt) => {
+          // Guard against unmounted component
+          if (!mountedRef.current) {
+            watchingRef.current.delete(key);
+            return;
+          }
+
           console.log(`✅ [TxWatcher] Transaction confirmed: ${key}`, receipt.status);
 
           if (receipt.status === 'success') {
@@ -130,6 +153,12 @@ export function usePendingTransactionWatcher() {
           watchingRef.current.delete(key);
         })
         .catch((error) => {
+          // Guard against unmounted component
+          if (!mountedRef.current) {
+            watchingRef.current.delete(key);
+            return;
+          }
+
           console.log(`❌ [TxWatcher] Transaction error: ${key}`, error);
           // Transaction was likely rejected or replaced
           removePendingTransaction(key);
