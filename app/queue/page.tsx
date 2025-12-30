@@ -231,9 +231,11 @@ export default function QueuePage() {
     }
   }, [cancelWasRejected, cancelingGameId, resetCancelState, finishCancellingGame, queryClient]);
 
-  // Separate user's games from other games, excluding games being cancelled or joined
+  // Separate user's games from other games
+  // User's games: show even when cancelling (to display cancelling state)
+  // Other games: hide when cancelling or joining (optimistic removal)
   const myPendingGames = pendingGames?.filter(
-    (game) => game.creator_address.toLowerCase() === address?.toLowerCase() && !isGameCancelling(game.id)
+    (game) => game.creator_address.toLowerCase() === address?.toLowerCase()
   );
   const otherPendingGames = pendingGames?.filter(
     (game) => game.creator_address.toLowerCase() !== address?.toLowerCase() && !isGameCancelling(game.id) && !isGameJoining(game.id)
@@ -413,9 +415,14 @@ export default function QueuePage() {
 
                   {myPendingGames.map((game) => {
                     const tier = tiers?.find((t) => t.id === game.tier);
+                    const isCancellingThis = isGameCancelling(game.id) || cancelingGameId === game.id;
 
                     return (
-                      <Card key={game.id} variant="surface" className="bg-yellow-500/5 border border-yellow-500/20">
+                      <Card
+                        key={game.id}
+                        variant="surface"
+                        className={`bg-yellow-500/5 border border-yellow-500/20 transition-opacity ${isCancellingThis ? 'opacity-60' : ''}`}
+                      >
                         <Flex direction="column" gap="3" p="4">
                           <Flex justify="between" align="center">
                             <Flex direction="column" gap="1">
@@ -423,7 +430,7 @@ export default function QueuePage() {
                                 Game {formatGameId(game.id)}
                               </Text>
                               <Text size="1" color="gray">
-                                Waiting for opponent...
+                                {isCancellingThis ? 'Cancelling game...' : 'Waiting for opponent...'}
                               </Text>
                             </Flex>
                             <Badge color="yellow" size="2" className="glow-gold">
@@ -441,7 +448,7 @@ export default function QueuePage() {
                                 </Text>
                               </Flex>
                             </Flex>
-                            {cancelingGameId === game.id ? (
+                            {isGameCancelling(game.id) || cancelingGameId === game.id ? (
                               <Badge color="yellow" size="2">
                                 <Loader2 className="w-3 h-3 animate-spin" />
                                 Cancelling...
@@ -452,7 +459,7 @@ export default function QueuePage() {
                                 variant="soft"
                                 color="red"
                                 onClick={() => handleCancelGame(game.id)}
-                                disabled={isCanceling}
+                                disabled={isCanceling || isGameCancelling(game.id)}
                               >
                                 <XCircle className="w-4 h-4" />
                                 Cancel Now
