@@ -8,16 +8,20 @@
 ALTER TABLE tiers ENABLE ROW LEVEL SECURITY;
 
 -- Allow public read access to tiers
+DROP POLICY IF EXISTS "tiers_select_public" ON tiers;
 CREATE POLICY "tiers_select_public" ON tiers
   FOR SELECT USING (true);
 
 -- Only service_role can modify tiers (using proper auth.role() function)
+DROP POLICY IF EXISTS "tiers_insert_service_role" ON tiers;
 CREATE POLICY "tiers_insert_service_role" ON tiers
   FOR INSERT WITH CHECK (auth.role() = 'service_role');
 
+DROP POLICY IF EXISTS "tiers_update_service_role" ON tiers;
 CREATE POLICY "tiers_update_service_role" ON tiers
   FOR UPDATE USING (auth.role() = 'service_role');
 
+DROP POLICY IF EXISTS "tiers_delete_service_role" ON tiers;
 CREATE POLICY "tiers_delete_service_role" ON tiers
   FOR DELETE USING (auth.role() = 'service_role');
 
@@ -28,16 +32,20 @@ CREATE POLICY "tiers_delete_service_role" ON tiers
 ALTER TABLE contract_config ENABLE ROW LEVEL SECURITY;
 
 -- Allow public read access to contract config
+DROP POLICY IF EXISTS "contract_config_select_public" ON contract_config;
 CREATE POLICY "contract_config_select_public" ON contract_config
   FOR SELECT USING (true);
 
 -- Only service_role can modify contract config
+DROP POLICY IF EXISTS "contract_config_insert_service_role" ON contract_config;
 CREATE POLICY "contract_config_insert_service_role" ON contract_config
   FOR INSERT WITH CHECK (auth.role() = 'service_role');
 
+DROP POLICY IF EXISTS "contract_config_update_service_role" ON contract_config;
 CREATE POLICY "contract_config_update_service_role" ON contract_config
   FOR UPDATE USING (auth.role() = 'service_role');
 
+DROP POLICY IF EXISTS "contract_config_delete_service_role" ON contract_config;
 CREATE POLICY "contract_config_delete_service_role" ON contract_config
   FOR DELETE USING (auth.role() = 'service_role');
 
@@ -62,15 +70,19 @@ CREATE POLICY "games_update_service_role" ON games
 
 DROP POLICY IF EXISTS "indexer_state_all_service_role" ON indexer_state;
 
+DROP POLICY IF EXISTS "indexer_state_select_public" ON indexer_state;
 CREATE POLICY "indexer_state_select_public" ON indexer_state
   FOR SELECT USING (true);
 
+DROP POLICY IF EXISTS "indexer_state_insert_service_role" ON indexer_state;
 CREATE POLICY "indexer_state_insert_service_role" ON indexer_state
   FOR INSERT WITH CHECK (auth.role() = 'service_role');
 
+DROP POLICY IF EXISTS "indexer_state_update_service_role" ON indexer_state;
 CREATE POLICY "indexer_state_update_service_role" ON indexer_state
   FOR UPDATE USING (auth.role() = 'service_role');
 
+DROP POLICY IF EXISTS "indexer_state_delete_service_role" ON indexer_state;
 CREATE POLICY "indexer_state_delete_service_role" ON indexer_state
   FOR DELETE USING (auth.role() = 'service_role');
 
@@ -78,13 +90,13 @@ CREATE POLICY "indexer_state_delete_service_role" ON indexer_state
 -- 5. FIX AUDIT_LOG RLS POLICIES
 -- =============================================================
 
-DROP POLICY IF EXISTS "audit_log_select_service_role" ON audit_log;
-
 -- Audit logs should be readable by service role only
+DROP POLICY IF EXISTS "audit_log_select_service_role" ON audit_log;
 CREATE POLICY "audit_log_select_service_role" ON audit_log
   FOR SELECT USING (auth.role() = 'service_role');
 
 -- Only service role can insert audit logs
+DROP POLICY IF EXISTS "audit_log_insert_service_role" ON audit_log;
 CREATE POLICY "audit_log_insert_service_role" ON audit_log
   FOR INSERT WITH CHECK (auth.role() = 'service_role');
 
@@ -96,11 +108,13 @@ CREATE POLICY "audit_log_insert_service_role" ON audit_log
 -- =============================================================
 
 -- Reuse existing audit function for tiers
+DROP TRIGGER IF EXISTS audit_tiers_trigger ON tiers;
 CREATE TRIGGER audit_tiers_trigger
   AFTER INSERT OR UPDATE OR DELETE ON tiers
   FOR EACH ROW EXECUTE FUNCTION audit_games_changes();
 
 -- Reuse existing audit function for contract_config
+DROP TRIGGER IF EXISTS audit_contract_config_trigger ON contract_config;
 CREATE TRIGGER audit_contract_config_trigger
   AFTER INSERT OR UPDATE OR DELETE ON contract_config
   FOR EACH ROW EXECUTE FUNCTION audit_games_changes();
