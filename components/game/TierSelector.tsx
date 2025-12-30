@@ -3,7 +3,8 @@
 import { useAccount, useBalance } from 'wagmi';
 import { useTiers } from '@/hooks/useTiers';
 import { useGameStore } from '@/store/gameStore';
-import { formatCurrency } from '@/lib/utils';
+import { formatCurrency, devLog } from '@/lib/utils';
+import { PLATFORM_FEE_PERCENT, WINNER_PAYOUT_PERCENT } from '@/lib/constants';
 import { Button, Flex, Text, Grid, Badge, Card, Heading, Skeleton } from '@radix-ui/themes';
 import { Users, Lock } from 'lucide-react';
 import { NetworkIndicator } from '@/components/ui/NetworkIndicator';
@@ -27,7 +28,7 @@ export function TierSelector() {
 
   // Show error message if balance fetch failed
   if (balanceError) {
-    console.error('Balance fetch error:', balanceError);
+    devLog.error('Balance fetch error:', balanceError);
   }
 
   return (
@@ -113,7 +114,7 @@ export function TierSelector() {
             </Text>
             <Text size="1" color="gray">
               You'll pay ${tiers?.[selectedTier]?.amountUsd} and can win up to $
-              {tiers?.[selectedTier]?.winAmountUsd} (97% of pot, 3% fee)
+              {tiers?.[selectedTier]?.winAmountUsd} ({WINNER_PAYOUT_PERCENT}% of pot, {PLATFORM_FEE_PERCENT}% fee)
             </Text>
           </Flex>
         </Card>

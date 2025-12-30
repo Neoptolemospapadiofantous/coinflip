@@ -108,6 +108,16 @@ export const RATE_LIMIT_REQUESTS_PER_MINUTE = 100;
 export const RPC_TIMEOUT_MS = 15000;
 
 // ============================================
+// PLATFORM FEE
+// ============================================
+
+/** Platform fee percentage on wins */
+export const PLATFORM_FEE_PERCENT = 3;
+
+/** Winner payout percentage (100 - fee) */
+export const WINNER_PAYOUT_PERCENT = 100 - PLATFORM_FEE_PERCENT;
+
+// ============================================
 // GAS LIMITS
 // ============================================
 

@@ -138,7 +138,7 @@ export function useRealtimeSync() {
             // Update stats
             queryClientRef.current.invalidateQueries({ queryKey: ['game-stats'] });
           } catch (error) {
-            console.error('🆕 [RealtimeSync] Error processing INSERT:', error);
+            devLog.error('🆕 [RealtimeSync] Error processing INSERT:', error);
           }
         }
       )
@@ -242,7 +242,7 @@ export function useRealtimeSync() {
               queryClientRef.current.invalidateQueries({ queryKey: ['game-stats'] });
             }
           } catch (error) {
-            console.error('🔄 [RealtimeSync] Error processing UPDATE:', error);
+            devLog.error('🔄 [RealtimeSync] Error processing UPDATE:', error);
           }
         }
       )
@@ -270,7 +270,7 @@ export function useRealtimeSync() {
             queryClientRef.current.invalidateQueries({ queryKey: ['games', 'active'] });
             queryClientRef.current.invalidateQueries({ queryKey: ['game-stats'] });
           } catch (error) {
-            console.error('🗑️ [RealtimeSync] Error processing DELETE:', error);
+            devLog.error('🗑️ [RealtimeSync] Error processing DELETE:', error);
           }
         }
       )

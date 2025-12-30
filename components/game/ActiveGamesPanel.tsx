@@ -5,7 +5,7 @@ import { Card, Flex, Heading, Text, Badge, ScrollArea, IconButton } from '@radix
 import { useActiveGamesList, useGameStore, MAX_CONCURRENT_GAMES } from '@/store/gameStore';
 import { Game } from '@/types/game';
 import { Users, Loader2, Trophy, ChevronRight, Wifi, WifiOff, Clock, ChevronDown, ChevronUp, RefreshCw } from 'lucide-react';
-import { formatCurrency, formatGameId, safeStorage } from '@/lib/utils';
+import { formatCurrency, formatGameId, safeStorage, devLog } from '@/lib/utils';
 import { useAccount } from 'wagmi';
 import { useConnectionStatus } from '@/hooks/useRealtimeSync';
 import { formatGameTimeRemaining, isGameWarning, isGameExpired } from '@/hooks/useGameTimeout';
@@ -198,7 +198,7 @@ export function ActiveGamesPanel() {
         if (game.id.startsWith('optimistic-')) {
           const createdTime = new Date(game.created_at).getTime();
           if (now - createdTime > OPTIMISTIC_TIMEOUT_MS) {
-            console.log(`🧹 Removing stale optimistic game: ${game.id}`);
+            devLog.log(`🧹 Removing stale optimistic game: ${game.id}`);
             removeActiveGame(game.id);
           }
         }

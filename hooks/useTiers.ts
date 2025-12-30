@@ -4,6 +4,7 @@ import { supabase } from '@/lib/supabase';
 import { Tier } from '@/types/tier';
 import { TESTNET_TIERS, PRODUCTION_TIERS } from '@/lib/mockData';
 import { isTestnet } from '@/lib/networkUtils';
+import { devLog } from '@/lib/utils';
 
 // Set to true to use mock data (before Supabase is set up)
 // Set to false once you've populated the tiers table in Supabase
@@ -25,8 +26,8 @@ export function useTiers() {
 
       // ALWAYS use mock tiers for testnets to ensure correct amounts
       if (isTestnet(chainId)) {
-        console.log('🧪 TESTNET DETECTED - Using testnet tier amounts (100x smaller)');
-        console.log('📊 Testnet Tiers:', mockTiers.map(t => ({
+        devLog.log('🧪 TESTNET DETECTED - Using testnet tier amounts (100x smaller)');
+        devLog.log('📊 Testnet Tiers:', mockTiers.map(t => ({
           id: t.id,
           amountUsd: t.amountUsd,
           amountWei: t.amount,
@@ -37,7 +38,7 @@ export function useTiers() {
 
       // Use mock data if Supabase isn't set up yet
       if (USE_MOCK_DATA) {
-        console.log('Using PRODUCTION tier data (Supabase not configured)');
+        devLog.log('Using PRODUCTION tier data (Supabase not configured)');
         return mockTiers;
       }
 
@@ -50,7 +51,7 @@ export function useTiers() {
           .order('id');
 
         if (error) {
-          console.warn('Error fetching tiers from Supabase, falling back to mock data:', error);
+          devLog.warn('Error fetching tiers from Supabase, falling back to mock data:', error);
           return mockTiers;
         }
 
@@ -67,7 +68,7 @@ export function useTiers() {
           })) || mockTiers
         );
       } catch (err) {
-        console.warn('Exception fetching tiers, falling back to mock data:', err);
+        devLog.warn('Exception fetching tiers, falling back to mock data:', err);
         return mockTiers;
       }
     },
@@ -110,7 +111,7 @@ export function useTier(tierId: number) {
           .single();
 
         if (error) {
-          console.warn('Error fetching tier, falling back to mock data:', error);
+          devLog.warn('Error fetching tier, falling back to mock data:', error);
           return mockTiers.find((t) => t.id === tierId) || null;
         }
 
@@ -126,7 +127,7 @@ export function useTier(tierId: number) {
           enabled: data.enabled,
         };
       } catch (err) {
-        console.warn('Exception fetching tier, falling back to mock data:', err);
+        devLog.warn('Exception fetching tier, falling back to mock data:', err);
         return mockTiers.find((t) => t.id === tierId) || null;
       }
     },

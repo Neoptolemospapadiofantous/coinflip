@@ -4,14 +4,9 @@ import { getCoinFlipAddress } from '@/lib/contracts/addresses';
 import { encodeFunctionData } from 'viem';
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { isUserError } from '@/lib/errors';
+import { devLog } from '@/lib/utils';
+import { CANCEL_COOLDOWN_MS, GAS_LIMITS } from '@/lib/constants';
 
-// Static gas limits - safe values that work on Sepolia
-const GAS_CAPS = {
-  createGame: BigInt(300_000),
-  joinGame: BigInt(500_000),
-  cancelGame: BigInt(200_000),
-  claimVrfTimeout: BigInt(200_000),
-};
 
 // =============================================================
 // INPUT VALIDATION
@@ -150,24 +145,24 @@ export function useCreateGame() {
         args: [tier, choice],
       });
 
-      console.log(`🚀 Sending createGame tx with gas=${GAS_CAPS.createGame}`);
+      devLog.log(`🚀 Sending createGame tx with gas=${GAS_LIMITS.createGame}`);
 
       const txHash = await walletClient.sendTransaction({
         to: contractAddress,
         data: txData,
         value: amountValidation.value!,
-        gas: GAS_CAPS.createGame,
+        gas: GAS_LIMITS.createGame,
       });
 
-      console.log(`✅ Transaction sent: ${txHash.slice(0, 10)}...`);
+      devLog.log(`✅ Transaction sent: ${txHash.slice(0, 10)}...`);
       setHash(txHash);
     } catch (err) {
       // Don't show error for user-initiated rejections
       if (isUserError(err)) {
-        console.log('ℹ️ Transaction cancelled by user');
+        devLog.log('ℹ️ Transaction cancelled by user');
         setWasRejected(true);
       } else {
-        console.error('❌ Transaction failed:', err);
+        devLog.error('❌ Transaction failed:', err);
         setWriteError(err as Error);
       }
     } finally {
@@ -236,23 +231,23 @@ export function useJoinGame() {
         args: [gameIdValidation.value!],
       });
 
-      console.log(`🚀 Sending joinGame tx with gas=${GAS_CAPS.joinGame}`);
+      devLog.log(`🚀 Sending joinGame tx with gas=${GAS_LIMITS.joinGame}`);
 
       const txHash = await walletClient.sendTransaction({
         to: contractAddress,
         data: txData,
         value: amountValidation.value!,
-        gas: GAS_CAPS.joinGame,
+        gas: GAS_LIMITS.joinGame,
       });
 
-      console.log(`✅ Transaction sent: ${txHash.slice(0, 10)}...`);
+      devLog.log(`✅ Transaction sent: ${txHash.slice(0, 10)}...`);
       setHash(txHash);
     } catch (err) {
       // Don't show error for user-initiated rejections
       if (isUserError(err)) {
-        console.log('ℹ️ Transaction cancelled by user');
+        devLog.log('ℹ️ Transaction cancelled by user');
       } else {
-        console.error('❌ Transaction failed:', err);
+        devLog.error('❌ Transaction failed:', err);
         setWriteError(err as Error);
       }
     } finally {
@@ -270,9 +265,6 @@ export function useJoinGame() {
     reset,
   };
 }
-
-// Cooldown between cancel operations (5 seconds)
-const CANCEL_COOLDOWN_MS = 5000;
 
 // Hook to cancel a game - uses wallet client directly for full gas control
 export function useCancelGame() {
@@ -326,7 +318,7 @@ export function useCancelGame() {
     }
 
     if (isCooldown) {
-      console.log('⏳ Cancel cooldown active, please wait...');
+      devLog.log('⏳ Cancel cooldown active, please wait...');
       return;
     }
 
@@ -354,23 +346,23 @@ export function useCancelGame() {
         args: [gameIdValidation.value!],
       });
 
-      console.log(`🚀 Sending cancelGame tx for game ${gameIdValidation.value} with gas=${GAS_CAPS.cancelGame}`);
+      devLog.log(`🚀 Sending cancelGame tx for game ${gameIdValidation.value} with gas=${GAS_LIMITS.cancelGame}`);
 
       const txHash = await walletClient.sendTransaction({
         to: contractAddress,
         data: txData,
-        gas: GAS_CAPS.cancelGame,
+        gas: GAS_LIMITS.cancelGame,
       });
 
-      console.log(`✅ Transaction sent: ${txHash.slice(0, 10)}...`);
+      devLog.log(`✅ Transaction sent: ${txHash.slice(0, 10)}...`);
       setHash(txHash);
     } catch (err) {
       // Don't show error for user-initiated rejections
       if (isUserError(err)) {
-        console.log('ℹ️ Transaction cancelled by user');
+        devLog.log('ℹ️ Transaction cancelled by user');
         setWasRejected(true);
       } else {
-        console.error('❌ Transaction failed:', err);
+        devLog.error('❌ Transaction failed:', err);
         setWriteError(err as Error);
       }
     } finally {
@@ -433,22 +425,22 @@ export function useClaimVrfTimeout() {
         args: [gameIdValidation.value!],
       });
 
-      console.log(`🚀 Sending claimVrfTimeout tx for game ${gameIdValidation.value} with gas=${GAS_CAPS.claimVrfTimeout}`);
+      devLog.log(`🚀 Sending claimVrfTimeout tx for game ${gameIdValidation.value} with gas=${GAS_LIMITS.claimVrfTimeout}`);
 
       const txHash = await walletClient.sendTransaction({
         to: contractAddress,
         data: txData,
-        gas: GAS_CAPS.claimVrfTimeout,
+        gas: GAS_LIMITS.claimVrfTimeout,
       });
 
-      console.log(`✅ Transaction sent: ${txHash.slice(0, 10)}...`);
+      devLog.log(`✅ Transaction sent: ${txHash.slice(0, 10)}...`);
       setHash(txHash);
     } catch (err) {
       // Don't show error for user-initiated rejections
       if (isUserError(err)) {
-        console.log('ℹ️ Transaction cancelled by user');
+        devLog.log('ℹ️ Transaction cancelled by user');
       } else {
-        console.error('❌ Transaction failed:', err);
+        devLog.error('❌ Transaction failed:', err);
         setWriteError(err as Error);
       }
     } finally {
@@ -534,7 +526,7 @@ export function useCheckGameStatus() {
         args: [BigInt(gameId)],
       }) as OnChainGame;
 
-      console.log(`🔍 On-chain game ${gameId}:`, {
+      devLog.log(`🔍 On-chain game ${gameId}:`, {
         playerA: result.playerA,
         playerB: result.playerB,
         tier: result.tier,
@@ -544,7 +536,7 @@ export function useCheckGameStatus() {
 
       return result.state as GameState;
     } catch (err) {
-      console.error(`❌ Error reading game ${gameId}:`, err);
+      devLog.error(`❌ Error reading game ${gameId}:`, err);
       return null;
     }
   };

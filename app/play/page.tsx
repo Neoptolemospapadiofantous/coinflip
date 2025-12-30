@@ -25,7 +25,8 @@ import { useCreatedGameTracking } from '@/hooks/useCreatedGameTracking';
 import { useOptimisticUpdates } from '@/hooks/useOptimisticUpdates';
 import { Info, Loader2, CheckCircle2, AlertCircle, Clock, Users, X, Plus, Gamepad2, Zap } from 'lucide-react';
 import { parseError } from '@/lib/errors';
-import { formatGameId, formatCurrency } from '@/lib/utils';
+import { formatGameId, formatCurrency, devLog } from '@/lib/utils';
+import { PLATFORM_FEE_PERCENT } from '@/lib/constants';
 import { Game } from '@/types/game';
 import { useQueryClient } from '@tanstack/react-query';
 import { invalidateGameQueries, removeGameFromPendingCache } from '@/lib/queryUtils';
@@ -111,7 +112,7 @@ export default function PlayPage() {
   // Track the created game in real-time
   const handleGameFound = useCallback((game: Game) => {
     if (!mountedRef.current) return;
-    console.log('🎮 Game found in database:', game.id);
+    devLog.log('🎮 Game found in database:', game.id);
     // Mark pending tx as confirmed (DB trigger also handles this)
     if (pendingTxIdRef.current) {
       markDbTxConfirmed(pendingTxIdRef.current);
@@ -127,7 +128,7 @@ export default function PlayPage() {
   const handleGameMatched = useCallback((game: Game) => {
     if (!mountedRef.current) return;
     isMatchedRef.current = true;
-    console.log('🎮 Game matched! Queueing modal...');
+    devLog.log('🎮 Game matched! Queueing modal...');
     updateActiveGame(game);
     queueModal(game, 'matched');
     // Reset creation UI after a brief delay to show transition
@@ -142,7 +143,7 @@ export default function PlayPage() {
 
   const handleGameResolved = useCallback((game: Game) => {
     if (!mountedRef.current) return;
-    console.log('🎮 Game resolved:', game.winner_address);
+    devLog.log('🎮 Game resolved:', game.winner_address);
     updateActiveGame(game);
     queueModal(game, 'resolved');
     // Reset creation UI immediately
@@ -153,7 +154,7 @@ export default function PlayPage() {
 
   const handleGameCancelled = useCallback((_game: Game) => {
     if (!mountedRef.current) return;
-    console.log('🎮 Game cancelled');
+    devLog.log('🎮 Game cancelled');
     // Mark pending tx as confirmed (cancellation succeeded)
     if (pendingTxIdRef.current) {
       markDbTxConfirmed(pendingTxIdRef.current);
@@ -206,7 +207,7 @@ export default function PlayPage() {
   useEffect(() => {
     if (cancelSuccess && mountedRef.current && cancellingGameIdRef.current) {
       const gameId = cancellingGameIdRef.current;
-      console.log('🎮 Game cancelled successfully:', gameId);
+      devLog.log('🎮 Game cancelled successfully:', gameId);
       finishCancellingGame(gameId, true);
 
       // Invalidate all game queries for real-time sync across pages
@@ -224,7 +225,7 @@ export default function PlayPage() {
   // Handle cancel error - revert optimistic update
   useEffect(() => {
     if (cancelError && mountedRef.current && cancellingGameIdRef.current) {
-      console.log('🎮 Game cancel failed, reverting');
+      devLog.log('🎮 Game cancel failed, reverting');
       finishCancellingGame(cancellingGameIdRef.current, false);
       // Refetch pending games to restore the optimistically removed game
       invalidateGameQueries(queryClient, cancellingGameIdRef.current);
@@ -236,7 +237,7 @@ export default function PlayPage() {
   // Handle user rejection - silently revert without error
   useEffect(() => {
     if (cancelWasRejected && mountedRef.current && cancellingGameIdRef.current) {
-      console.log('🎮 Cancel rejected by user, reverting UI for game:', cancellingGameIdRef.current);
+      devLog.log('🎮 Cancel rejected by user, reverting UI for game:', cancellingGameIdRef.current);
       finishCancellingGame(cancellingGameIdRef.current, false);
       // Refetch pending games to restore the optimistically removed game
       invalidateGameQueries(queryClient, cancellingGameIdRef.current);
@@ -249,7 +250,7 @@ export default function PlayPage() {
   // Handle create game rejection - reset UI and mark pending tx as failed
   useEffect(() => {
     if (createWasRejected && mountedRef.current) {
-      console.log('🎮 Create game rejected by user, resetting UI');
+      devLog.log('🎮 Create game rejected by user, resetting UI');
       if (pendingTxIdRef.current) {
         markDbTxFailed(pendingTxIdRef.current, 'User rejected');
         pendingTxIdRef.current = null;
@@ -261,7 +262,7 @@ export default function PlayPage() {
   // Handle create game error - mark pending tx as failed and rollback optimistic update
   useEffect(() => {
     if (error && mountedRef.current) {
-      console.log('🎮 Create game error, marking pending tx as failed');
+      devLog.log('🎮 Create game error, marking pending tx as failed');
       if (pendingTxIdRef.current) {
         markDbTxFailed(pendingTxIdRef.current, error.message || 'Transaction failed');
         pendingTxIdRef.current = null;
@@ -276,7 +277,7 @@ export default function PlayPage() {
   // Create optimistic game when txHash is available
   useEffect(() => {
     if (txHash && selectedTier !== null && coinChoice !== null && currentTier) {
-      console.log('🎮 Transaction submitted, creating optimistic game');
+      devLog.log('🎮 Transaction submitted, creating optimistic game');
       // Create optimistic game for instant UI feedback
       optimisticCreateGame(txHash, selectedTier, coinChoice, currentTier.amount);
     }
@@ -294,7 +295,7 @@ export default function PlayPage() {
   const handleCreateGame = useCallback(async () => {
     if (selectedTier === null || coinChoice === null || !currentTier) return;
     if (!canCreate) {
-      console.warn('Cannot create game - at max concurrent games');
+      devLog.warn('Cannot create game - at max concurrent games');
       return;
     }
     setStep(GameStep.CREATING);
@@ -313,7 +314,7 @@ export default function PlayPage() {
         pendingTxIdRef.current = pendingTx.id;
       }
     } catch (err) {
-      console.warn('Failed to save pending tx to DB:', err);
+      devLog.warn('Failed to save pending tx to DB:', err);
     }
 
     createGame(selectedTier, coinChoice, currentTier.amount);
@@ -323,11 +324,11 @@ export default function PlayPage() {
     if (!trackedGame?.id) return;
 
     if (isCancellingRef.current || isGameCancelling(trackedGame.id)) {
-      console.warn('Cancel already in progress');
+      devLog.warn('Cancel already in progress');
       return;
     }
     if (isMatchedRef.current || trackedGame.status !== 'pending') {
-      console.warn('Cannot cancel - game is no longer pending:', trackedGame.status);
+      devLog.warn('Cannot cancel - game is no longer pending:', trackedGame.status);
       return;
     }
 
@@ -559,7 +560,7 @@ export default function PlayPage() {
                         </Flex>
                         <Flex justify="between">
                           <Text size="1" color="gray">Platform Fee:</Text>
-                          <Text size="1" color="gray">3% on wins</Text>
+                          <Text size="1" color="gray">{PLATFORM_FEE_PERCENT}% on wins</Text>
                         </Flex>
                       </Flex>
 

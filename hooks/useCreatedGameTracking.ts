@@ -123,14 +123,14 @@ export function useCreatedGameTracking({
         .maybeSingle();
 
       if (error) {
-        console.error('Error fetching game:', error);
+        devLog.error('Error fetching game:', error);
         return null;
       }
 
       // Normalize the game data (converts numeric IDs to strings)
       return data ? parseGame(data) : null;
     } catch (err) {
-      console.error('Error in fetchGameFromDB:', err);
+      devLog.error('Error in fetchGameFromDB:', err);
       return null;
     }
   }, []);
@@ -213,7 +213,7 @@ export function useCreatedGameTracking({
         )
         .subscribe((status, err) => {
           if (err) {
-            console.error(`[GameTracking] Subscription error for game ${game.id}:`, err.message);
+            devLog.error(`[GameTracking] Subscription error for game ${game.id}:`, err.message);
           }
           if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
             devLog.warn(`[GameTracking] Subscription ${status} for game ${game.id}`);

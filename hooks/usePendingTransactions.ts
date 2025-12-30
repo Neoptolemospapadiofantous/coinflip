@@ -303,7 +303,9 @@ export function usePendingTransactions() {
     };
 
     // Run cleanup once on mount
-    cleanupExpired();
+    cleanupExpired().catch(() => {
+      // Error already logged in cleanupExpired
+    });
   }, [address]);
 
   return {

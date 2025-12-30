@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { Game } from '@/types/game';
+import { devLog } from '@/lib/utils';
 
 // Maximum number of concurrent games a player can have
 export const MAX_CONCURRENT_GAMES = 5;
@@ -263,7 +264,7 @@ export const useGameStore = create<GameState>((set, get) => ({
     set((state) => {
       const newMap = new Map(state.pendingTransactions);
       newMap.set(key, tx);
-      console.log(`📝 [GameStore] Added pending tx: ${key}`, tx);
+      devLog.log(`📝 [GameStore] Added pending tx: ${key}`, tx);
       return { pendingTransactions: newMap };
     }),
 
@@ -273,7 +274,7 @@ export const useGameStore = create<GameState>((set, get) => ({
       const existing = newMap.get(key);
       if (existing) {
         newMap.set(key, { ...existing, ...updates });
-        console.log(`📝 [GameStore] Updated pending tx: ${key}`, updates);
+        devLog.log(`📝 [GameStore] Updated pending tx: ${key}`, updates);
       }
       return { pendingTransactions: newMap };
     }),
@@ -282,7 +283,7 @@ export const useGameStore = create<GameState>((set, get) => ({
     set((state) => {
       const newMap = new Map(state.pendingTransactions);
       newMap.delete(key);
-      console.log(`📝 [GameStore] Removed pending tx: ${key}`);
+      devLog.log(`📝 [GameStore] Removed pending tx: ${key}`);
       return { pendingTransactions: newMap };
     }),
 
@@ -318,14 +319,14 @@ export const useGameStore = create<GameState>((set, get) => ({
   // Modal queue management
   queueModal: (game, type) =>
     set((state) => {
-      console.log(`🎯 [GameStore] queueModal called: game=${game.id} type=${type} status=${game.status}`);
+      devLog.log(`🎯 [GameStore] queueModal called: game=${game.id} type=${type} status=${game.status}`);
 
       // Don't queue if exact same entry already in queue
       const alreadyQueued = state.modalQueue.some(
         (entry) => entry.game.id === game.id && entry.type === type
       );
       if (alreadyQueued) {
-        console.log(`🎯 [GameStore] Modal already queued, skipping`);
+        devLog.log(`🎯 [GameStore] Modal already queued, skipping`);
         return state;
       }
 
@@ -368,7 +369,7 @@ export const useGameStore = create<GameState>((set, get) => ({
       if (!state.showGameModal && !state.currentModalGame) {
         const nextEntry = newQueue.shift();
         if (nextEntry) {
-          console.log(`🎯 [GameStore] Showing modal immediately: game=${nextEntry.game.id} type=${nextEntry.type}`);
+          devLog.log(`🎯 [GameStore] Showing modal immediately: game=${nextEntry.game.id} type=${nextEntry.type}`);
           return {
             modalQueue: newQueue,
             currentModalGame: nextEntry.game,
@@ -382,7 +383,7 @@ export const useGameStore = create<GameState>((set, get) => ({
         }
       }
 
-      console.log(`🎯 [GameStore] Modal queued (waiting): game=${game.id} type=${type} queueLength=${newQueue.length}`);
+      devLog.log(`🎯 [GameStore] Modal queued (waiting): game=${game.id} type=${type} queueLength=${newQueue.length}`);
       return { modalQueue: newQueue };
     }),
 

@@ -192,7 +192,7 @@ export function GameSessionModal({ game, open, onClose, userAddress, modalType }
       const timeout = setTimeout(() => {
         // Check if still mounted before updating state
         if (!mountedRef.current) return;
-        console.log(`🔄 Auto-refetching game ${game.id} due to validation errors (attempt ${retryCountRef.current + 1}/${MAX_DATA_RETRIES})`);
+        devLog.log(`🔄 Auto-refetching game ${game.id} due to validation errors (attempt ${retryCountRef.current + 1}/${MAX_DATA_RETRIES})`);
         retryCountRef.current++;
         setCurrentRetryCount(retryCountRef.current);
         refetchGame();
@@ -213,7 +213,7 @@ export function GameSessionModal({ game, open, onClose, userAddress, modalType }
     if (freshGame && game && freshGame.id === game.id) {
       const freshValidation = validateGameState(freshGame);
       if (freshValidation.valid && !validation.valid) {
-        console.log('✅ Fresh game data is valid, updating store');
+        devLog.log('✅ Fresh game data is valid, updating store');
         updateActiveGame(freshGame);
       }
     }

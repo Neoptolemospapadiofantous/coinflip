@@ -21,7 +21,7 @@ import { Layout } from '@/components/layout/Layout';
 import { useTiers } from '@/hooks/useTiers';
 import { useJoinGame } from '@/hooks/useContract';
 import { usePendingGames, useGameStats } from '@/hooks/useGames';
-import { formatCurrency, formatGameId } from '@/lib/utils';
+import { formatCurrency, formatGameId, devLog } from '@/lib/utils';
 import { Clock, Users, Loader2, TrendingUp, XCircle, AlertCircle, Wifi, WifiOff, Wallet } from 'lucide-react';
 import Link from 'next/link';
 import { StatusBadge } from '@/components/game/StatusBadge';
@@ -245,7 +245,7 @@ export default function QueuePage() {
   // Handle user rejection - silently revert without error
   useEffect(() => {
     if (cancelWasRejected && cancelingGameId) {
-      console.log('🎮 Cancel rejected by user, reverting UI for game:', cancelingGameId);
+      devLog.log('🎮 Cancel rejected by user, reverting UI for game:', cancelingGameId);
       finishCancellingGame(cancelingGameId, false);
       // Refetch pending games to restore the optimistically removed game
       invalidateGameQueries(queryClient, cancelingGameId);

@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
 import { Game, parseGame } from '@/types/game';
+import { devLog } from '@/lib/utils';
 
 /**
  * Normalize an array of games from Supabase
@@ -32,7 +33,7 @@ export function useGames() {
         .order('created_at', { ascending: false });
 
       if (error) {
-        console.error('Error fetching games:', error);
+        devLog.error('Error fetching games:', error);
         throw new Error(`Failed to fetch games: ${error.message}`);
       }
 
@@ -56,7 +57,7 @@ export function usePendingGames() {
         .order('created_at', { ascending: false });
 
       if (error) {
-        console.error('Error fetching pending games:', error);
+        devLog.error('Error fetching pending games:', error);
         throw new Error(`Failed to fetch pending games: ${error.message}`);
       }
 
@@ -79,7 +80,7 @@ export function useActiveGames() {
         .order('created_at', { ascending: false });
 
       if (error) {
-        console.error('Error fetching active games:', error);
+        devLog.error('Error fetching active games:', error);
         throw new Error(`Failed to fetch active games: ${error.message}`);
       }
 
@@ -109,7 +110,7 @@ export function usePlayerGames(address: string | undefined, limit: number = 50) 
         .limit(limit);
 
       if (error) {
-        console.error('Error fetching player games:', error);
+        devLog.error('Error fetching player games:', error);
         throw new Error(`Failed to fetch player games: ${error.message}`);
       }
 
@@ -138,7 +139,7 @@ export function usePlayerStats(address: string | undefined) {
         .or(`creator_address.ilike.${lowerAddress},joiner_address.ilike.${lowerAddress}`);
 
       if (error) {
-        console.error('Error fetching player stats:', error);
+        devLog.error('Error fetching player stats:', error);
         return null;
       }
 
@@ -218,7 +219,7 @@ export function useGame(gameId: string | null) {
         .single();
 
       if (error) {
-        console.error('Error fetching game:', error);
+        devLog.error('Error fetching game:', error);
         return null;
       }
 
@@ -242,7 +243,7 @@ export function useGameStats() {
         .single();
 
       if (error) {
-        console.error('Error fetching game stats:', error);
+        devLog.error('Error fetching game stats:', error);
         return null;
       }
 

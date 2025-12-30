@@ -2,6 +2,7 @@
 
 import React from 'react';
 import { Container, Flex, Heading, Text, Button, Card, Callout } from '@radix-ui/themes';
+import { devLog } from '@/lib/utils';
 import { AlertTriangle, RefreshCw, Home } from 'lucide-react';
 import Link from 'next/link';
 
@@ -35,10 +36,8 @@ export class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoun
   }
 
   componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
-    // Log error to console in development
-    if (process.env.NODE_ENV === 'development') {
-      console.error('Error caught by boundary:', error, errorInfo);
-    }
+    // Log error to console (devLog.error handles environment-appropriate logging)
+    devLog.error('Error caught by boundary:', error, errorInfo);
 
     // Update state with error details
     this.setState({

@@ -6,6 +6,7 @@ import { useAccount } from 'wagmi';
 import { usePlayerGames, usePlayerStats } from '@/hooks/useGames';
 import { useTiers } from '@/hooks/useTiers';
 import { formatCurrency, formatRelativeTime, formatGameId, getCoinSideLabel, formatTxHash, getBlockExplorerUrl } from '@/lib/utils';
+import { PLATFORM_FEE_PERCENT } from '@/lib/constants';
 import { useMemo, useState } from 'react';
 import {
   AreaChart,
@@ -234,7 +235,7 @@ export default function HistoryPage() {
                       <Heading size="7" className="text-orange-400">
                         {formatCurrency(stats.totalFees)}
                       </Heading>
-                      <Text size="1" color="gray">3% platform fee</Text>
+                      <Text size="1" color="gray">{PLATFORM_FEE_PERCENT}% platform fee</Text>
                     </Flex>
                   </Card>
                 </>

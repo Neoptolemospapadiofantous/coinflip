@@ -5,6 +5,7 @@ import { useAccount } from 'wagmi';
 import { useGameStore } from '@/store/gameStore';
 import { showToast } from '@/lib/toast';
 import { playSound } from '@/lib/sounds';
+import { devLog } from '@/lib/utils';
 
 /**
  * Hook to detect wallet address changes during an active session
@@ -31,7 +32,7 @@ export function useWalletChangeDetection() {
       const previousAddress = previousAddressRef.current;
 
       if (currentAddress !== previousAddress) {
-        console.log(`🔄 Wallet changed from ${previousAddress.slice(0, 8)}... to ${currentAddress.slice(0, 8)}...`);
+        devLog.log(`🔄 Wallet changed from ${previousAddress.slice(0, 8)}... to ${currentAddress.slice(0, 8)}...`);
 
         // Check if there were active games with the previous wallet
         const hasActiveGames = activeGames.size > 0;
@@ -51,7 +52,7 @@ export function useWalletChangeDetection() {
 
     // Handle disconnect
     if (!address && previousAddressRef.current) {
-      console.log('🔌 Wallet disconnected');
+      devLog.log('🔌 Wallet disconnected');
       previousAddressRef.current = null;
       hasShownWarningRef.current = false;
     }

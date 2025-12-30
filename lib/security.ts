@@ -7,6 +7,7 @@
 import { isAddress } from 'viem';
 import { Redis } from '@upstash/redis';
 import { Ratelimit } from '@upstash/ratelimit';
+import { devLog } from './utils';
 
 /**
  * Validate and sanitize Ethereum address
@@ -189,13 +190,13 @@ export class DistributedRateLimiter {
         });
 
         this.useRedis = true;
-        console.log('[RateLimiter] Using distributed Redis rate limiting');
+        devLog.log('[RateLimiter] Using distributed Redis rate limiting');
       } catch (error) {
-        console.warn('[RateLimiter] Failed to initialize Redis, using in-memory fallback:', error);
+        devLog.warn('[RateLimiter] Failed to initialize Redis, using in-memory fallback:', error);
         this.useRedis = false;
       }
     } else {
-      console.log('[RateLimiter] No Redis config found, using in-memory rate limiting');
+      devLog.log('[RateLimiter] No Redis config found, using in-memory rate limiting');
     }
   }
 
@@ -209,7 +210,7 @@ export class DistributedRateLimiter {
         return success;
       } catch (error) {
         // On Redis error, fall back to in-memory
-        console.warn('[RateLimiter] Redis error, falling back to in-memory:', error);
+        devLog.warn('[RateLimiter] Redis error, falling back to in-memory:', error);
         return this.fallback.isAllowed(key);
       }
     }

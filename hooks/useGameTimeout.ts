@@ -6,6 +6,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useGameStore } from '@/store/gameStore';
 import { Game } from '@/types/game';
 import { playSound } from '@/lib/sounds';
+import { devLog } from '@/lib/utils';
 
 // Chainlink Automation auto-cancels after 5 minutes (25 blocks on Sepolia @ 12s/block)
 // This is for UI display purposes only - actual cancellation is on-chain
@@ -149,7 +150,7 @@ export function useGameTimeout() {
 
       // Game has expired and we haven't shown modal yet
       if (remaining <= 0 && !expiredModalShownRef.current.has(game.id)) {
-        console.log(`⏰ [useGameTimeout] Game ${game.id} expired, showing modal`);
+        devLog.log(`⏰ [useGameTimeout] Game ${game.id} expired, showing modal`);
         expiredModalShownRef.current.add(game.id);
         playSound.error();
         queueModal(game, 'expired');
@@ -180,7 +181,7 @@ export function useGameTimeout() {
     }
 
     // Start polling for DB updates
-    console.log('⏰ [useGameTimeout] Games past auto-cancel threshold, polling for updates...');
+    devLog.log('⏰ [useGameTimeout] Games past auto-cancel threshold, polling for updates...');
 
     const poll = () => {
       queryClient.invalidateQueries({ queryKey: ['games', 'pending'] });

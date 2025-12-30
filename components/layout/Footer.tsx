@@ -22,7 +22,6 @@ const FOOTER_LINKS: FooterSection[] = [
     title: 'Resources',
     links: [
       { href: '/docs', label: 'Documentation', icon: FileText },
-      { href: '/admin/setup', label: 'Setup Guide', icon: Shield },
     ],
   },
   {

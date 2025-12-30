@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getApiRateLimiter, sanitizeJson } from '@/lib/security';
 import { ALLOWED_CHAIN_IDS, CHAIN_IDS, PUBLIC_RPC_URLS } from '@/lib/chainConfig';
+import { devLog } from '@/lib/utils';
 
 // =============================================================
 // RATE LIMITING (using distributed RateLimiter with Redis/fallback)
@@ -325,7 +326,7 @@ export async function POST(request: NextRequest) {
     }
   } catch (error) {
     // Log internally but don't expose details
-    console.error('RPC proxy error:', error);
+    devLog.error('RPC proxy error:', error);
     return addSecurityHeaders(NextResponse.json(
       { jsonrpc: '2.0', error: { code: -32603, message: 'Internal error' }, id: null },
       { status: 500 }
