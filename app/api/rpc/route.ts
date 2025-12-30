@@ -85,6 +85,82 @@ const ALLOWED_METHODS = new Set([
 // RPC request timeout in milliseconds
 const RPC_TIMEOUT = 15000;
 
+// =============================================================
+// RESPONSE CACHING (for read-only methods)
+// =============================================================
+
+// Cache TTLs in milliseconds per method
+const CACHE_TTLS: Record<string, number> = {
+  'eth_chainId': 3600000,       // 1 hour (chain ID never changes)
+  'eth_blockNumber': 2000,      // 2 seconds (new block every ~12s on Sepolia)
+  'eth_gasPrice': 5000,         // 5 seconds (gas price changes slowly)
+  'eth_maxPriorityFeePerGas': 5000,
+  'net_version': 3600000,       // 1 hour (network version doesn't change)
+};
+
+// Methods that should NOT be cached (state-dependent or transaction-related)
+const UNCACHEABLE_METHODS = new Set([
+  'eth_sendRawTransaction',
+  'eth_getTransactionCount', // Nonce needs to be fresh
+  'eth_getBalance',          // Balance can change any time
+  'eth_call',                // Contract calls can return different results
+  'eth_estimateGas',         // Gas estimates change based on state
+  'eth_getLogs',             // Logs depend on block range
+  'eth_getFilterLogs',
+  'eth_getFilterChanges',
+  'eth_newFilter',
+  'eth_newBlockFilter',
+  'eth_uninstallFilter',
+]);
+
+interface CacheEntry {
+  response: unknown;
+  expiresAt: number;
+}
+
+// Simple in-memory cache with automatic cleanup
+const responseCache = new Map<string, CacheEntry>();
+const MAX_CACHE_SIZE = 1000;
+
+function getCacheKey(chainId: number, method: string, params?: unknown[]): string {
+  return `${chainId}:${method}:${params ? JSON.stringify(params) : ''}`;
+}
+
+function getCachedResponse(key: string): unknown | null {
+  const entry = responseCache.get(key);
+  if (!entry) return null;
+
+  if (Date.now() > entry.expiresAt) {
+    responseCache.delete(key);
+    return null;
+  }
+
+  return entry.response;
+}
+
+function setCachedResponse(key: string, response: unknown, ttlMs: number): void {
+  // Evict oldest entries if cache is too large
+  if (responseCache.size >= MAX_CACHE_SIZE) {
+    const oldestKey = responseCache.keys().next().value;
+    if (oldestKey) responseCache.delete(oldestKey);
+  }
+
+  responseCache.set(key, {
+    response,
+    expiresAt: Date.now() + ttlMs,
+  });
+}
+
+// Cleanup expired entries periodically
+setInterval(() => {
+  const now = Date.now();
+  for (const [key, entry] of responseCache.entries()) {
+    if (now > entry.expiresAt) {
+      responseCache.delete(key);
+    }
+  }
+}, 60000); // Every minute
+
 // Validate JSON-RPC request structure
 function isValidJsonRpcRequest(body: unknown): body is { jsonrpc: string; method: string; id: number | string; params?: unknown[] } {
   if (typeof body !== 'object' || body === null) return false;
@@ -178,6 +254,22 @@ export async function POST(request: NextRequest) {
       ));
     }
 
+    // Check cache for cacheable methods
+    const cacheTtl = CACHE_TTLS[body.method];
+    const isCacheable = cacheTtl && !UNCACHEABLE_METHODS.has(body.method);
+
+    if (isCacheable) {
+      const cacheKey = getCacheKey(chainId, body.method, body.params);
+      const cachedData = getCachedResponse(cacheKey);
+      if (cachedData) {
+        // Return cached response with original request ID
+        const cachedResponse = { ...cachedData as Record<string, unknown>, id: body.id };
+        const response = addSecurityHeaders(NextResponse.json(cachedResponse));
+        response.headers.set('X-Cache', 'HIT');
+        return response;
+      }
+    }
+
     // Create abort controller for timeout
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), RPC_TIMEOUT);
@@ -212,7 +304,15 @@ export async function POST(request: NextRequest) {
         ));
       }
 
-      return addSecurityHeaders(NextResponse.json(data));
+      // Cache successful responses for cacheable methods
+      if (isCacheable && cacheTtl && !('error' in data)) {
+        const cacheKey = getCacheKey(chainId, body.method, body.params);
+        setCachedResponse(cacheKey, data, cacheTtl);
+      }
+
+      const jsonResponse = addSecurityHeaders(NextResponse.json(data));
+      jsonResponse.headers.set('X-Cache', 'MISS');
+      return jsonResponse;
     } catch (fetchError) {
       clearTimeout(timeoutId);
       if (fetchError instanceof Error && fetchError.name === 'AbortError') {

@@ -11,6 +11,13 @@ import { devLog } from '@/lib/utils';
 // Fallback polling with exponential backoff (capped at 15s for better UX)
 const FALLBACK_POLL_INTERVALS = [3000, 5000, 10000, 15000]; // 3s, 5s, 10s, 15s max
 
+// Add jitter to prevent thundering herd (returns random offset between -25% and +25%)
+function addJitter(interval: number): number {
+  const jitterRange = interval * 0.25; // 25% jitter
+  const jitter = (Math.random() - 0.5) * 2 * jitterRange;
+  return Math.max(1000, interval + jitter); // Minimum 1 second
+}
+
 /**
  * Centralized real-time sync manager
  *
@@ -297,12 +304,13 @@ export function useRealtimeSync() {
             notifyListeners();
             fallbackPoll();
 
-            // Get next interval with backoff
+            // Get next interval with backoff + jitter (prevents thundering herd)
             const intervalIndex = Math.min(fallbackRetryCountRef.current, FALLBACK_POLL_INTERVALS.length - 1);
-            const nextInterval = FALLBACK_POLL_INTERVALS[intervalIndex];
+            const baseInterval = FALLBACK_POLL_INTERVALS[intervalIndex];
+            const nextInterval = addJitter(baseInterval);
             fallbackRetryCountRef.current++;
 
-            devLog.log(`🔄 [RealtimeSync] Next poll in ${nextInterval / 1000}s`);
+            devLog.log(`🔄 [RealtimeSync] Next poll in ${(nextInterval / 1000).toFixed(1)}s (with jitter)`);
             fallbackIntervalRef.current = setTimeout(startFallbackPolling, nextInterval);
           };
 

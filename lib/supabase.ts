@@ -13,7 +13,7 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   },
   realtime: {
     params: {
-      eventsPerSecond: 10,
+      eventsPerSecond: 100, // Increased for 1000+ concurrent users
     },
   },
 });

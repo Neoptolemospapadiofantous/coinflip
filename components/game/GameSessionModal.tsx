@@ -4,7 +4,7 @@ import { Dialog, Flex, Heading, Text, Button, Card, Progress } from '@radix-ui/t
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
-import { CoinFlip2D } from './CoinFlip3D';
+import { CoinFlip2D } from './CoinFlip2D';
 import { Confetti } from '@/components/effects/Confetti';
 import { Game } from '@/types/game';
 import { formatCurrency, formatGameId } from '@/lib/utils';
