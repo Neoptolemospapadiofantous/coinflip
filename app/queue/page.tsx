@@ -126,7 +126,7 @@ export default function QueuePage() {
   const [joinedGameId, setJoinedGameId] = useState<string | null>(null);
   const [cancelingGameId, setCancelingGameId] = useState<string | null>(null);
   const [now, setNow] = useState(Date.now()); // For live time updates
-  const { addActiveGame, startCancellingGame, finishCancellingGame, isGameCancelling, startJoiningGame, finishJoiningGame, isGameJoining } = useGameStore();
+  const { addActiveGame, updateActiveGame, queueModal, startCancellingGame, finishCancellingGame, isGameCancelling, startJoiningGame, finishJoiningGame, isGameJoining } = useGameStore();
   const queryClient = useQueryClient();
 
   // Refs for cleanup
@@ -153,20 +153,38 @@ export default function QueuePage() {
   // Real-time updates are handled centrally by useRealtimeSync (in Providers)
   // Connection status is now managed by useConnectionStatus hook
 
-  // Handle join success - invalidate queries to remove joined game from list
+  // Handle join success - immediately show matched modal (no waiting for realtime)
   useEffect(() => {
-    if (isSuccess && joinedGameId) {
+    if (isSuccess && joinedGameId && selectedGame && address) {
       // Complete the optimistic join
       finishJoiningGame(joinedGameId, true);
 
       // Immediately invalidate queries for real-time sync
       invalidateGameQueries(queryClient, joinedGameId);
 
+      // Create matched game object with joiner info
+      const matchedGame: Game = {
+        ...selectedGame,
+        status: 'matched',
+        joiner_address: address as string,
+        joiner_choice: !selectedGame.creator_choice,
+      };
+
+      // Update game in store to matched status
+      updateActiveGame(matchedGame);
+
+      // Immediately queue the matched modal (don't wait for realtime)
+      queueModal(matchedGame, 'matched');
+
       // Show success feedback
       showToast.gameMatched();
       playSound.match();
+
+      // Close dialog immediately since modal will show
+      setIsDialogOpen(false);
+      setSelectedGame(null);
     }
-  }, [isSuccess, joinedGameId, queryClient, finishJoiningGame]);
+  }, [isSuccess, joinedGameId, selectedGame, address, queryClient, finishJoiningGame, updateActiveGame, queueModal]);
 
   // Handle join error - revert optimistic update
   useEffect(() => {
@@ -279,20 +297,8 @@ export default function QueuePage() {
     }
   }, []);
 
-  // Auto-close dialog after successful join
-  // Modal queuing is handled by central useRealtimeSync
-  // Keep joinedGameId set to prevent re-clicking until game is removed from list
-  useEffect(() => {
-    if (!isSuccess) return;
-
-    const timer = setTimeout(() => {
-      if (mountedRef.current) {
-        handleDialogClose(false); // Don't reset joinedGameId - let real-time sync handle it
-      }
-    }, 2000);
-
-    return () => clearTimeout(timer);
-  }, [isSuccess, handleDialogClose]);
+  // Note: Dialog is now closed immediately on success in the join success handler above
+  // This ensures seamless transition to the matched modal
 
   if (!isConnected) {
     return (
