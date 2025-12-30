@@ -5,12 +5,16 @@ import { Header } from './Header';
 import { Footer } from './Footer';
 import { Toaster } from '@/components/ui/Toaster';
 import { ConnectionStatusBanner } from '@/components/ui/ConnectionStatusBanner';
+import { useConnectionStatus } from '@/hooks/useRealtimeSync';
 
 export function Layout({ children }: { children: React.ReactNode }) {
+  const { isConnected } = useConnectionStatus();
+
   return (
     <Flex direction="column" style={{ minHeight: '100vh' }} className="relative">
-      {/* Ambient background effects */}
-      <div className="fixed inset-0 -z-10 overflow-hidden pointer-events-none">
+      {/* Ambient background effects - only show when connected */}
+      {isConnected && (
+      <div className="fixed inset-0 -z-10 overflow-hidden pointer-events-none animate-fade-in">
         {/* Gradient orbs */}
         <div className="absolute top-0 left-1/4 w-96 h-96 bg-cyan-500/10 rounded-full blur-3xl animate-pulse-slow" />
         <div className="absolute bottom-1/4 right-1/4 w-80 h-80 bg-purple-500/10 rounded-full blur-3xl animate-pulse-slow" style={{ animationDelay: '1s' }} />
@@ -29,6 +33,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
         {/* Vignette effect */}
         <div className="absolute inset-0 bg-gradient-radial from-transparent via-transparent to-slate-950" />
       </div>
+      )}
 
       <Header />
 
