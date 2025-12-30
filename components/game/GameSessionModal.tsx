@@ -17,6 +17,8 @@ import { useGame } from '@/hooks/useGames';
 import { useCancelGame } from '@/hooks/useContract';
 import { showToast } from '@/lib/toast';
 import { playSound } from '@/lib/sounds';
+import { useNotificationState } from '@/hooks/useNotificationState';
+import { useUserPreferences } from '@/hooks/useUserPreferences';
 
 interface GameSessionModalProps {
   game: Game | null;
@@ -32,8 +34,6 @@ const VRF_TIMEOUT_SECONDS = 120;
 const MAX_DATA_RETRIES = 10;
 // Game expiry time (5 minutes) - after this, Chainlink Automation will auto-cancel
 const GAME_EXPIRY_MS = 5 * 60 * 1000;
-// LocalStorage key for animation skip preference
-const SKIP_ANIMATION_KEY = 'coinflip-skip-animation';
 
 export function GameSessionModal({ game, open, onClose, userAddress, modalType }: GameSessionModalProps) {
   const [isFlipping, setIsFlipping] = useState(false);
@@ -45,9 +45,11 @@ export function GameSessionModal({ game, open, onClose, userAddress, modalType }
   const [cancelStatus, setCancelStatus] = useState<'idle' | 'cancelling' | 'success' | 'error'>('idle');
   const [showConfetti, setShowConfetti] = useState(false);
   const [expiredElapsedSeconds, setExpiredElapsedSeconds] = useState(0);
-  const [alwaysSkipAnimation, setAlwaysSkipAnimation] = useState(false);
   const [currentRetryCount, setCurrentRetryCount] = useState(0);
-  const { resetGame, updateActiveGame, removeActiveGame, startCancellingGame, finishCancellingGame, modalQueue, saveLastGameSettings, setupQuickRebet } = useGameStore();
+  const { resetGame, updateActiveGame, removeActiveGame, startCancellingGame, finishCancellingGame, modalQueue, setupQuickRebet } = useGameStore();
+
+  // User preferences from database (skip animation, last game settings)
+  const { skipAnimation: alwaysSkipAnimation, setSkipAnimation, saveLastGameSettings } = useUserPreferences();
 
   // Use refs to prevent duplicate sounds/toasts (more reliable than state)
   const hasPlayedMatchSoundRef = useRef(false);
@@ -57,6 +59,9 @@ export function GameSessionModal({ game, open, onClose, userAddress, modalType }
 
   // Cancel game hook
   const { cancelGame, isLoading: isCancelling, isSuccess: cancelSuccess, error: cancelError, reset: resetCancel } = useCancelGame();
+
+  // Notification state for tracking sounds in database
+  const { shouldPlaySound, markSoundPlayed } = useNotificationState();
 
   // Fetch fresh game data for auto-refetch on validation errors
   const { data: freshGame, refetch: refetchGame } = useGame(game?.id ?? null);
@@ -129,11 +134,17 @@ export function GameSessionModal({ game, open, onClose, userAddress, modalType }
         setVrfTimedOut(false);
       }
 
-      // Play match sound and show toast once
-      if (!hasPlayedMatchSoundRef.current && isParticipant) {
+      // Play match sound and show toast once (check DB to prevent repeats across refreshes)
+      if (!hasPlayedMatchSoundRef.current && isParticipant && game.id) {
         hasPlayedMatchSoundRef.current = true;
-        playSound.match();
-        showToast.gameMatched();
+        // Check DB and play sound if not already played
+        shouldPlaySound(game.id, 'matched').then((shouldPlay) => {
+          if (shouldPlay) {
+            playSound.match();
+            showToast.gameMatched();
+            markSoundPlayed(game.id, 'matched');
+          }
+        });
       }
     }
 
@@ -146,9 +157,8 @@ export function GameSessionModal({ game, open, onClose, userAddress, modalType }
         vrfTimerRef.current = null;
       }
 
-      // Check if user prefers to skip animation
-      const shouldSkip = localStorage.getItem(SKIP_ANIMATION_KEY) === 'true';
-      if (shouldSkip) {
+      // Check if user prefers to skip animation (from DB-backed preferences)
+      if (alwaysSkipAnimation) {
         // Skip directly to result
         setSkipped(true);
         setShowResult(true);
@@ -160,7 +170,7 @@ export function GameSessionModal({ game, open, onClose, userAddress, modalType }
       setVrfTimedOut(false);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- Intentionally using game?.id and game?.status to prevent re-renders
-  }, [game?.id, game?.status, validation.valid]);
+  }, [game?.id, game?.status, validation.valid, alwaysSkipAnimation]);
 
   // Auto-refetch on validation errors (incomplete VRF data)
   useEffect(() => {
@@ -259,12 +269,6 @@ export function GameSessionModal({ game, open, onClose, userAddress, modalType }
     };
   }, []);
 
-  // Load animation skip preference from localStorage
-  useEffect(() => {
-    const saved = localStorage.getItem(SKIP_ANIMATION_KEY);
-    setAlwaysSkipAnimation(saved === 'true');
-  }, []);
-
   // Track cancel status
   useEffect(() => {
     if (cancelSuccess) {
@@ -310,26 +314,37 @@ export function GameSessionModal({ game, open, onClose, userAddress, modalType }
 
   /// Extracted: Play result effects (sound, confetti, toast)
   const playResultEffects = useCallback(() => {
-    if (hasPlayedResultSoundRef.current || !isParticipant) return;
+    if (hasPlayedResultSoundRef.current || !isParticipant || !game?.id) return;
     hasPlayedResultSoundRef.current = true;
 
-    // Save game settings for quick re-bet
+    // Save game settings for quick re-bet (to DB for cross-device sync)
     if (game) {
       const userChoice = isCreator ? game.creator_choice : game.joiner_choice;
       if (userChoice !== undefined && userChoice !== null && game.tier !== undefined) {
-        saveLastGameSettings(game.tier, userChoice, isWinner, game.amount);
+        saveLastGameSettings({
+          tier: game.tier,
+          choice: userChoice,
+          wasWin: isWinner,
+          amount: game.amount,
+        });
       }
     }
 
-    if (isWinner) {
-      playSound.win();
-      setShowConfetti(true);
-      showToast.gameWon(formatCurrency(BigInt(game?.payout || 0)));
-    } else {
-      playSound.loss();
-      showToast.gameLost();
-    }
-  }, [isParticipant, isWinner, isCreator, game, saveLastGameSettings]);
+    // Check DB and play sound if not already played (prevents repeats across refreshes)
+    shouldPlaySound(game.id, 'resolved').then((shouldPlay) => {
+      if (shouldPlay) {
+        if (isWinner) {
+          playSound.win();
+          setShowConfetti(true);
+          showToast.gameWon(formatCurrency(BigInt(game?.payout || 0)));
+        } else {
+          playSound.loss();
+          showToast.gameLost();
+        }
+        markSoundPlayed(game.id, 'resolved');
+      }
+    });
+  }, [isParticipant, isWinner, isCreator, game, saveLastGameSettings, shouldPlaySound, markSoundPlayed]);
 
   const handleFlipComplete = useCallback(() => {
     setShowResult(true);
@@ -338,20 +353,17 @@ export function GameSessionModal({ game, open, onClose, userAddress, modalType }
 
   const handleSkip = useCallback((savePreference: boolean = false) => {
     if (savePreference) {
-      localStorage.setItem(SKIP_ANIMATION_KEY, 'true');
-      setAlwaysSkipAnimation(true);
+      setSkipAnimation(true);
     }
     setSkipped(true);
     setIsFlipping(false);
     setShowResult(true);
     playResultEffects();
-  }, [playResultEffects]);
+  }, [playResultEffects, setSkipAnimation]);
 
   const toggleSkipPreference = useCallback(() => {
-    const newValue = !alwaysSkipAnimation;
-    localStorage.setItem(SKIP_ANIMATION_KEY, newValue.toString());
-    setAlwaysSkipAnimation(newValue);
-  }, [alwaysSkipAnimation]);
+    setSkipAnimation(!alwaysSkipAnimation);
+  }, [alwaysSkipAnimation, setSkipAnimation]);
 
   const handleClose = () => {
     // Cleanup
@@ -958,7 +970,7 @@ export function GameSessionModal({ game, open, onClose, userAddress, modalType }
                       {cancelStatus === 'cancelling' ? (
                         <>
                           <Loader2 className="w-4 h-4 animate-spin mr-2" />
-                          Cancelling...
+                          Waiting for confirmation...
                         </>
                       ) : cancelStatus === 'error' ? (
                         'Try Again'
