@@ -2,6 +2,7 @@
 
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { useAccount } from 'wagmi';
+import { useSearchParams } from 'next/navigation';
 import { ConnectButton } from '@rainbow-me/rainbowkit';
 import {
   Container,
@@ -21,9 +22,10 @@ import { useGameStore, MAX_CONCURRENT_GAMES, useActiveGamesList } from '@/store/
 import { useCreateGame, useCancelGame } from '@/hooks/useContract';
 import { useTiers } from '@/hooks/useTiers';
 import { useCreatedGameTracking } from '@/hooks/useCreatedGameTracking';
-import { Info, Loader2, CheckCircle2, AlertCircle, Clock, Users, X, Plus, Gamepad2 } from 'lucide-react';
+import { useOptimisticUpdates } from '@/hooks/useOptimisticUpdates';
+import { Info, Loader2, CheckCircle2, AlertCircle, Clock, Users, X, Plus, Gamepad2, Zap } from 'lucide-react';
 import { parseError } from '@/lib/errors';
-import { formatGameId } from '@/lib/utils';
+import { formatGameId, formatCurrency } from '@/lib/utils';
 import { Game } from '@/types/game';
 import { useQueryClient } from '@tanstack/react-query';
 import { invalidateGameQueries, removeGameFromPendingCache } from '@/lib/queryUtils';
@@ -40,10 +42,13 @@ enum GameStep {
 
 export default function PlayPage() {
   const { isConnected, address } = useAccount();
+  const searchParams = useSearchParams();
+  const isQuickRebet = searchParams.get('quickRebet') === 'true';
   const [step, setStep] = useState<GameStep>(GameStep.SELECT_TIER);
   const {
     selectedTier,
     coinChoice,
+    lastGameSettings,
     resetGameCreation,
     addActiveGame,
     updateActiveGame,
@@ -54,13 +59,16 @@ export default function PlayPage() {
     finishCancellingGame,
     isGameCancelling,
     addPendingTransaction,
+    updatePendingTransaction,
     removePendingTransaction,
+    clearLastGameSettings,
   } = useGameStore();
   const { createGame, isLoading, isSuccess, txHash, error, wasRejected: createWasRejected, reset: resetCreateGame } = useCreateGame();
   const { cancelGame, isLoading: isCancelling, error: cancelError, isSuccess: cancelSuccess, wasRejected: cancelWasRejected, reset: resetCancelState } = useCancelGame();
   const { data: tiers } = useTiers();
   const activeGames = useActiveGamesList();
   const queryClient = useQueryClient();
+  const { optimisticCreateGame, rollbackOptimisticCreate, optimisticCancelGame, rollbackOptimisticCancel } = useOptimisticUpdates();
 
   // Refs for race condition prevention
   const isCancellingRef = useRef(false);
@@ -82,7 +90,9 @@ export default function PlayPage() {
     isMatchedRef.current = false;
     resetCancelState();
     resetCreateGame?.();
-  }, [resetGameCreation, resetCancelState, resetCreateGame]);
+    // Clear any pending create transaction
+    removePendingTransaction('create-game');
+  }, [resetGameCreation, resetCancelState, resetCreateGame, removePendingTransaction]);
 
   // Track the created game in real-time
   const handleGameFound = useCallback((game: Game) => {
@@ -127,9 +137,11 @@ export default function PlayPage() {
   const handleGameCancelled = useCallback((_game: Game) => {
     if (!mountedRef.current) return;
     console.log('🎮 Game cancelled');
+    // Remove pending transaction if any
+    removePendingTransaction('create-game');
     // Game will be removed when modal closes
     handleReset();
-  }, [handleReset]);
+  }, [handleReset, removePendingTransaction]);
 
   const {
     game: trackedGame,
@@ -148,6 +160,18 @@ export default function PlayPage() {
 
   // Sync cancelTracking to ref for use in callbacks
   cancelTrackingRef.current = cancelTracking;
+
+  // Handle quick re-bet: if we have settings and query param, skip to confirm
+  const quickRebetHandledRef = useRef(false);
+  useEffect(() => {
+    if (isQuickRebet && lastGameSettings && !quickRebetHandledRef.current && canCreate) {
+      quickRebetHandledRef.current = true;
+      // Settings are already set by setupQuickRebet in the modal
+      // Just skip to confirm step
+      setStep(GameStep.CONFIRM);
+      showToast.info('Quick re-bet: Same tier and choice loaded!');
+    }
+  }, [isQuickRebet, lastGameSettings, canCreate]);
 
   // Cleanup on unmount
   useEffect(() => {
@@ -211,13 +235,29 @@ export default function PlayPage() {
     }
   }, [createWasRejected, handleReset, removePendingTransaction]);
 
-  // Handle create game error - remove pending transaction
+  // Handle create game error - remove pending transaction and rollback optimistic update
   useEffect(() => {
     if (error && mountedRef.current) {
       console.log('🎮 Create game error, removing pending transaction');
       removePendingTransaction('create-game');
+      // Rollback optimistic game if we had a txHash
+      if (txHash) {
+        rollbackOptimisticCreate(txHash);
+      }
     }
-  }, [error, removePendingTransaction]);
+  }, [error, txHash, removePendingTransaction, rollbackOptimisticCreate]);
+
+  // Update pending transaction with txHash when available (for global watcher)
+  // Also create optimistic game for instant UI feedback
+  useEffect(() => {
+    if (txHash && selectedTier !== null && coinChoice !== null && currentTier) {
+      console.log('🎮 Updating pending transaction with txHash:', txHash);
+      updatePendingTransaction('create-game', { txHash });
+
+      // Create optimistic game for instant UI feedback
+      optimisticCreateGame(txHash, selectedTier, coinChoice, currentTier.amount);
+    }
+  }, [txHash, selectedTier, coinChoice, currentTier, updatePendingTransaction, optimisticCreateGame]);
 
   // Reset matched ref when tracked game changes
   useEffect(() => {
@@ -458,7 +498,15 @@ export default function PlayPage() {
                 {step === GameStep.CONFIRM && (
                   <>
                     <Flex direction="column" gap="4">
-                      <Heading size="5">Confirm Your Game</Heading>
+                      <Flex align="center" gap="2">
+                        <Heading size="5">Confirm Your Game</Heading>
+                        {isQuickRebet && lastGameSettings && (
+                          <Badge color={lastGameSettings.wasWin ? 'green' : 'orange'} size="2">
+                            <Zap className="w-3 h-3 mr-1" />
+                            Quick Re-bet
+                          </Badge>
+                        )}
+                      </Flex>
 
                       <Flex direction="column" gap="3">
                         <Flex justify="between">
@@ -653,10 +701,9 @@ export default function PlayPage() {
 
                           {/* Real-time Status */}
                           <Flex align="center" gap="2">
-                            <div className={`w-2 h-2 rounded-full ${trackingPhase === 'waiting_event' || trackingPhase === 'waiting_indexer' ? 'bg-green-400' : 'bg-yellow-400'} animate-pulse`} />
+                            <div className={`w-2 h-2 rounded-full ${trackingPhase === 'waiting_indexer' ? 'bg-green-400' : 'bg-yellow-400'} animate-pulse`} />
                             <Text size="1" color="gray">
-                              {trackingPhase === 'waiting_event' ? 'Listening for event...' :
-                               trackingPhase === 'waiting_indexer' ? 'Syncing to database...' :
+                              {trackingPhase === 'waiting_indexer' ? 'Waiting for confirmation...' :
                                trackingPhase === 'found' ? 'Game found!' : 'Connecting...'}
                             </Text>
                           </Flex>

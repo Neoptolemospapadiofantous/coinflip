@@ -54,11 +54,17 @@ function ActiveGameCard({ game, onViewGame, userAddress }: ActiveGameCardProps) 
   const isWinner = game.winner_address?.toLowerCase() === userAddress?.toLowerCase();
   const userChoice = isCreator ? game.creator_choice : game.joiner_choice;
 
-  // Time-based states for pending games
-  const warning = game.status === 'pending' && isGameWarning(game);
-  const expired = game.status === 'pending' && isGameExpired(game);
+  // Check if this is an optimistic (unconfirmed) game
+  const isOptimistic = game.id.startsWith('optimistic-');
+
+  // Time-based states for pending games (not applicable for optimistic games)
+  const warning = !isOptimistic && game.status === 'pending' && isGameWarning(game);
+  const expired = !isOptimistic && game.status === 'pending' && isGameExpired(game);
 
   const getStatusColor = () => {
+    // Optimistic games show as confirming (purple/blue)
+    if (isOptimistic) return 'purple';
+
     if (game.status === 'pending') {
       if (expired) return 'red';
       if (warning) return 'orange';
@@ -75,6 +81,9 @@ function ActiveGameCard({ game, onViewGame, userAddress }: ActiveGameCardProps) 
   };
 
   const getStatusIcon = () => {
+    // Optimistic games show spinner
+    if (isOptimistic) return <Loader2 className="w-3 h-3 animate-spin" />;
+
     switch (game.status) {
       case 'pending':
         return <Users className="w-3 h-3" />;
@@ -88,6 +97,9 @@ function ActiveGameCard({ game, onViewGame, userAddress }: ActiveGameCardProps) 
   };
 
   const getStatusText = () => {
+    // Optimistic games show "Confirming"
+    if (isOptimistic) return 'Confirming...';
+
     switch (game.status) {
       case 'pending':
         return 'Waiting';
@@ -109,13 +121,13 @@ function ActiveGameCard({ game, onViewGame, userAddress }: ActiveGameCardProps) 
 
   return (
     <Card
-      className={`card-simple cursor-pointer hover:border-cyan-500/50 transition-all ${getBorderClass()}`}
-      onClick={() => onViewGame(game)}
+      className={`card-simple ${isOptimistic ? 'opacity-75' : 'cursor-pointer hover:border-cyan-500/50'} transition-all ${getBorderClass()}`}
+      onClick={() => !isOptimistic && onViewGame(game)}
     >
       <Flex direction="column" gap="2" p="3">
         <Flex justify="between" align="center">
           <Text size="1" className="font-mono text-gray-500">
-            {formatGameId(game.id)}
+            {isOptimistic ? 'Pending...' : formatGameId(game.id)}
           </Text>
           <Badge size="1" color={getStatusColor()} variant="soft">
             <Flex align="center" gap="1">
@@ -135,14 +147,21 @@ function ActiveGameCard({ game, onViewGame, userAddress }: ActiveGameCardProps) 
           <ChevronRight className="w-4 h-4 text-gray-500" />
         </Flex>
 
-        {/* Countdown timer for pending games */}
-        {game.status === 'pending' && (
+        {/* Countdown timer for pending games (not for optimistic) */}
+        {game.status === 'pending' && !isOptimistic && (
           <Flex align="center" gap="1">
             <Clock className={`w-3 h-3 ${expired ? 'text-red-400' : warning ? 'text-yellow-400' : 'text-gray-400'}`} />
             <Text size="1" className={expired ? 'text-red-400' : warning ? 'text-yellow-400' : 'text-gray-400'}>
               {formatGameTimeRemaining(game)}
             </Text>
           </Flex>
+        )}
+
+        {/* Show confirming message for optimistic games */}
+        {isOptimistic && (
+          <Text size="1" className="text-purple-400">
+            Waiting for blockchain confirmation...
+          </Text>
         )}
 
         {game.status === 'resolved' && (
