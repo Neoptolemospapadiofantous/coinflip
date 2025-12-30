@@ -1,3 +1,5 @@
+import { devLog } from '@/lib/utils';
+
 export enum GameStatus {
   PENDING = 'pending',
   MATCHED = 'matched',
@@ -143,7 +145,7 @@ function normalizeGame(obj: Record<string, unknown>): Record<string, unknown> {
  */
 export function parseGame(obj: unknown): Game | null {
   if (typeof obj !== 'object' || obj === null) {
-    console.warn('Invalid game object received (not an object):', obj);
+    devLog.warn('Invalid game object received (not an object)');
     return null;
   }
 
@@ -153,7 +155,9 @@ export function parseGame(obj: unknown): Game | null {
   if (isValidGame(normalized)) {
     return normalized;
   }
-  console.warn('Invalid game object received:', obj);
+  // Log safely without exposing potentially large/sensitive objects
+  const objRecord = obj as Record<string, unknown>;
+  devLog.warn('Invalid game object received, id:', objRecord.id || 'unknown');
   return null;
 }
 

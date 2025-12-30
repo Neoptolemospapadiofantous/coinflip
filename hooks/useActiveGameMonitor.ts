@@ -138,7 +138,9 @@ export function useActiveGameMonitor() {
       }
     };
 
-    processGames();
+    processGames().catch((error) => {
+      devLog.error('❌ [ActiveGameMonitor] Error processing games:', error);
+    });
   }, [games, address, addActiveGame, updateActiveGame, getActiveGame, queueModal, shouldShowModal, markModalShown]);
 
   const handleCloseModal = useCallback(async () => {

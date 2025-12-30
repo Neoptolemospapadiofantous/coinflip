@@ -82,6 +82,31 @@ export const POST_EVENT_RETRY_INTERVAL_MS = 500;
 /** Maximum retries when waiting for indexer after event */
 export const POST_EVENT_MAX_RETRIES = 10;
 
+/** Optimistic game confirmation timeout (2 minutes) - auto-remove if not confirmed */
+export const OPTIMISTIC_GAME_TIMEOUT_MS = 2 * 60 * 1000;
+
+// ============================================
+// LIMITS
+// ============================================
+
+/** Maximum concurrent games per player */
+export const MAX_CONCURRENT_GAMES = 5;
+
+/** Maximum games to prefetch notifications for */
+export const MAX_PREFETCH_GAMES = 100;
+
+/** Maximum entries in notification cache (LRU) */
+export const MAX_NOTIFICATION_CACHE_SIZE = 100;
+
+/** Maximum RPC response cache entries */
+export const MAX_RPC_CACHE_SIZE = 1000;
+
+/** Rate limit: requests per minute per IP */
+export const RATE_LIMIT_REQUESTS_PER_MINUTE = 100;
+
+/** RPC proxy request timeout (ms) */
+export const RPC_TIMEOUT_MS = 15000;
+
 // ============================================
 // GAS LIMITS
 // ============================================

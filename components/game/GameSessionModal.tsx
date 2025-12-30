@@ -7,7 +7,7 @@ import { useRouter } from 'next/navigation';
 import { CoinFlip2D } from './CoinFlip2D';
 import { Confetti } from '@/components/effects/Confetti';
 import { Game } from '@/types/game';
-import { formatCurrency, formatGameId } from '@/lib/utils';
+import { formatCurrency, formatGameId, devLog } from '@/lib/utils';
 import { CopyableGameId } from '@/components/ui/CopyableGameId';
 import { invalidateGameQueries, removeGameFromPendingCache } from '@/lib/queryUtils';
 import { Loader2, Users, Trophy, Zap, AlertTriangle, Clock, XCircle, Layers } from 'lucide-react';
@@ -93,7 +93,7 @@ export function GameSessionModal({ game, open, onClose, userAddress, modalType }
     try {
       return validateGameState(game);
     } catch (error) {
-      console.error('Game validation error:', error);
+      devLog.error('Game validation error:', error);
       return { valid: false, errors: ['Validation failed - please refresh'] };
     }
   }, [game]);

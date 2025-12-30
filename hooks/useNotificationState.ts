@@ -254,12 +254,18 @@ export function useNotificationState() {
   const prefetchNotifications = useCallback(async (gameIds: string[]): Promise<void> => {
     if (!address || gameIds.length === 0) return;
 
+    // Limit to prevent DoS - only prefetch first 100 games
+    const limitedGameIds = gameIds.slice(0, 100);
+    if (gameIds.length > 100) {
+      devLog.warn(`🔔 [Notification] Limiting prefetch from ${gameIds.length} to 100 games`);
+    }
+
     try {
       const { data, error } = await supabase
         .from('user_game_notifications')
         .select('*')
         .eq('user_address', address.toLowerCase())
-        .in('game_id', gameIds);
+        .in('game_id', limitedGameIds);
 
       if (error) {
         devLog.warn(`🔔 [Notification] Error prefetching:`, error.message);
