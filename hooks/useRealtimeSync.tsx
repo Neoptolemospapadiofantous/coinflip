@@ -93,13 +93,16 @@ export function useRealtimeSync() {
           }
           console.log('🆕 [RealtimeSync] Game created:', game.id, 'status:', game.status);
 
+          // Remove any optimistic game with matching tx_hash
+          const optimisticId = `optimistic-${game.tx_hash.slice(0, 10)}`;
+
           // Add new pending game directly to cache for instant UI update
           if (game.status === 'pending') {
             queryClientRef.current.setQueryData(['games', 'pending'], (old: Game[] | undefined) => {
               if (!old) return [game];
-              // Avoid duplicates
-              if (old.some(g => g.id === game.id)) return old;
-              return [game, ...old]; // Add to front (newest first)
+              // Remove optimistic version and avoid duplicates
+              const filtered = old.filter(g => g.id !== optimisticId && g.id !== game.id);
+              return [game, ...filtered]; // Add real game to front
             });
           }
 
@@ -107,10 +110,12 @@ export function useRealtimeSync() {
           queryClientRef.current.invalidateQueries({ queryKey: ['games', 'pending'] });
           queryClientRef.current.invalidateQueries({ queryKey: ['games', 'active'] });
 
-          // If this is the user's game, add to active games (if not already tracked)
+          // If this is the user's game, update active games (replace optimistic with real)
           const userAddress = addressRef.current?.toLowerCase();
           if (userAddress && game.creator_address?.toLowerCase() === userAddress) {
-            // Use updateActiveGame instead - it won't overwrite addedAt if exists
+            // Remove optimistic game from active games
+            actionsRef.current.removeActiveGame(optimisticId);
+            // Add the real game
             actionsRef.current.updateActiveGame(game);
           }
 
