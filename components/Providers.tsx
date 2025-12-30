@@ -7,8 +7,15 @@ import { config } from '@/lib/wagmi';
 import { useState } from 'react';
 import { GameMonitor } from './GameMonitor';
 import { RealtimeSyncProvider } from '@/hooks/useRealtimeSync';
+import { usePendingTransactionWatcher } from '@/hooks/usePendingTransactionWatcher';
 
 import '@rainbow-me/rainbowkit/styles.css';
+
+// Component that runs the global transaction watcher
+function GlobalTransactionWatcher() {
+  usePendingTransactionWatcher();
+  return null;
+}
 
 export function Providers({ children }: { children: React.ReactNode }) {
   const [queryClient] = useState(() => new QueryClient());
@@ -20,6 +27,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
           <RealtimeSyncProvider>
             {children}
             <GameMonitor />
+            <GlobalTransactionWatcher />
           </RealtimeSyncProvider>
         </RainbowKitProvider>
       </QueryClientProvider>
