@@ -5,7 +5,7 @@ import { Card, Flex, Heading, Text, Badge, ScrollArea, IconButton } from '@radix
 import { useActiveGamesList, useGameStore, MAX_CONCURRENT_GAMES } from '@/store/gameStore';
 import { Game } from '@/types/game';
 import { Users, Loader2, Trophy, ChevronRight, Wifi, WifiOff, Clock, ChevronDown, ChevronUp, RefreshCw } from 'lucide-react';
-import { formatCurrency, formatGameId } from '@/lib/utils';
+import { formatCurrency, formatGameId, safeStorage } from '@/lib/utils';
 import { useAccount } from 'wagmi';
 import { useConnectionStatus } from '@/hooks/useRealtimeSync';
 import { formatGameTimeRemaining, isGameWarning, isGameExpired } from '@/hooks/useGameTimeout';
@@ -180,8 +180,7 @@ export function ActiveGamesPanel() {
   const { queueModal } = useGameStore();
   const [, setTick] = useState(0);
   const [isCollapsed, setIsCollapsed] = useState(() => {
-    if (typeof window === 'undefined') return false;
-    return localStorage.getItem(PANEL_COLLAPSED_KEY) === 'true';
+    return safeStorage.getItem(PANEL_COLLAPSED_KEY) === 'true';
   });
 
   // Force re-render every second to update countdown timers
@@ -196,7 +195,7 @@ export function ActiveGamesPanel() {
   const toggleCollapsed = () => {
     setIsCollapsed(prev => {
       const newValue = !prev;
-      localStorage.setItem(PANEL_COLLAPSED_KEY, String(newValue));
+      safeStorage.setItem(PANEL_COLLAPSED_KEY, String(newValue));
       return newValue;
     });
   };

@@ -2,6 +2,17 @@ import { type ClassValue, clsx } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 import { formatUnits } from 'viem';
 
+// Check if running in development mode
+const isDev = process.env.NODE_ENV === 'development';
+
+// Development-only logger - prevents sensitive data from leaking to production console
+export const devLog = {
+  log: (...args: unknown[]) => isDev && console.log(...args),
+  warn: (...args: unknown[]) => isDev && console.warn(...args),
+  error: (...args: unknown[]) => console.error(...args), // Always log errors
+  info: (...args: unknown[]) => isDev && console.info(...args),
+};
+
 // Tailwind utility
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
@@ -10,6 +21,8 @@ export function cn(...inputs: ClassValue[]) {
 // Format address for display (0x1234...5678)
 export function formatAddress(address: string): string {
   if (!address) return '';
+  // Ethereum addresses are 42 characters (0x + 40 hex chars)
+  if (address.length < 10) return address; // Too short to format
   return `${address.slice(0, 6)}...${address.slice(-4)}`;
 }
 
@@ -79,6 +92,8 @@ export function formatRelativeTime(date: Date | string): string {
 // Format transaction hash for display
 export function formatTxHash(hash: string): string {
   if (!hash) return '';
+  // Transaction hashes are 66 characters (0x + 64 hex chars)
+  if (hash.length < 20) return hash; // Too short to format
   return `${hash.slice(0, 10)}...${hash.slice(-8)}`;
 }
 
@@ -100,6 +115,39 @@ export function getBlockExplorerUrl(chainId: number, hash: string, type: 'tx' | 
 export function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
+
+// Safe localStorage helpers - handles SSR, incognito mode, and quota errors
+export const safeStorage = {
+  getItem: (key: string): string | null => {
+    if (typeof window === 'undefined') return null;
+    try {
+      return localStorage.getItem(key);
+    } catch {
+      devLog.warn(`Failed to read localStorage key: ${key}`);
+      return null;
+    }
+  },
+  setItem: (key: string, value: string): boolean => {
+    if (typeof window === 'undefined') return false;
+    try {
+      localStorage.setItem(key, value);
+      return true;
+    } catch {
+      devLog.warn(`Failed to write localStorage key: ${key}`);
+      return false;
+    }
+  },
+  removeItem: (key: string): boolean => {
+    if (typeof window === 'undefined') return false;
+    try {
+      localStorage.removeItem(key);
+      return true;
+    } catch {
+      devLog.warn(`Failed to remove localStorage key: ${key}`);
+      return false;
+    }
+  },
+};
 
 // Copy to clipboard
 export async function copyToClipboard(text: string): Promise<boolean> {

@@ -4,6 +4,7 @@ import { useEffect, useState, useRef, useCallback } from 'react';
 import { useChainId } from 'wagmi';
 import { supabase } from '@/lib/supabase';
 import { Game, parseGame } from '@/types/game';
+import { devLog } from '@/lib/utils';
 
 interface UseCreatedGameTrackingOptions {
   txHash: string | undefined;
@@ -59,6 +60,7 @@ export function useCreatedGameTracking({
   const retryIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const gameIdRef = useRef<string | null>(null);
   const currentTxHashRef = useRef<string | null>(null);
+  const subscriptionRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
 
   // Callback refs to avoid re-running effect
   const onGameFoundRef = useRef(onGameFound);
@@ -133,14 +135,11 @@ export function useCreatedGameTracking({
     }
   }, []);
 
-  // Ref for subscription cleanup
-  const subscriptionRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
-
   // Handle game found
   const handleGameFound = useCallback((game: Game) => {
     if (!mountedRef.current || gameIdRef.current) return;
 
-    console.log(`🎮 Found created game:`, game.id, 'status:', game.status);
+    devLog.log(`🎮 Found created game:`, game.id, 'status:', game.status);
     gameIdRef.current = game.id;
 
     // Stop polling
@@ -169,7 +168,7 @@ export function useCreatedGameTracking({
     // Subscribe to status changes if game is still active (pending or matched)
     // We need to track matched games to catch the resolved status
     if (game.status === 'pending' || game.status === 'matched') {
-      console.log(`📡 Subscribing to status changes for game ${game.id}`);
+      devLog.log(`📡 Subscribing to status changes for game ${game.id}`);
       subscriptionRef.current = supabase
         .channel(`game-tracking-${game.id}`)
         .on(
@@ -184,10 +183,10 @@ export function useCreatedGameTracking({
             if (!mountedRef.current) return;
             const updatedGame = parseGame(payload.new);
             if (!updatedGame) {
-              console.warn(`📡 Game ${game.id} received invalid payload`);
+              devLog.warn(`📡 Game ${game.id} received invalid payload`);
               return;
             }
-            console.log(`📡 Game ${game.id} status changed to:`, updatedGame.status);
+            devLog.log(`📡 Game ${game.id} status changed to:`, updatedGame.status);
 
             // Update local state
             setState((prev) => ({
@@ -206,7 +205,7 @@ export function useCreatedGameTracking({
 
             // Game is now resolved or cancelled - cleanup subscription
             if ((updatedGame.status === 'resolved' || updatedGame.status === 'cancelled') && subscriptionRef.current) {
-              console.log(`📡 Game ${game.id} finished (${updatedGame.status}) - cleaning up subscription`);
+              devLog.log(`📡 Game ${game.id} finished (${updatedGame.status}) - cleaning up subscription`);
               supabase.removeChannel(subscriptionRef.current);
               subscriptionRef.current = null;
             }
@@ -217,7 +216,7 @@ export function useCreatedGameTracking({
             console.error(`[GameTracking] Subscription error for game ${game.id}:`, err.message);
           }
           if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
-            console.warn(`[GameTracking] Subscription ${status} for game ${game.id}`);
+            devLog.warn(`[GameTracking] Subscription ${status} for game ${game.id}`);
           }
         });
     }
@@ -241,7 +240,7 @@ export function useCreatedGameTracking({
     gameIdRef.current = null;
     mountedRef.current = true;
 
-    console.log('🔍 Starting game tracking for tx:', txHash.slice(0, 10));
+    devLog.log('🔍 Starting game tracking for tx:', txHash.slice(0, 10));
 
     setState({
       game: null,
@@ -281,7 +280,7 @@ export function useCreatedGameTracking({
     // Timeout
     timeoutRef.current = setTimeout(() => {
       if (!gameIdRef.current && mountedRef.current) {
-        console.warn('Timeout waiting for game to be indexed');
+        devLog.warn('Timeout waiting for game to be indexed');
         setState((prev) => ({
           ...prev,
           isSearching: false,

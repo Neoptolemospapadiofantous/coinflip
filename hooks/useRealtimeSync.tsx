@@ -6,6 +6,7 @@ import { supabase } from '@/lib/supabase';
 import { useGameStore } from '@/store/gameStore';
 import { Game, parseGame } from '@/types/game';
 import { useAccount } from 'wagmi';
+import { devLog } from '@/lib/utils';
 
 // Fallback polling with exponential backoff (capped at 15s for better UX)
 const FALLBACK_POLL_INTERVALS = [3000, 5000, 10000, 15000]; // 3s, 5s, 10s, 15s max
@@ -63,7 +64,7 @@ export function useRealtimeSync() {
 
   // Fallback polling function
   const fallbackPoll = () => {
-    console.log('🔄 [RealtimeSync] Fallback polling...');
+    devLog.log('🔄 [RealtimeSync] Fallback polling...');
     queryClientRef.current.invalidateQueries({ queryKey: ['games', 'pending'] });
     queryClientRef.current.invalidateQueries({ queryKey: ['games', 'active'] });
     queryClientRef.current.invalidateQueries({ queryKey: ['game-stats'] });
@@ -74,7 +75,7 @@ export function useRealtimeSync() {
 
   // Setup single channel for all game updates - NO dependencies to prevent re-subscription
   useEffect(() => {
-    console.log('📡 [RealtimeSync] Setting up centralized real-time sync...');
+    devLog.log('📡 [RealtimeSync] Setting up centralized real-time sync...');
     globalConnectionStatus = 'connecting';
 
     const channel = supabase
@@ -90,10 +91,10 @@ export function useRealtimeSync() {
           try {
             const game = parseGame(payload.new);
             if (!game) {
-              console.warn('🆕 [RealtimeSync] Received invalid game payload on INSERT');
+              devLog.warn('🆕 [RealtimeSync] Received invalid game payload on INSERT');
               return;
             }
-            console.log('🆕 [RealtimeSync] Game created:', game.id, 'status:', game.status);
+            devLog.log('🆕 [RealtimeSync] Game created:', game.id, 'status:', game.status);
 
             // Remove any optimistic game with matching tx_hash
             const txHashPrefix = game.tx_hash?.slice(0, 10) || '';
@@ -144,12 +145,12 @@ export function useRealtimeSync() {
           try {
             const game = parseGame(payload.new);
             if (!game) {
-              console.warn('🔄 [RealtimeSync] Received invalid game payload on UPDATE');
+              devLog.warn('🔄 [RealtimeSync] Received invalid game payload on UPDATE');
               return;
             }
             // oldGame is partial and may be incomplete, just extract what we need
             const oldGame = payload.old as Partial<Game> | null;
-            console.log('🔄 [RealtimeSync] Game updated:', game.id, oldGame?.status, '→', game.status);
+            devLog.log('🔄 [RealtimeSync] Game updated:', game.id, oldGame?.status, '→', game.status);
 
             const userAddress = addressRef.current?.toLowerCase();
             const isUserGame = userAddress && (
@@ -169,7 +170,7 @@ export function useRealtimeSync() {
 
             // If game was in pending cache but is no longer pending, remove it immediately
             if (wasInPendingCache && !isPending) {
-              console.log('🔄 [RealtimeSync] Removing game from pending cache:', game.id, '→', game.status);
+              devLog.log('🔄 [RealtimeSync] Removing game from pending cache:', game.id, '→', game.status);
               queryClientRef.current.setQueryData(['games', 'pending'], (old: Game[] | undefined) =>
                 old?.filter(g => g.id !== game.id) || []
               );
@@ -179,7 +180,7 @@ export function useRealtimeSync() {
             } else if (!isPending && (game.status === 'cancelled' || game.status === 'matched' || game.status === 'resolved')) {
               // Fallback: if game left pending state but wasn't in our cache, invalidate to refresh
               // This handles cases where our cache was stale
-              console.log('🔄 [RealtimeSync] Game status changed, invalidating pending list:', game.id, '→', game.status);
+              devLog.log('🔄 [RealtimeSync] Game status changed, invalidating pending list:', game.id, '→', game.status);
               queryClientRef.current.invalidateQueries({ queryKey: ['games', 'pending'] });
             }
 
@@ -196,7 +197,7 @@ export function useRealtimeSync() {
 
               // Handle status transitions
               if (statusChanged) {
-                console.log('🔄 [RealtimeSync] User game status changed:', game.id, cachedStatus, '→', game.status);
+                devLog.log('🔄 [RealtimeSync] User game status changed:', game.id, cachedStatus, '→', game.status);
                 if (game.status === 'matched') {
                   actionsRef.current.queueModal(game, 'matched');
                 } else if (game.status === 'resolved') {
@@ -239,7 +240,7 @@ export function useRealtimeSync() {
             // DELETE payloads only contain the primary key in old
             const oldGame = payload.old as { id?: string } | null;
             const gameId = oldGame?.id;
-            console.log('🗑️ [RealtimeSync] Game deleted:', gameId);
+            devLog.log('🗑️ [RealtimeSync] Game deleted:', gameId);
 
             if (gameId && typeof gameId === 'string') {
               queryClientRef.current.removeQueries({ queryKey: ['game', gameId] });
@@ -256,7 +257,7 @@ export function useRealtimeSync() {
         }
       )
       .subscribe((status, err) => {
-        console.log('📡 [RealtimeSync] Connection status:', status, err ? `Error: ${err.message}` : '');
+        devLog.log('📡 [RealtimeSync] Connection status:', status, err ? `Error: ${err.message}` : '');
         globalConnectionStatus = status as typeof globalConnectionStatus;
         notifyListeners();
 
@@ -270,10 +271,10 @@ export function useRealtimeSync() {
           fallbackRetryCountRef.current = 0; // Reset backoff
           globalIsPolling = false;
           notifyListeners();
-          console.log('✅ [RealtimeSync] WebSocket connected - real-time updates active');
+          devLog.log('✅ [RealtimeSync] WebSocket connected - real-time updates active');
         } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
           setIsConnected(false);
-          console.warn('⚠️ [RealtimeSync] WebSocket disconnected - starting fallback polling');
+          devLog.warn('⚠️ [RealtimeSync] WebSocket disconnected - starting fallback polling');
 
           // Start fallback polling with exponential backoff
           const startFallbackPolling = () => {
@@ -290,7 +291,7 @@ export function useRealtimeSync() {
             const nextInterval = FALLBACK_POLL_INTERVALS[intervalIndex];
             fallbackRetryCountRef.current++;
 
-            console.log(`🔄 [RealtimeSync] Next poll in ${nextInterval / 1000}s`);
+            devLog.log(`🔄 [RealtimeSync] Next poll in ${nextInterval / 1000}s`);
             fallbackIntervalRef.current = setTimeout(startFallbackPolling, nextInterval);
           };
 
@@ -308,7 +309,7 @@ export function useRealtimeSync() {
 
     // Cleanup on unmount only
     return () => {
-      console.log('🔌 [RealtimeSync] Cleaning up...');
+      devLog.log('🔌 [RealtimeSync] Cleaning up...');
       mountedRef.current = false;
       channel.unsubscribe();
       if (fallbackIntervalRef.current) {

@@ -3,6 +3,7 @@
 import { useEffect, useRef, useCallback } from 'react';
 import { usePublicClient } from 'wagmi';
 import { useGameStore } from '@/store/gameStore';
+import { devLog } from '@/lib/utils';
 
 /**
  * Global hook that watches pending transactions and updates the store
@@ -49,7 +50,7 @@ export function usePendingTransactionWatcher() {
           const age = Date.now() - tx.startedAt;
           // Only cleanup if it's been at least 1 second (avoid race conditions)
           if (age > 1000) {
-            console.log(`🧹 [TxWatcher] Removing pending tx after focus return: ${key} (age: ${age}ms)`);
+            devLog.log(`🧹 [TxWatcher] Removing pending tx after focus return: ${key} (age: ${age}ms)`);
             removePendingTransaction(key);
           }
         }
@@ -68,7 +69,7 @@ export function usePendingTransactionWatcher() {
     for (const [key, tx] of currentPendingTransactions.entries()) {
       if (!tx.txHash) {
         hadPendingBeforeBlurRef.current.add(key);
-        console.log(`👀 [TxWatcher] Tracking pending tx before blur: ${key}`);
+        devLog.log(`👀 [TxWatcher] Tracking pending tx before blur: ${key}`);
       }
     }
   }, []);
@@ -76,7 +77,7 @@ export function usePendingTransactionWatcher() {
   // Check for rejections when window regains focus
   const handleFocus = useCallback(() => {
     if (hadPendingBeforeBlurRef.current.size > 0) {
-      console.log(`👀 [TxWatcher] Window focused, checking ${hadPendingBeforeBlurRef.current.size} pending txs`);
+      devLog.log(`👀 [TxWatcher] Window focused, checking ${hadPendingBeforeBlurRef.current.size} pending txs`);
       checkPendingAfterFocus();
     }
   }, [checkPendingAfterFocus]);
@@ -114,7 +115,7 @@ export function usePendingTransactionWatcher() {
       // Mark as watching
       watchingRef.current.add(key);
 
-      console.log(`👀 [TxWatcher] Watching transaction: ${key} (${tx.txHash})`);
+      devLog.log(`👀 [TxWatcher] Watching transaction: ${key} (${tx.txHash})`);
 
       // Watch the transaction
       publicClient.waitForTransactionReceipt({ hash: tx.txHash })
@@ -125,7 +126,7 @@ export function usePendingTransactionWatcher() {
             return;
           }
 
-          console.log(`✅ [TxWatcher] Transaction confirmed: ${key}`, receipt.status);
+          devLog.log(`✅ [TxWatcher] Transaction confirmed: ${key}`, receipt.status);
 
           if (receipt.status === 'success') {
             // Transaction succeeded - remove from pending
@@ -139,7 +140,7 @@ export function usePendingTransactionWatcher() {
             }
           } else {
             // Transaction failed (reverted)
-            console.log(`❌ [TxWatcher] Transaction reverted: ${key}`);
+            devLog.log(`❌ [TxWatcher] Transaction reverted: ${key}`);
             removePendingTransaction(key);
 
             if (tx.type === 'cancel' && tx.gameId) {
@@ -159,7 +160,7 @@ export function usePendingTransactionWatcher() {
             return;
           }
 
-          console.log(`❌ [TxWatcher] Transaction error: ${key}`, error);
+          devLog.log(`❌ [TxWatcher] Transaction error: ${key}`, error);
           // Transaction was likely rejected or replaced
           removePendingTransaction(key);
 
@@ -196,11 +197,11 @@ export function usePendingTransactionWatcher() {
 
         if (!tx.txHash && age > NO_HASH_FALLBACK) {
           // No txHash after 2 minutes - fallback cleanup
-          console.log(`🧹 [TxWatcher] Fallback cleanup (no hash): ${key}`);
+          devLog.log(`🧹 [TxWatcher] Fallback cleanup (no hash): ${key}`);
           removePendingTransaction(key);
         } else if (tx.txHash && age > WITH_HASH_THRESHOLD) {
           // Has txHash but very old - something went wrong
-          console.log(`🧹 [TxWatcher] Fallback cleanup (timeout): ${key}`);
+          devLog.log(`🧹 [TxWatcher] Fallback cleanup (timeout): ${key}`);
           removePendingTransaction(key);
         }
       }

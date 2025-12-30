@@ -5,6 +5,7 @@ import { useAccount } from 'wagmi';
 import { useCallback } from 'react';
 import { Game } from '@/types/game';
 import { useGameStore } from '@/store/gameStore';
+import { devLog } from '@/lib/utils';
 
 /**
  * Hook for optimistic UI updates
@@ -58,11 +59,17 @@ export function useOptimisticUpdates() {
       updated_at: new Date().toISOString(),
     };
 
-    console.log(`⚡ [Optimistic] Created game with tx: ${txHash.slice(0, 10)}...`);
+    devLog.log(`⚡ [Optimistic] Created game with tx: ${txHash.slice(0, 10)}...`);
 
-    // Add to pending games cache
+    // Add to pending games cache (with deduplication)
     queryClient.setQueryData(['games', 'pending'], (old: Game[] | undefined) => {
       if (!old) return [optimisticGame];
+      // Check if this optimistic game already exists to prevent duplicates
+      const existingIndex = old.findIndex(g => g.id === optimisticGame.id);
+      if (existingIndex >= 0) {
+        // Already exists, don't add duplicate
+        return old;
+      }
       return [optimisticGame, ...old];
     });
 
@@ -79,7 +86,7 @@ export function useOptimisticUpdates() {
   const removeOptimisticGame = useCallback((txHash: string) => {
     const optimisticId = `optimistic-${txHash.slice(0, 10)}`;
 
-    console.log(`⚡ [Optimistic] Removing optimistic game: ${optimisticId}`);
+    devLog.log(`⚡ [Optimistic] Removing optimistic game: ${optimisticId}`);
 
     // Remove from pending games cache
     queryClient.setQueryData(['games', 'pending'], (old: Game[] | undefined) => {
@@ -99,7 +106,7 @@ export function useOptimisticUpdates() {
     gameId: string,
     joinerAddress: string
   ) => {
-    console.log(`⚡ [Optimistic] Joining game: ${gameId}`);
+    devLog.log(`⚡ [Optimistic] Joining game: ${gameId}`);
 
     // Get current game from cache
     const cachedPendingGames = queryClient.getQueryData(['games', 'pending']) as Game[] | undefined;
@@ -137,7 +144,7 @@ export function useOptimisticUpdates() {
    * Called when cancelGame transaction is sent
    */
   const optimisticCancelGame = useCallback((gameId: string) => {
-    console.log(`⚡ [Optimistic] Cancelling game: ${gameId}`);
+    devLog.log(`⚡ [Optimistic] Cancelling game: ${gameId}`);
 
     // Remove from pending games cache
     queryClient.setQueryData(['games', 'pending'], (old: Game[] | undefined) =>
@@ -154,7 +161,7 @@ export function useOptimisticUpdates() {
   const rollbackOptimisticCreate = useCallback((txHash: string) => {
     const optimisticId = `optimistic-${txHash.slice(0, 10)}`;
 
-    console.log(`⚡ [Optimistic] Rolling back create: ${optimisticId}`);
+    devLog.log(`⚡ [Optimistic] Rolling back create: ${optimisticId}`);
 
     queryClient.setQueryData(['games', 'pending'], (old: Game[] | undefined) =>
       old?.filter(g => g.id !== optimisticId) || []
@@ -167,7 +174,7 @@ export function useOptimisticUpdates() {
    * Rollback optimistic join if transaction fails
    */
   const rollbackOptimisticJoin = useCallback((gameId: string, originalGame: Game) => {
-    console.log(`⚡ [Optimistic] Rolling back join: ${gameId}`);
+    devLog.log(`⚡ [Optimistic] Rolling back join: ${gameId}`);
 
     // Restore to pending cache
     queryClient.setQueryData(['games', 'pending'], (old: Game[] | undefined) => {
@@ -187,7 +194,7 @@ export function useOptimisticUpdates() {
    * Rollback optimistic cancel if transaction fails
    */
   const rollbackOptimisticCancel = useCallback((game: Game) => {
-    console.log(`⚡ [Optimistic] Rolling back cancel: ${game.id}`);
+    devLog.log(`⚡ [Optimistic] Rolling back cancel: ${game.id}`);
 
     // Restore to pending cache
     queryClient.setQueryData(['games', 'pending'], (old: Game[] | undefined) => {

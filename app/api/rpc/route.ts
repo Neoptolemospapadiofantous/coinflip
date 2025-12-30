@@ -156,7 +156,13 @@ export async function POST(request: NextRequest) {
     }
 
     const chainIdHeader = request.headers.get('x-chain-id');
-    const chainId = chainIdHeader ? parseInt(chainIdHeader, 10) : 11155111;
+    let chainId = 11155111; // Default to Sepolia
+    if (chainIdHeader) {
+      const parsed = parseInt(chainIdHeader, 10);
+      if (!isNaN(parsed) && parsed > 0) {
+        chainId = parsed;
+      }
+    }
 
     // Validate chain ID against whitelist
     if (!ALLOWED_CHAIN_IDS.has(chainId)) {
