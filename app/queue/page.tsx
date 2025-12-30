@@ -35,6 +35,7 @@ import { showToast } from '@/lib/toast';
 import { playSound } from '@/lib/sounds';
 import { Game } from '@/types/game';
 import { Tier } from '@/types/tier';
+import { usePendingTransactions } from '@/hooks/usePendingTransactions';
 
 // Type for selected game with attached tier info
 // Use tierInfo to avoid conflict with Game.tier (which is number)
@@ -128,10 +129,21 @@ export default function QueuePage() {
   const [now, setNow] = useState(Date.now()); // For live time updates
   const {
     addActiveGame, updateActiveGame, queueModal,
-    startCancellingGame, finishCancellingGame, isGameCancelling,
-    startJoiningGame, finishJoiningGame, isGameJoining,
-    addPendingTransaction, removePendingTransaction, getPendingCreate, getPendingCancel, hasPendingTransaction
+    startCancellingGame, finishCancellingGame,
+    startJoiningGame, finishJoiningGame,
   } = useGameStore();
+
+  // DB-backed pending transactions (persists across refreshes/devices)
+  const {
+    getPendingCreate,
+    getPendingCancel,
+    isGameCancelling,
+    isGameJoining,
+    addPendingTransaction,
+    markConfirmed,
+    markFailed,
+    removePendingTransaction,
+  } = usePendingTransactions();
   const queryClient = useQueryClient();
 
   // Refs for cleanup
@@ -203,8 +215,11 @@ export default function QueuePage() {
     if (isCancelSuccess && cancelingGameId) {
       finishCancellingGame(cancelingGameId, true);
 
-      // Clear any pending create transaction (in case it wasn't cleared)
-      removePendingTransaction('create-game');
+      // Clear any pending cancel transaction (DB trigger will also handle this)
+      const pendingCancel = getPendingCancel(Number(cancelingGameId));
+      if (pendingCancel) {
+        markConfirmed(pendingCancel.id);
+      }
 
       // Immediately invalidate all game queries for real-time sync
       invalidateGameQueries(queryClient, cancelingGameId);
@@ -215,7 +230,7 @@ export default function QueuePage() {
       setCancelingGameId(null);
       resetCancelState();
     }
-  }, [isCancelSuccess, cancelingGameId, resetCancelState, finishCancellingGame, queryClient, removePendingTransaction]);
+  }, [isCancelSuccess, cancelingGameId, resetCancelState, finishCancellingGame, queryClient, getPendingCancel, markConfirmed]);
 
   useEffect(() => {
     if (cancelError && cancelingGameId) {
@@ -248,6 +263,16 @@ export default function QueuePage() {
   const otherPendingGames = pendingGames?.filter(
     (game) => game.creator_address.toLowerCase() !== address?.toLowerCase() && !isGameCancelling(game.id) && !isGameJoining(game.id)
   );
+
+  // Auto-clear pending create transaction when user's game appears
+  // This provides instant feedback instead of waiting for DB poll
+  useEffect(() => {
+    const pendingCreate = getPendingCreate();
+    if (pendingCreate && myPendingGames && myPendingGames.length > 0) {
+      // Game appeared in the list - mark pending tx as confirmed
+      markConfirmed(pendingCreate.id);
+    }
+  }, [myPendingGames, getPendingCreate, markConfirmed]);
 
   const handleJoinClick = useCallback((game: Game, tier: Tier) => {
     // Reset any previous join state
@@ -488,7 +513,7 @@ export default function QueuePage() {
                                 Game {formatGameId(game.id)}
                               </Text>
                               <Text size="1" color="gray">
-                                {isCancellingThis ? 'Cancelling game...' : 'Waiting for opponent...'}
+                                {isCancellingThis ? 'Waiting for blockchain confirmation...' : 'Waiting for opponent...'}
                               </Text>
                             </Flex>
                             <Badge color="yellow" size="2" className="glow-gold">
@@ -509,7 +534,7 @@ export default function QueuePage() {
                             {isGameCancelling(game.id) || cancelingGameId === game.id ? (
                               <Badge color="yellow" size="2">
                                 <Loader2 className="w-3 h-3 animate-spin" />
-                                Cancelling...
+                                Confirming...
                               </Badge>
                             ) : (
                               <Button
@@ -805,7 +830,7 @@ export default function QueuePage() {
               <Flex direction="column" gap="3" align="center" py="4">
                 <Loader2 className="w-12 h-12 text-cyan-400 animate-spin" />
                 <Text size="2" weight="bold" className="text-cyan-400">
-                  Confirming transaction...
+                  Waiting for blockchain confirmation...
                 </Text>
                 <Text size="1" color="gray" className="font-mono">
                   TX: {txHash.slice(0, 10)}...{txHash.slice(-8)}

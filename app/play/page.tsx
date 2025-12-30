@@ -31,6 +31,8 @@ import { useQueryClient } from '@tanstack/react-query';
 import { invalidateGameQueries, removeGameFromPendingCache } from '@/lib/queryUtils';
 import { showToast } from '@/lib/toast';
 import { playSound } from '@/lib/sounds';
+import { usePendingTransactions } from '@/hooks/usePendingTransactions';
+import { useUserPreferences } from '@/hooks/useUserPreferences';
 
 enum GameStep {
   SELECT_TIER = 'select_tier',
@@ -48,7 +50,6 @@ export default function PlayPage() {
   const {
     selectedTier,
     coinChoice,
-    lastGameSettings,
     resetGameCreation,
     addActiveGame,
     updateActiveGame,
@@ -58,11 +59,21 @@ export default function PlayPage() {
     startCancellingGame,
     finishCancellingGame,
     isGameCancelling,
-    addPendingTransaction,
-    updatePendingTransaction,
-    removePendingTransaction,
-    clearLastGameSettings,
   } = useGameStore();
+
+  // DB-backed pending transactions for persistence across refreshes
+  const {
+    addPendingTransaction: addDbPendingTx,
+    getPendingCreate,
+    markConfirmed: markDbTxConfirmed,
+    markFailed: markDbTxFailed,
+  } = usePendingTransactions();
+
+  // DB-backed user preferences for quick re-bet
+  const { lastGameSettings, clearLastGameSettings } = useUserPreferences();
+
+  // Ref to track the DB pending tx ID for the current create operation
+  const pendingTxIdRef = useRef<number | null>(null);
   const { createGame, isLoading, isSuccess, txHash, error, wasRejected: createWasRejected, reset: resetCreateGame } = useCreateGame();
   const { cancelGame, isLoading: isCancelling, error: cancelError, isSuccess: cancelSuccess, wasRejected: cancelWasRejected, reset: resetCancelState } = useCancelGame();
   const { data: tiers } = useTiers();
@@ -90,22 +101,28 @@ export default function PlayPage() {
     isMatchedRef.current = false;
     resetCancelState();
     resetCreateGame?.();
-    // Clear any pending create transaction
-    removePendingTransaction('create-game');
-  }, [resetGameCreation, resetCancelState, resetCreateGame, removePendingTransaction]);
+    // Mark pending tx as failed if user resets manually
+    if (pendingTxIdRef.current) {
+      markDbTxFailed(pendingTxIdRef.current, 'User cancelled');
+      pendingTxIdRef.current = null;
+    }
+  }, [resetGameCreation, resetCancelState, resetCreateGame, markDbTxFailed]);
 
   // Track the created game in real-time
   const handleGameFound = useCallback((game: Game) => {
     if (!mountedRef.current) return;
     console.log('🎮 Game found in database:', game.id);
-    // Remove pending transaction (game is now confirmed)
-    removePendingTransaction('create-game');
+    // Mark pending tx as confirmed (DB trigger also handles this)
+    if (pendingTxIdRef.current) {
+      markDbTxConfirmed(pendingTxIdRef.current);
+      pendingTxIdRef.current = null;
+    }
     // Add to active games
     addActiveGame(game);
     // Show toast and play sound
     showToast.gameCreated(formatGameId(game.id));
     playSound.success();
-  }, [addActiveGame, removePendingTransaction]);
+  }, [addActiveGame, markDbTxConfirmed]);
 
   const handleGameMatched = useCallback((game: Game) => {
     if (!mountedRef.current) return;
@@ -137,11 +154,14 @@ export default function PlayPage() {
   const handleGameCancelled = useCallback((_game: Game) => {
     if (!mountedRef.current) return;
     console.log('🎮 Game cancelled');
-    // Remove pending transaction if any
-    removePendingTransaction('create-game');
+    // Mark pending tx as confirmed (cancellation succeeded)
+    if (pendingTxIdRef.current) {
+      markDbTxConfirmed(pendingTxIdRef.current);
+      pendingTxIdRef.current = null;
+    }
     // Game will be removed when modal closes
     handleReset();
-  }, [handleReset, removePendingTransaction]);
+  }, [handleReset, markDbTxConfirmed]);
 
   const {
     game: trackedGame,
@@ -226,38 +246,41 @@ export default function PlayPage() {
     }
   }, [cancelWasRejected, finishCancellingGame, resetCancelState, queryClient]);
 
-  // Handle create game rejection - reset UI and remove pending transaction
+  // Handle create game rejection - reset UI and mark pending tx as failed
   useEffect(() => {
     if (createWasRejected && mountedRef.current) {
       console.log('🎮 Create game rejected by user, resetting UI');
-      removePendingTransaction('create-game');
+      if (pendingTxIdRef.current) {
+        markDbTxFailed(pendingTxIdRef.current, 'User rejected');
+        pendingTxIdRef.current = null;
+      }
       handleReset();
     }
-  }, [createWasRejected, handleReset, removePendingTransaction]);
+  }, [createWasRejected, handleReset, markDbTxFailed]);
 
-  // Handle create game error - remove pending transaction and rollback optimistic update
+  // Handle create game error - mark pending tx as failed and rollback optimistic update
   useEffect(() => {
     if (error && mountedRef.current) {
-      console.log('🎮 Create game error, removing pending transaction');
-      removePendingTransaction('create-game');
+      console.log('🎮 Create game error, marking pending tx as failed');
+      if (pendingTxIdRef.current) {
+        markDbTxFailed(pendingTxIdRef.current, error.message || 'Transaction failed');
+        pendingTxIdRef.current = null;
+      }
       // Rollback optimistic game if we had a txHash
       if (txHash) {
         rollbackOptimisticCreate(txHash);
       }
     }
-  }, [error, txHash, removePendingTransaction, rollbackOptimisticCreate]);
+  }, [error, txHash, markDbTxFailed, rollbackOptimisticCreate]);
 
-  // Update pending transaction with txHash when available (for global watcher)
-  // Also create optimistic game for instant UI feedback
+  // Create optimistic game when txHash is available
   useEffect(() => {
     if (txHash && selectedTier !== null && coinChoice !== null && currentTier) {
-      console.log('🎮 Updating pending transaction with txHash:', txHash);
-      updatePendingTransaction('create-game', { txHash });
-
+      console.log('🎮 Transaction submitted, creating optimistic game');
       // Create optimistic game for instant UI feedback
       optimisticCreateGame(txHash, selectedTier, coinChoice, currentTier.amount);
     }
-  }, [txHash, selectedTier, coinChoice, currentTier, updatePendingTransaction, optimisticCreateGame]);
+  }, [txHash, selectedTier, coinChoice, currentTier, optimisticCreateGame]);
 
   // Reset matched ref when tracked game changes
   useEffect(() => {
@@ -268,7 +291,7 @@ export default function PlayPage() {
     }
   }, [trackedGame?.status]);
 
-  const handleCreateGame = useCallback(() => {
+  const handleCreateGame = useCallback(async () => {
     if (selectedTier === null || coinChoice === null || !currentTier) return;
     if (!canCreate) {
       console.warn('Cannot create game - at max concurrent games');
@@ -278,16 +301,23 @@ export default function PlayPage() {
     isMatchedRef.current = false;
     isCancellingRef.current = false;
 
-    // Add pending transaction to store (visible across pages)
-    addPendingTransaction('create-game', {
-      type: 'create',
-      tier: selectedTier,
-      choice: coinChoice,
-      startedAt: Date.now(),
-    });
+    // Add pending transaction to DB (persists across refreshes)
+    try {
+      const pendingTx = await addDbPendingTx({
+        tx_type: 'create',
+        tier: selectedTier,
+        choice: coinChoice,
+        amount_eth: currentTier.amount,
+      });
+      if (pendingTx) {
+        pendingTxIdRef.current = pendingTx.id;
+      }
+    } catch (err) {
+      console.warn('Failed to save pending tx to DB:', err);
+    }
 
     createGame(selectedTier, coinChoice, currentTier.amount);
-  }, [selectedTier, coinChoice, currentTier, createGame, canCreate, addPendingTransaction]);
+  }, [selectedTier, coinChoice, currentTier, createGame, canCreate, addDbPendingTx]);
 
   const handleCancelGame = useCallback(() => {
     if (!trackedGame?.id) return;
@@ -604,7 +634,7 @@ export default function PlayPage() {
                               <Text size="2" weight="bold" className={isSuccess ? (isSearching ? 'text-yellow-400' : 'text-green-400') : 'text-gray-400'}>
                                 Broadcasting to Blockchain
                               </Text>
-                              {isSuccess && isSearching && <Text size="1" color="gray">Confirming transaction...</Text>}
+                              {isSuccess && isSearching && <Text size="1" color="gray">Waiting for blockchain confirmation...</Text>}
                               {isSuccess && !isSearching && <Text size="1" className="text-green-400">Confirmed</Text>}
                             </Flex>
                           </Flex>
