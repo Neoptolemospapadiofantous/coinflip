@@ -53,6 +53,8 @@ export default function PlayPage() {
     startCancellingGame,
     finishCancellingGame,
     isGameCancelling,
+    addPendingTransaction,
+    removePendingTransaction,
   } = useGameStore();
   const { createGame, isLoading, isSuccess, txHash, error, wasRejected: createWasRejected, reset: resetCreateGame } = useCreateGame();
   const { cancelGame, isLoading: isCancelling, error: cancelError, isSuccess: cancelSuccess, wasRejected: cancelWasRejected, reset: resetCancelState } = useCancelGame();
@@ -86,12 +88,14 @@ export default function PlayPage() {
   const handleGameFound = useCallback((game: Game) => {
     if (!mountedRef.current) return;
     console.log('🎮 Game found in database:', game.id);
+    // Remove pending transaction (game is now confirmed)
+    removePendingTransaction('create-game');
     // Add to active games
     addActiveGame(game);
     // Show toast and play sound
     showToast.gameCreated(formatGameId(game.id));
     playSound.success();
-  }, [addActiveGame]);
+  }, [addActiveGame, removePendingTransaction]);
 
   const handleGameMatched = useCallback((game: Game) => {
     if (!mountedRef.current) return;
@@ -198,13 +202,22 @@ export default function PlayPage() {
     }
   }, [cancelWasRejected, finishCancellingGame, resetCancelState, queryClient]);
 
-  // Handle create game rejection - reset UI
+  // Handle create game rejection - reset UI and remove pending transaction
   useEffect(() => {
     if (createWasRejected && mountedRef.current) {
       console.log('🎮 Create game rejected by user, resetting UI');
+      removePendingTransaction('create-game');
       handleReset();
     }
-  }, [createWasRejected, handleReset]);
+  }, [createWasRejected, handleReset, removePendingTransaction]);
+
+  // Handle create game error - remove pending transaction
+  useEffect(() => {
+    if (error && mountedRef.current) {
+      console.log('🎮 Create game error, removing pending transaction');
+      removePendingTransaction('create-game');
+    }
+  }, [error, removePendingTransaction]);
 
   // Reset matched ref when tracked game changes
   useEffect(() => {
@@ -224,8 +237,17 @@ export default function PlayPage() {
     setStep(GameStep.CREATING);
     isMatchedRef.current = false;
     isCancellingRef.current = false;
+
+    // Add pending transaction to store (visible across pages)
+    addPendingTransaction('create-game', {
+      type: 'create',
+      tier: selectedTier,
+      choice: coinChoice,
+      startedAt: Date.now(),
+    });
+
     createGame(selectedTier, coinChoice, currentTier.amount);
-  }, [selectedTier, coinChoice, currentTier, createGame, canCreate]);
+  }, [selectedTier, coinChoice, currentTier, createGame, canCreate, addPendingTransaction]);
 
   const handleCancelGame = useCallback(() => {
     if (!trackedGame?.id) return;

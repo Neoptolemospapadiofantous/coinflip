@@ -14,6 +14,18 @@ interface ModalQueueEntry {
   type: 'matched' | 'resolved' | 'expired';
 }
 
+// Pending transaction tracking (for cross-page state)
+export type PendingTxType = 'create' | 'cancel' | 'join';
+
+export interface PendingTransaction {
+  type: PendingTxType;
+  gameId?: string; // For cancel/join - the game being acted on
+  txHash?: `0x${string}`; // Set once transaction is submitted
+  tier?: number; // For create - the tier being created
+  choice?: boolean; // For create - the coin choice
+  startedAt: number;
+}
+
 interface GameState {
   // Current game creation flow
   selectedTier: number | null;
@@ -27,6 +39,9 @@ interface GameState {
 
   // Games being joined (for optimistic UI)
   joiningGames: Set<string>;
+
+  // Pending transactions awaiting wallet approval (persists across pages)
+  pendingTransactions: Map<string, PendingTransaction>;
 
   // Current focused game (for modal display)
   currentModalGame: Game | null;
@@ -62,6 +77,15 @@ interface GameState {
   finishJoiningGame: (gameId: string, success: boolean) => void;
   isGameJoining: (gameId: string) => boolean;
 
+  // Actions - Pending transaction tracking
+  addPendingTransaction: (key: string, tx: PendingTransaction) => void;
+  updatePendingTransaction: (key: string, updates: Partial<PendingTransaction>) => void;
+  removePendingTransaction: (key: string) => void;
+  getPendingTransaction: (key: string) => PendingTransaction | undefined;
+  hasPendingTransaction: (type: PendingTxType, gameId?: string) => boolean;
+  getPendingCreate: () => PendingTransaction | undefined;
+  getPendingCancel: (gameId: string) => PendingTransaction | undefined;
+
   // Actions - Modal queue management
   queueModal: (game: Game, type: 'matched' | 'resolved' | 'expired') => void;
   showNextModal: () => void;
@@ -84,6 +108,7 @@ export const useGameStore = create<GameState>((set, get) => ({
   activeGames: new Map(),
   cancellingGames: new Set(),
   joiningGames: new Set(),
+  pendingTransactions: new Map(),
   currentModalGame: null,
   currentModalType: null,
   modalQueue: [],
@@ -196,6 +221,63 @@ export const useGameStore = create<GameState>((set, get) => ({
     }),
 
   isGameJoining: (gameId) => get().joiningGames.has(gameId),
+
+  // Pending transaction tracking
+  addPendingTransaction: (key, tx) =>
+    set((state) => {
+      const newMap = new Map(state.pendingTransactions);
+      newMap.set(key, tx);
+      console.log(`📝 [GameStore] Added pending tx: ${key}`, tx);
+      return { pendingTransactions: newMap };
+    }),
+
+  updatePendingTransaction: (key, updates) =>
+    set((state) => {
+      const newMap = new Map(state.pendingTransactions);
+      const existing = newMap.get(key);
+      if (existing) {
+        newMap.set(key, { ...existing, ...updates });
+        console.log(`📝 [GameStore] Updated pending tx: ${key}`, updates);
+      }
+      return { pendingTransactions: newMap };
+    }),
+
+  removePendingTransaction: (key) =>
+    set((state) => {
+      const newMap = new Map(state.pendingTransactions);
+      newMap.delete(key);
+      console.log(`📝 [GameStore] Removed pending tx: ${key}`);
+      return { pendingTransactions: newMap };
+    }),
+
+  getPendingTransaction: (key) => get().pendingTransactions.get(key),
+
+  hasPendingTransaction: (type, gameId) => {
+    const txs = get().pendingTransactions;
+    for (const tx of txs.values()) {
+      if (tx.type === type) {
+        if (gameId && tx.gameId !== gameId) continue;
+        return true;
+      }
+    }
+    return false;
+  },
+
+  getPendingCreate: () => {
+    const txs = get().pendingTransactions;
+    for (const tx of txs.values()) {
+      if (tx.type === 'create') return tx;
+    }
+    return undefined;
+  },
+
+  getPendingCancel: (gameId) => {
+    const txs = get().pendingTransactions;
+    for (const [key, tx] of txs.entries()) {
+      if (tx.type === 'cancel' && tx.gameId === gameId) return tx;
+    }
+    return undefined;
+  },
 
   // Modal queue management
   queueModal: (game, type) =>

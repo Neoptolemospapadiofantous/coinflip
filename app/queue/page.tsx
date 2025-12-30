@@ -22,7 +22,7 @@ import { useTiers } from '@/hooks/useTiers';
 import { useJoinGame } from '@/hooks/useContract';
 import { usePendingGames, useGameStats } from '@/hooks/useGames';
 import { formatCurrency, formatGameId } from '@/lib/utils';
-import { Clock, Users, Loader2, TrendingUp, XCircle, AlertCircle, Wifi, WifiOff } from 'lucide-react';
+import { Clock, Users, Loader2, TrendingUp, XCircle, AlertCircle, Wifi, WifiOff, Wallet } from 'lucide-react';
 import Link from 'next/link';
 import { StatusBadge } from '@/components/game/StatusBadge';
 import { useCancelGame } from '@/hooks/useContract';
@@ -126,7 +126,12 @@ export default function QueuePage() {
   const [joinedGameId, setJoinedGameId] = useState<string | null>(null);
   const [cancelingGameId, setCancelingGameId] = useState<string | null>(null);
   const [now, setNow] = useState(Date.now()); // For live time updates
-  const { addActiveGame, updateActiveGame, queueModal, startCancellingGame, finishCancellingGame, isGameCancelling, startJoiningGame, finishJoiningGame, isGameJoining } = useGameStore();
+  const {
+    addActiveGame, updateActiveGame, queueModal,
+    startCancellingGame, finishCancellingGame, isGameCancelling,
+    startJoiningGame, finishJoiningGame, isGameJoining,
+    addPendingTransaction, removePendingTransaction, getPendingCreate, getPendingCancel, hasPendingTransaction
+  } = useGameStore();
   const queryClient = useQueryClient();
 
   // Refs for cleanup
@@ -403,6 +408,56 @@ export default function QueuePage() {
                 </Flex>
               </Flex>
             </Card>
+
+            {/* Pending Create Transaction (awaiting wallet approval) */}
+            {getPendingCreate() && (
+              <Card className="card-solid border-orange-500/60 animate-pulse-slow">
+                <Flex direction="column" gap="4" p="6">
+                  <Flex align="center" gap="2">
+                    <Wallet className="w-5 h-5 text-orange-400" />
+                    <Heading size="5" className="text-orange-400">Awaiting Wallet Approval</Heading>
+                  </Flex>
+
+                  <Card variant="surface" className="bg-orange-500/5 border border-orange-500/20">
+                    <Flex direction="column" gap="3" p="4">
+                      <Flex justify="between" align="center">
+                        <Flex direction="column" gap="1">
+                          <Text size="2" weight="bold" className="text-orange-400">
+                            New Game
+                          </Text>
+                          <Text size="1" color="gray">
+                            Confirm in your wallet to create the game
+                          </Text>
+                        </Flex>
+                        <Badge color="orange" size="2" className="animate-pulse">
+                          <Loader2 className="w-3 h-3 animate-spin" />
+                          Pending...
+                        </Badge>
+                      </Flex>
+
+                      <Flex align="center" gap="2">
+                        <Text size="1" color="gray">
+                          Your choice: {getPendingCreate()?.choice ? 'Tails 🪙' : 'Heads 👑'}
+                        </Text>
+                        <Text size="1" color="gray">•</Text>
+                        <Text size="1" color="gray">
+                          Tier {(getPendingCreate()?.tier ?? 0) + 1}
+                        </Text>
+                      </Flex>
+
+                      <Card variant="surface" className="bg-orange-500/5 border border-orange-500/20">
+                        <Flex direction="column" gap="1" p="2">
+                          <Text size="1" className="text-orange-300">
+                            Please check your wallet (MetaMask) and confirm the transaction.
+                            This page will update automatically once confirmed.
+                          </Text>
+                        </Flex>
+                      </Card>
+                    </Flex>
+                  </Card>
+                </Flex>
+              </Card>
+            )}
 
             {/* User's Active Game (if any) */}
             {myPendingGames && myPendingGames.length > 0 && (
