@@ -10,7 +10,7 @@ import { Game } from '@/types/game';
 import { formatCurrency, formatGameId } from '@/lib/utils';
 import { CopyableGameId } from '@/components/ui/CopyableGameId';
 import { invalidateGameQueries, removeGameFromPendingCache } from '@/lib/queryUtils';
-import { Loader2, Users, Trophy, Zap, AlertTriangle, Clock, XCircle } from 'lucide-react';
+import { Loader2, Users, Trophy, Zap, AlertTriangle, Clock, XCircle, Layers } from 'lucide-react';
 import { useGameStore } from '@/store/gameStore';
 import { validateGameState } from '@/hooks/useGameSync';
 import { useGame } from '@/hooks/useGames';
@@ -30,6 +30,10 @@ interface GameSessionModalProps {
 const VRF_TIMEOUT_SECONDS = 120;
 // Max retries for fetching complete game data
 const MAX_DATA_RETRIES = 10;
+// Game expiry time (5 minutes) - after this, Chainlink Automation will auto-cancel
+const GAME_EXPIRY_MS = 5 * 60 * 1000;
+// LocalStorage key for animation skip preference
+const SKIP_ANIMATION_KEY = 'coinflip-skip-animation';
 
 export function GameSessionModal({ game, open, onClose, userAddress, modalType }: GameSessionModalProps) {
   const [isFlipping, setIsFlipping] = useState(false);
@@ -40,7 +44,10 @@ export function GameSessionModal({ game, open, onClose, userAddress, modalType }
   const [dataRetryExhausted, setDataRetryExhausted] = useState(false);
   const [cancelStatus, setCancelStatus] = useState<'idle' | 'cancelling' | 'success' | 'error'>('idle');
   const [showConfetti, setShowConfetti] = useState(false);
-  const { resetGame, updateActiveGame, removeActiveGame, startCancellingGame, finishCancellingGame } = useGameStore();
+  const [expiredElapsedSeconds, setExpiredElapsedSeconds] = useState(0);
+  const [alwaysSkipAnimation, setAlwaysSkipAnimation] = useState(false);
+  const [currentRetryCount, setCurrentRetryCount] = useState(0);
+  const { resetGame, updateActiveGame, removeActiveGame, startCancellingGame, finishCancellingGame, modalQueue } = useGameStore();
 
   // Use refs to prevent duplicate sounds/toasts (more reliable than state)
   const hasPlayedMatchSoundRef = useRef(false);
@@ -57,6 +64,7 @@ export function GameSessionModal({ game, open, onClose, userAddress, modalType }
   // Refs for tracking
   const vrfTimerRef = useRef<NodeJS.Timeout | null>(null);
   const vrfStartTimeRef = useRef<number | null>(null);
+  const expiredTimerRef = useRef<NodeJS.Timeout | null>(null);
   const lastGameIdRef = useRef<string | null>(null);
   const lastGameStatusRef = useRef<string | null>(null);
   const retryCountRef = useRef(0);
@@ -138,8 +146,17 @@ export function GameSessionModal({ game, open, onClose, userAddress, modalType }
         vrfTimerRef.current = null;
       }
 
-      // Start flip animation
-      setIsFlipping(true);
+      // Check if user prefers to skip animation
+      const shouldSkip = localStorage.getItem(SKIP_ANIMATION_KEY) === 'true';
+      if (shouldSkip) {
+        // Skip directly to result
+        setSkipped(true);
+        setShowResult(true);
+        setIsFlipping(false);
+      } else {
+        // Start flip animation
+        setIsFlipping(true);
+      }
       setVrfTimedOut(false);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- Intentionally using game?.id and game?.status to prevent re-renders
@@ -150,6 +167,7 @@ export function GameSessionModal({ game, open, onClose, userAddress, modalType }
     if (!game || game.status !== 'resolved' || validation.valid) {
       retryCountRef.current = 0;
       setDataRetryExhausted(false);
+      setCurrentRetryCount(0);
       return;
     }
 
@@ -160,6 +178,7 @@ export function GameSessionModal({ game, open, onClose, userAddress, modalType }
         if (!mountedRef.current) return;
         console.log(`🔄 Auto-refetching game ${game.id} due to validation errors (attempt ${retryCountRef.current + 1}/${MAX_DATA_RETRIES})`);
         retryCountRef.current++;
+        setCurrentRetryCount(retryCountRef.current);
         refetchGame();
       }, 1000); // Retry every 1 second (more aggressive)
 
@@ -204,6 +223,28 @@ export function GameSessionModal({ game, open, onClose, userAddress, modalType }
     }
   }, [game?.status]);
 
+  // Expired game elapsed timer - track how long past the 5 min expiry
+  useEffect(() => {
+    if (modalType === 'expired' && game?.status === 'pending' && game?.created_at) {
+      // Calculate initial elapsed time since game creation
+      const updateElapsed = () => {
+        const createdAt = new Date(game.created_at).getTime();
+        const elapsed = Math.floor((Date.now() - createdAt) / 1000);
+        setExpiredElapsedSeconds(elapsed);
+      };
+
+      updateElapsed(); // Set initial value
+      expiredTimerRef.current = setInterval(updateElapsed, 1000);
+
+      return () => {
+        if (expiredTimerRef.current) {
+          clearInterval(expiredTimerRef.current);
+          expiredTimerRef.current = null;
+        }
+      };
+    }
+  }, [modalType, game?.status, game?.created_at]);
+
   // Cleanup on unmount
   useEffect(() => {
     mountedRef.current = true;
@@ -212,7 +253,16 @@ export function GameSessionModal({ game, open, onClose, userAddress, modalType }
       if (vrfTimerRef.current) {
         clearInterval(vrfTimerRef.current);
       }
+      if (expiredTimerRef.current) {
+        clearInterval(expiredTimerRef.current);
+      }
     };
+  }, []);
+
+  // Load animation skip preference from localStorage
+  useEffect(() => {
+    const saved = localStorage.getItem(SKIP_ANIMATION_KEY);
+    setAlwaysSkipAnimation(saved === 'true');
   }, []);
 
   // Track cancel status
@@ -278,12 +328,22 @@ export function GameSessionModal({ game, open, onClose, userAddress, modalType }
     playResultEffects();
   }, [playResultEffects]);
 
-  const handleSkip = useCallback(() => {
+  const handleSkip = useCallback((savePreference: boolean = false) => {
+    if (savePreference) {
+      localStorage.setItem(SKIP_ANIMATION_KEY, 'true');
+      setAlwaysSkipAnimation(true);
+    }
     setSkipped(true);
     setIsFlipping(false);
     setShowResult(true);
     playResultEffects();
   }, [playResultEffects]);
+
+  const toggleSkipPreference = useCallback(() => {
+    const newValue = !alwaysSkipAnimation;
+    localStorage.setItem(SKIP_ANIMATION_KEY, newValue.toString());
+    setAlwaysSkipAnimation(newValue);
+  }, [alwaysSkipAnimation]);
 
   const handleClose = () => {
     // Cleanup
@@ -328,7 +388,22 @@ export function GameSessionModal({ game, open, onClose, userAddress, modalType }
               {modalType !== 'expired' && game.status === 'resolved' && showResult && (isWinner ? 'You Won!' : 'Better Luck Next Time')}
               {modalType !== 'expired' && game.status === 'cancelled' && 'Game Cancelled'}
             </Heading>
-            <CopyableGameId gameId={game.id} size={{ initial: '1', sm: '2' }} />
+            <Flex align="center" gap="2">
+              <CopyableGameId gameId={game.id} size={{ initial: '1', sm: '2' }} />
+              {/* Queue indicator - shows when more games are waiting */}
+              {modalQueue.length > 0 && (
+                <Flex
+                  align="center"
+                  gap="1"
+                  className="px-2 py-1 rounded-full bg-purple-500/20 border border-purple-500/40"
+                >
+                  <Layers className="w-3 h-3 text-purple-400" />
+                  <Text size="1" className="text-purple-400" weight="medium">
+                    +{modalQueue.length} more
+                  </Text>
+                </Flex>
+              )}
+            </Flex>
           </Flex>
         </Dialog.Title>
 
@@ -342,37 +417,72 @@ export function GameSessionModal({ game, open, onClose, userAddress, modalType }
 
                   <Flex direction="column" gap="2" align="center" className="px-2">
                     <Heading size={{ initial: '4', sm: '5' }} className="text-gradient-cyan-purple text-center">
-                      Requesting Random Number...
+                      {vrfElapsedSeconds < 5 && 'Sending VRF Request...'}
+                      {vrfElapsedSeconds >= 5 && vrfElapsedSeconds < 15 && 'Awaiting Block Confirmations...'}
+                      {vrfElapsedSeconds >= 15 && vrfElapsedSeconds < 25 && 'VRF Nodes Processing...'}
+                      {vrfElapsedSeconds >= 25 && vrfElapsedSeconds < 45 && 'Generating Random Number...'}
+                      {vrfElapsedSeconds >= 45 && vrfElapsedSeconds < 90 && 'Finalizing Result...'}
+                      {vrfElapsedSeconds >= 90 && 'Network Congestion Detected'}
                     </Heading>
                     <Text size={{ initial: '2', sm: '3' }} color="gray" align="center">
-                      Chainlink VRF is generating a provably fair result
+                      {vrfElapsedSeconds < 5 && 'Transaction submitted to Chainlink VRF'}
+                      {vrfElapsedSeconds >= 5 && vrfElapsedSeconds < 15 && 'Waiting for 3 block confirmations'}
+                      {vrfElapsedSeconds >= 15 && vrfElapsedSeconds < 25 && 'Decentralized oracle network at work'}
+                      {vrfElapsedSeconds >= 25 && vrfElapsedSeconds < 45 && 'Cryptographically secure randomness'}
+                      {vrfElapsedSeconds >= 45 && vrfElapsedSeconds < 90 && 'Almost there, please wait...'}
+                      {vrfElapsedSeconds >= 90 && 'High network activity - result incoming'}
                     </Text>
                   </Flex>
 
-                  {/* VRF Progress Bar */}
-                  <Flex direction="column" gap="2" className="w-full max-w-xs">
+                  {/* VRF Progress Steps */}
+                  <Flex direction="column" gap="3" className="w-full max-w-xs">
+                    {/* Step indicators */}
+                    <Flex justify="between" align="center" className="px-1">
+                      <Flex direction="column" align="center" gap="1">
+                        <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${vrfElapsedSeconds >= 0 ? 'bg-cyan-500 text-white' : 'bg-gray-600 text-gray-400'}`}>
+                          {vrfElapsedSeconds >= 5 ? '✓' : '1'}
+                        </div>
+                        <Text size="1" color={vrfElapsedSeconds >= 0 ? 'cyan' : 'gray'}>Request</Text>
+                      </Flex>
+                      <div className={`flex-1 h-0.5 mx-1 ${vrfElapsedSeconds >= 5 ? 'bg-cyan-500' : 'bg-gray-600'}`} />
+                      <Flex direction="column" align="center" gap="1">
+                        <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${vrfElapsedSeconds >= 5 ? 'bg-cyan-500 text-white' : 'bg-gray-600 text-gray-400'}`}>
+                          {vrfElapsedSeconds >= 15 ? '✓' : '2'}
+                        </div>
+                        <Text size="1" color={vrfElapsedSeconds >= 5 ? 'cyan' : 'gray'}>Confirm</Text>
+                      </Flex>
+                      <div className={`flex-1 h-0.5 mx-1 ${vrfElapsedSeconds >= 15 ? 'bg-cyan-500' : 'bg-gray-600'}`} />
+                      <Flex direction="column" align="center" gap="1">
+                        <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${vrfElapsedSeconds >= 15 ? 'bg-cyan-500 text-white' : 'bg-gray-600 text-gray-400'}`}>
+                          {vrfElapsedSeconds >= 25 ? '✓' : '3'}
+                        </div>
+                        <Text size="1" color={vrfElapsedSeconds >= 15 ? 'cyan' : 'gray'}>Generate</Text>
+                      </Flex>
+                      <div className={`flex-1 h-0.5 mx-1 ${vrfElapsedSeconds >= 25 ? 'bg-cyan-500' : 'bg-gray-600'}`} />
+                      <Flex direction="column" align="center" gap="1">
+                        <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${vrfElapsedSeconds >= 25 ? 'bg-cyan-500 text-white animate-pulse' : 'bg-gray-600 text-gray-400'}`}>
+                          4
+                        </div>
+                        <Text size="1" color={vrfElapsedSeconds >= 25 ? 'cyan' : 'gray'}>Result</Text>
+                      </Flex>
+                    </Flex>
+
+                    {/* Progress bar */}
                     <Progress
                       value={Math.min(vrfElapsedSeconds, 30)}
                       max={30}
                       size="2"
-                      color={vrfElapsedSeconds > 30 ? 'amber' : 'cyan'}
+                      color={vrfElapsedSeconds > 45 ? 'amber' : 'cyan'}
                     />
                     <Flex justify="between" align="center">
                       <Flex align="center" gap="1" className="text-cyan-400">
                         <Clock className="w-3 h-3" />
                         <Text size="1" weight="bold">{formatTime(vrfElapsedSeconds)}</Text>
                       </Flex>
-                      <Text size="1" color="gray">
-                        {vrfElapsedSeconds < 10 && 'Requesting...'}
-                        {vrfElapsedSeconds >= 10 && vrfElapsedSeconds < 20 && 'Processing...'}
-                        {vrfElapsedSeconds >= 20 && vrfElapsedSeconds < 30 && 'Almost there...'}
-                        {vrfElapsedSeconds >= 30 && vrfElapsedSeconds < 60 && 'Taking longer...'}
-                        {vrfElapsedSeconds >= 60 && 'Network busy...'}
+                      <Text size="1" color={vrfElapsedSeconds > 30 ? 'amber' : 'gray'}>
+                        {vrfElapsedSeconds <= 30 ? 'Typical: 15-30s' : `+${vrfElapsedSeconds - 30}s over typical`}
                       </Text>
                     </Flex>
-                    <Text size="1" color="gray" align="center">
-                      Typical: ~15-30 seconds
-                    </Text>
                   </Flex>
                 </>
               ) : (
@@ -480,9 +590,25 @@ export function GameSessionModal({ game, open, onClose, userAddress, modalType }
                     </Text>
                   </Flex>
 
-                  <Text size="1" color="gray" align="center">
-                    This usually takes just a few seconds
-                  </Text>
+                  {/* Retry progress indicator */}
+                  <Flex direction="column" gap="2" align="center" className="w-full max-w-xs">
+                    <Progress
+                      value={currentRetryCount}
+                      max={MAX_DATA_RETRIES}
+                      size="1"
+                      color="green"
+                    />
+                    <Flex justify="between" className="w-full px-1">
+                      <Text size="1" color="gray">
+                        {currentRetryCount > 0 ? `Syncing... attempt ${currentRetryCount}/${MAX_DATA_RETRIES}` : 'Starting sync...'}
+                      </Text>
+                      <Text size="1" color={currentRetryCount > 5 ? 'yellow' : 'gray'}>
+                        {currentRetryCount <= 3 && 'Normal'}
+                        {currentRetryCount > 3 && currentRetryCount <= 6 && 'Slower than usual'}
+                        {currentRetryCount > 6 && 'Almost there...'}
+                      </Text>
+                    </Flex>
+                  </Flex>
                 </>
               ) : (
                 <>
@@ -544,16 +670,31 @@ export function GameSessionModal({ game, open, onClose, userAddress, modalType }
 
               {/* Skip Button */}
               {!skipped && isFlipping && (
-                <Flex justify="center">
-                  <Button
-                    size="3"
-                    variant="soft"
-                    onClick={handleSkip}
-                    className="glow-cyan hover:scale-105 transition-transform"
-                  >
-                    <Zap className="w-4 h-4" />
-                    Skip Animation
-                  </Button>
+                <Flex direction="column" gap="2" align="center">
+                  <Flex gap="2">
+                    <Button
+                      size="3"
+                      variant="soft"
+                      onClick={() => handleSkip(false)}
+                      className="glow-cyan hover:scale-105 transition-transform"
+                    >
+                      <Zap className="w-4 h-4" />
+                      Skip
+                    </Button>
+                    <Button
+                      size="3"
+                      variant="soft"
+                      color="purple"
+                      onClick={() => handleSkip(true)}
+                      className="hover:scale-105 transition-transform"
+                    >
+                      <Zap className="w-4 h-4" />
+                      Always Skip
+                    </Button>
+                  </Flex>
+                  <Text size="1" color="gray">
+                    {alwaysSkipAnimation ? 'Animation will be skipped automatically' : 'Click "Always Skip" to remember'}
+                  </Text>
                 </Flex>
               )}
             </Flex>
@@ -649,6 +790,21 @@ export function GameSessionModal({ game, open, onClose, userAddress, modalType }
                   Play Again
                 </Button>
               </Flex>
+
+              {/* Animation preference toggle */}
+              <Flex justify="center">
+                <button
+                  onClick={toggleSkipPreference}
+                  className="flex items-center gap-2 px-3 py-1.5 rounded-full text-xs transition-colors hover:bg-slate-700/50"
+                >
+                  <div className={`w-8 h-4 rounded-full transition-colors ${alwaysSkipAnimation ? 'bg-purple-500' : 'bg-slate-600'}`}>
+                    <div className={`w-3 h-3 rounded-full bg-white mt-0.5 transition-transform ${alwaysSkipAnimation ? 'translate-x-4.5 ml-0.5' : 'translate-x-0.5'}`} />
+                  </div>
+                  <Text size="1" color="gray">
+                    {alwaysSkipAnimation ? 'Skip animation: ON' : 'Skip animation: OFF'}
+                  </Text>
+                </button>
+              </Flex>
             </Flex>
           )}
 
@@ -676,16 +832,40 @@ export function GameSessionModal({ game, open, onClose, userAddress, modalType }
                 </>
               ) : (
                 <>
-                  <Clock className="w-20 h-20 text-yellow-400" />
+                  <Clock className="w-20 h-20 text-yellow-400 animate-pulse" />
 
                   <Flex direction="column" gap="2" align="center">
                     <Heading size="5" className="text-yellow-400">
                       No Opponent Found
                     </Heading>
                     <Text size="3" color="gray" align="center">
-                      Your game has been waiting for 5 minutes without being matched.
+                      Your game has been waiting for {formatTime(expiredElapsedSeconds)} without being matched.
                     </Text>
                   </Flex>
+
+                  {/* Elapsed time indicator */}
+                  <Card className="w-full max-w-xs bg-yellow-500/5 border border-yellow-500/20">
+                    <Flex direction="column" gap="2" p="3">
+                      <Flex justify="between" align="center">
+                        <Text size="1" color="gray">Time Waiting</Text>
+                        <Text size="2" weight="bold" className="text-yellow-400 font-mono">
+                          {formatTime(expiredElapsedSeconds)}
+                        </Text>
+                      </Flex>
+                      <Progress
+                        value={Math.min(expiredElapsedSeconds, 600)}
+                        max={600}
+                        size="1"
+                        color="yellow"
+                      />
+                      <Flex justify="between" align="center">
+                        <Text size="1" color="gray">5m expiry</Text>
+                        <Text size="1" className={expiredElapsedSeconds > 300 ? 'text-yellow-400' : 'text-gray-500'}>
+                          {expiredElapsedSeconds > 300 ? `+${formatTime(expiredElapsedSeconds - 300)} over` : 'Not yet'}
+                        </Text>
+                      </Flex>
+                    </Flex>
+                  </Card>
 
                   <Card className="card-simple w-full">
                     <Flex direction="column" gap="3" p="4">
@@ -721,13 +901,27 @@ export function GameSessionModal({ game, open, onClose, userAddress, modalType }
                           gap="2"
                         >
                           <Text size="2" className="text-green-400" weight="bold">
-                            Good News: You Can Get a Full Refund
+                            Get Your Instant Refund
                           </Text>
                           <Text size="2" className="text-green-200">
-                            Cancel the game now to receive your {formatCurrency(BigInt(game.amount))} back.
+                            Cancel now to receive your {formatCurrency(BigInt(game.amount))} back immediately.
                           </Text>
                         </Flex>
                       )}
+
+                      {/* Chainlink auto-cancel info */}
+                      <Flex
+                        className="bg-cyan-500/10 rounded-lg p-3 border border-cyan-500/20"
+                        direction="column"
+                        gap="1"
+                      >
+                        <Text size="1" className="text-cyan-400" weight="bold">
+                          Chainlink Automation Active
+                        </Text>
+                        <Text size="1" className="text-cyan-200">
+                          If you don&apos;t cancel manually, Chainlink will auto-cancel and refund you. This may take a few more minutes depending on network activity.
+                        </Text>
+                      </Flex>
                     </Flex>
                   </Card>
 
@@ -762,7 +956,7 @@ export function GameSessionModal({ game, open, onClose, userAddress, modalType }
                   </Flex>
 
                   <Text size="1" color="gray" align="center">
-                    The game will remain open until you cancel it or someone joins.
+                    Someone could still join your game. Cancel anytime for instant refund.
                   </Text>
                 </>
               )}
