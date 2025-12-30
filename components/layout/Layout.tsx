@@ -4,6 +4,7 @@ import { Flex } from '@radix-ui/themes';
 import { Header } from './Header';
 import { Footer } from './Footer';
 import { Toaster } from '@/components/ui/Toaster';
+import { ConnectionStatusBanner } from '@/components/ui/ConnectionStatusBanner';
 
 export function Layout({ children }: { children: React.ReactNode }) {
   return (
@@ -30,6 +31,9 @@ export function Layout({ children }: { children: React.ReactNode }) {
       </div>
 
       <Header />
+
+      {/* Connection status banner (shows when degraded to polling or disconnected) */}
+      <ConnectionStatusBanner />
 
       <Flex direction="column" style={{ flex: 1 }} className="relative z-0">
         {children}
