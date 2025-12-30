@@ -87,46 +87,50 @@ export function useRealtimeSync() {
           table: 'games',
         },
         (payload) => {
-          const game = parseGame(payload.new);
-          if (!game) {
-            console.warn('🆕 [RealtimeSync] Received invalid game payload on INSERT');
-            return;
-          }
-          console.log('🆕 [RealtimeSync] Game created:', game.id, 'status:', game.status);
-
-          // Remove any optimistic game with matching tx_hash
-          const txHashPrefix = game.tx_hash?.slice(0, 10) || '';
-          const optimisticId = txHashPrefix ? `optimistic-${txHashPrefix}` : '';
-
-          // Add new pending game directly to cache for instant UI update
-          if (game.status === 'pending') {
-            queryClientRef.current.setQueryData(['games', 'pending'], (old: Game[] | undefined) => {
-              if (!old) return [game];
-              // Remove optimistic version (if exists) and avoid duplicates
-              const filtered = old.filter(g =>
-                (optimisticId ? g.id !== optimisticId : true) && g.id !== game.id
-              );
-              return [game, ...filtered]; // Add real game to front
-            });
-          }
-
-          // Also invalidate to ensure consistency
-          queryClientRef.current.invalidateQueries({ queryKey: ['games', 'pending'] });
-          queryClientRef.current.invalidateQueries({ queryKey: ['games', 'active'] });
-
-          // If this is the user's game, update active games (replace optimistic with real)
-          const userAddress = addressRef.current?.toLowerCase();
-          if (userAddress && game.creator_address?.toLowerCase() === userAddress) {
-            // Remove optimistic game from active games (if exists)
-            if (optimisticId) {
-              actionsRef.current.removeActiveGame(optimisticId);
+          try {
+            const game = parseGame(payload.new);
+            if (!game) {
+              console.warn('🆕 [RealtimeSync] Received invalid game payload on INSERT');
+              return;
             }
-            // Add the real game
-            actionsRef.current.updateActiveGame(game);
-          }
+            console.log('🆕 [RealtimeSync] Game created:', game.id, 'status:', game.status);
 
-          // Update stats
-          queryClientRef.current.invalidateQueries({ queryKey: ['game-stats'] });
+            // Remove any optimistic game with matching tx_hash
+            const txHashPrefix = game.tx_hash?.slice(0, 10) || '';
+            const optimisticId = txHashPrefix ? `optimistic-${txHashPrefix}` : '';
+
+            // Add new pending game directly to cache for instant UI update
+            if (game.status === 'pending') {
+              queryClientRef.current.setQueryData(['games', 'pending'], (old: Game[] | undefined) => {
+                if (!old) return [game];
+                // Remove optimistic version (if exists) and avoid duplicates
+                const filtered = old.filter(g =>
+                  (optimisticId ? g.id !== optimisticId : true) && g.id !== game.id
+                );
+                return [game, ...filtered]; // Add real game to front
+              });
+            }
+
+            // Also invalidate to ensure consistency
+            queryClientRef.current.invalidateQueries({ queryKey: ['games', 'pending'] });
+            queryClientRef.current.invalidateQueries({ queryKey: ['games', 'active'] });
+
+            // If this is the user's game, update active games (replace optimistic with real)
+            const userAddress = addressRef.current?.toLowerCase();
+            if (userAddress && game.creator_address?.toLowerCase() === userAddress) {
+              // Remove optimistic game from active games (if exists)
+              if (optimisticId) {
+                actionsRef.current.removeActiveGame(optimisticId);
+              }
+              // Add the real game
+              actionsRef.current.updateActiveGame(game);
+            }
+
+            // Update stats
+            queryClientRef.current.invalidateQueries({ queryKey: ['game-stats'] });
+          } catch (error) {
+            console.error('🆕 [RealtimeSync] Error processing INSERT:', error);
+          }
         }
       )
       .on(
@@ -137,85 +141,89 @@ export function useRealtimeSync() {
           table: 'games',
         },
         (payload) => {
-          const game = parseGame(payload.new);
-          if (!game) {
-            console.warn('🔄 [RealtimeSync] Received invalid game payload on UPDATE');
-            return;
-          }
-          // oldGame is partial and may be incomplete, just extract what we need
-          const oldGame = payload.old as Partial<Game> | null;
-          console.log('🔄 [RealtimeSync] Game updated:', game.id, oldGame?.status, '→', game.status);
+          try {
+            const game = parseGame(payload.new);
+            if (!game) {
+              console.warn('🔄 [RealtimeSync] Received invalid game payload on UPDATE');
+              return;
+            }
+            // oldGame is partial and may be incomplete, just extract what we need
+            const oldGame = payload.old as Partial<Game> | null;
+            console.log('🔄 [RealtimeSync] Game updated:', game.id, oldGame?.status, '→', game.status);
 
-          const userAddress = addressRef.current?.toLowerCase();
-          const isUserGame = userAddress && (
-            game.creator_address?.toLowerCase() === userAddress ||
-            game.joiner_address?.toLowerCase() === userAddress
-          );
-
-          // Get cached data BEFORE updating (to detect status changes)
-          const cachedGame = queryClientRef.current.getQueryData(['game', game.id]) as Game | undefined;
-          const cachedPendingGames = queryClientRef.current.getQueryData(['games', 'pending']) as Game[] | undefined;
-          const cachedStatus = cachedGame?.status || oldGame?.status;
-
-          // Update specific game in cache
-          queryClientRef.current.setQueryData(['game', game.id], game);
-          const wasInPendingCache = cachedPendingGames?.some(g => g.id === game.id) ?? false;
-          const isPending = game.status === 'pending';
-
-          // If game was in pending cache but is no longer pending, remove it immediately
-          if (wasInPendingCache && !isPending) {
-            console.log('🔄 [RealtimeSync] Removing game from pending cache:', game.id, '→', game.status);
-            queryClientRef.current.setQueryData(['games', 'pending'], (old: Game[] | undefined) =>
-              old?.filter(g => g.id !== game.id) || []
+            const userAddress = addressRef.current?.toLowerCase();
+            const isUserGame = userAddress && (
+              game.creator_address?.toLowerCase() === userAddress ||
+              game.joiner_address?.toLowerCase() === userAddress
             );
-          } else if (!wasInPendingCache && isPending) {
-            // Game became pending, refetch the list
-            queryClientRef.current.invalidateQueries({ queryKey: ['games', 'pending'] });
-          } else if (!isPending && (game.status === 'cancelled' || game.status === 'matched' || game.status === 'resolved')) {
-            // Fallback: if game left pending state but wasn't in our cache, invalidate to refresh
-            // This handles cases where our cache was stale
-            console.log('🔄 [RealtimeSync] Game status changed, invalidating pending list:', game.id, '→', game.status);
-            queryClientRef.current.invalidateQueries({ queryKey: ['games', 'pending'] });
-          }
 
-          // Always update active games list on status change
-          queryClientRef.current.invalidateQueries({ queryKey: ['games', 'active'] });
+            // Get cached data BEFORE updating (to detect status changes)
+            const cachedGame = queryClientRef.current.getQueryData(['game', game.id]) as Game | undefined;
+            const cachedPendingGames = queryClientRef.current.getQueryData(['games', 'pending']) as Game[] | undefined;
+            const cachedStatus = cachedGame?.status || oldGame?.status;
 
-          // If user is involved in this game
-          if (isUserGame) {
-            // cachedStatus was read before cache update above
-            const statusChanged = cachedStatus !== game.status;
+            // Update specific game in cache
+            queryClientRef.current.setQueryData(['game', game.id], game);
+            const wasInPendingCache = cachedPendingGames?.some(g => g.id === game.id) ?? false;
+            const isPending = game.status === 'pending';
 
-            // Update in store
-            actionsRef.current.updateActiveGame(game);
-
-            // Handle status transitions
-            if (statusChanged) {
-              console.log('🔄 [RealtimeSync] User game status changed:', game.id, cachedStatus, '→', game.status);
-              if (game.status === 'matched') {
-                actionsRef.current.queueModal(game, 'matched');
-              } else if (game.status === 'resolved') {
-                actionsRef.current.queueModal(game, 'resolved');
-                // Auto-remove from active games after delay (tracked for cleanup)
-                const timeoutId = setTimeout(() => {
-                  autoRemoveTimeoutsRef.current.delete(timeoutId);
-                  if (mountedRef.current) {
-                    actionsRef.current.removeActiveGame(game.id);
-                  }
-                }, 5000);
-                autoRemoveTimeoutsRef.current.add(timeoutId);
-              } else if (game.status === 'cancelled') {
-                actionsRef.current.removeActiveGame(game.id);
-              }
+            // If game was in pending cache but is no longer pending, remove it immediately
+            if (wasInPendingCache && !isPending) {
+              console.log('🔄 [RealtimeSync] Removing game from pending cache:', game.id, '→', game.status);
+              queryClientRef.current.setQueryData(['games', 'pending'], (old: Game[] | undefined) =>
+                old?.filter(g => g.id !== game.id) || []
+              );
+            } else if (!wasInPendingCache && isPending) {
+              // Game became pending, refetch the list
+              queryClientRef.current.invalidateQueries({ queryKey: ['games', 'pending'] });
+            } else if (!isPending && (game.status === 'cancelled' || game.status === 'matched' || game.status === 'resolved')) {
+              // Fallback: if game left pending state but wasn't in our cache, invalidate to refresh
+              // This handles cases where our cache was stale
+              console.log('🔄 [RealtimeSync] Game status changed, invalidating pending list:', game.id, '→', game.status);
+              queryClientRef.current.invalidateQueries({ queryKey: ['games', 'pending'] });
             }
 
-            // Invalidate player games
-            queryClientRef.current.invalidateQueries({ queryKey: ['games', 'player', addressRef.current] });
-          }
+            // Always update active games list on status change
+            queryClientRef.current.invalidateQueries({ queryKey: ['games', 'active'] });
 
-          // Update stats on resolved games
-          if (game.status === 'resolved') {
-            queryClientRef.current.invalidateQueries({ queryKey: ['game-stats'] });
+            // If user is involved in this game
+            if (isUserGame) {
+              // cachedStatus was read before cache update above
+              const statusChanged = cachedStatus !== game.status;
+
+              // Update in store
+              actionsRef.current.updateActiveGame(game);
+
+              // Handle status transitions
+              if (statusChanged) {
+                console.log('🔄 [RealtimeSync] User game status changed:', game.id, cachedStatus, '→', game.status);
+                if (game.status === 'matched') {
+                  actionsRef.current.queueModal(game, 'matched');
+                } else if (game.status === 'resolved') {
+                  actionsRef.current.queueModal(game, 'resolved');
+                  // Auto-remove from active games after delay (tracked for cleanup)
+                  const timeoutId = setTimeout(() => {
+                    autoRemoveTimeoutsRef.current.delete(timeoutId);
+                    if (mountedRef.current) {
+                      actionsRef.current.removeActiveGame(game.id);
+                    }
+                  }, 5000);
+                  autoRemoveTimeoutsRef.current.add(timeoutId);
+                } else if (game.status === 'cancelled') {
+                  actionsRef.current.removeActiveGame(game.id);
+                }
+              }
+
+              // Invalidate player games
+              queryClientRef.current.invalidateQueries({ queryKey: ['games', 'player', addressRef.current] });
+            }
+
+            // Update stats on resolved games
+            if (game.status === 'resolved') {
+              queryClientRef.current.invalidateQueries({ queryKey: ['game-stats'] });
+            }
+          } catch (error) {
+            console.error('🔄 [RealtimeSync] Error processing UPDATE:', error);
           }
         }
       )
@@ -227,20 +235,24 @@ export function useRealtimeSync() {
           table: 'games',
         },
         (payload) => {
-          // DELETE payloads only contain the primary key in old
-          const oldGame = payload.old as { id?: string } | null;
-          const gameId = oldGame?.id;
-          console.log('🗑️ [RealtimeSync] Game deleted:', gameId);
+          try {
+            // DELETE payloads only contain the primary key in old
+            const oldGame = payload.old as { id?: string } | null;
+            const gameId = oldGame?.id;
+            console.log('🗑️ [RealtimeSync] Game deleted:', gameId);
 
-          if (gameId && typeof gameId === 'string') {
-            queryClientRef.current.removeQueries({ queryKey: ['game', gameId] });
-            actionsRef.current.removeActiveGame(gameId);
+            if (gameId && typeof gameId === 'string') {
+              queryClientRef.current.removeQueries({ queryKey: ['game', gameId] });
+              actionsRef.current.removeActiveGame(gameId);
+            }
+
+            // Invalidate lists
+            queryClientRef.current.invalidateQueries({ queryKey: ['games', 'pending'] });
+            queryClientRef.current.invalidateQueries({ queryKey: ['games', 'active'] });
+            queryClientRef.current.invalidateQueries({ queryKey: ['game-stats'] });
+          } catch (error) {
+            console.error('🗑️ [RealtimeSync] Error processing DELETE:', error);
           }
-
-          // Invalidate lists
-          queryClientRef.current.invalidateQueries({ queryKey: ['games', 'pending'] });
-          queryClientRef.current.invalidateQueries({ queryKey: ['games', 'active'] });
-          queryClientRef.current.invalidateQueries({ queryKey: ['game-stats'] });
         }
       )
       .subscribe((status, err) => {

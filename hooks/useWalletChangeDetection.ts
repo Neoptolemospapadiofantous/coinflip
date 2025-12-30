@@ -34,7 +34,7 @@ export function useWalletChangeDetection() {
         console.log(`🔄 Wallet changed from ${previousAddress.slice(0, 8)}... to ${currentAddress.slice(0, 8)}...`);
 
         // Check if there were active games with the previous wallet
-        const hasActiveGames = Object.keys(activeGames).length > 0;
+        const hasActiveGames = activeGames.size > 0;
 
         if (hasActiveGames && !hasShownWarningRef.current) {
           hasShownWarningRef.current = true;
@@ -65,7 +65,7 @@ export function useWalletChangeDetection() {
 
   // Reset warning flag when games change
   useEffect(() => {
-    if (Object.keys(activeGames).length === 0) {
+    if (activeGames.size === 0) {
       hasShownWarningRef.current = false;
     }
   }, [activeGames]);
