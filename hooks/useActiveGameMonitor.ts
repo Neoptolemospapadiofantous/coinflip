@@ -42,6 +42,7 @@ export function useActiveGameMonitor() {
 
   // Track games processed this session to avoid re-processing on every query update
   const processedGamesRef = useRef<Set<string>>(new Set());
+  const knownGameIdsRef = useRef<Set<string>>(new Set());
   const prefetchedRef = useRef(false);
 
   // Prefetch notification states when games load
@@ -57,6 +58,7 @@ export function useActiveGameMonitor() {
   useEffect(() => {
     prefetchedRef.current = false;
     processedGamesRef.current.clear();
+    knownGameIdsRef.current.clear();
   }, [address]);
 
   // Monitor all player games for new matches/resolutions
@@ -64,6 +66,22 @@ export function useActiveGameMonitor() {
     if (!address || !games) return;
 
     const lowerAddress = address.toLowerCase();
+
+    // Collect current game IDs for cleanup
+    const currentGameIds = new Set(games.map(g => g.id));
+
+    // Cleanup processedGamesRef entries for games that no longer exist
+    // This prevents memory growth and stale entries
+    for (const processKey of processedGamesRef.current) {
+      const gameId = processKey.split(':')[0];
+      if (!currentGameIds.has(gameId)) {
+        processedGamesRef.current.delete(processKey);
+        devLog.log(`🧹 [ActiveGameMonitor] Cleaned up processed entry: ${processKey}`);
+      }
+    }
+
+    // Update known game IDs
+    knownGameIdsRef.current = currentGameIds;
 
     // Process games asynchronously
     const processGames = async () => {

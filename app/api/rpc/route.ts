@@ -1,14 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { RateLimiter, sanitizeJson } from '@/lib/security';
+import { getApiRateLimiter, sanitizeJson } from '@/lib/security';
+import { ALLOWED_CHAIN_IDS, CHAIN_IDS, PUBLIC_RPC_URLS } from '@/lib/chainConfig';
 
 // =============================================================
-// RATE LIMITING (using centralized RateLimiter from lib/security)
+// RATE LIMITING (using distributed RateLimiter with Redis/fallback)
 // =============================================================
 
-// Create rate limiter: 100 requests per minute per IP
-const rateLimiter = new RateLimiter(100, 60000);
+// Get singleton distributed rate limiter (100 requests per minute per IP)
+const rateLimiter = getApiRateLimiter();
 
-// Cleanup old entries periodically (every 5 minutes)
+// Cleanup old entries periodically for in-memory fallback (every 5 minutes)
 setInterval(() => rateLimiter.cleanup(), 300000);
 
 // Get client identifier (IP address)
@@ -37,23 +38,19 @@ function addSecurityHeaders(response: NextResponse): NextResponse {
 }
 
 // =============================================================
-// RPC CONFIGURATION
+// RPC CONFIGURATION (using centralized chainConfig)
 // =============================================================
 
-// Allowed chain IDs (whitelist)
-const ALLOWED_CHAIN_IDS = new Set([11155111, 80002, 137]);
-
-// RPC endpoints by chain ID (server-side, no CORS issues)
-// Note: ALCHEMY_API_KEY is server-only (no NEXT_PUBLIC_ prefix) to prevent client exposure
+// Build RPC URLs with private API keys where available
 const RPC_URLS: Record<number, string> = {
   // Sepolia - use Alchemy if available, fallback to public
-  11155111: process.env.ALCHEMY_API_KEY
+  [CHAIN_IDS.SEPOLIA]: process.env.ALCHEMY_API_KEY
     ? `https://eth-sepolia.g.alchemy.com/v2/${process.env.ALCHEMY_API_KEY}`
-    : 'https://ethereum-sepolia-rpc.publicnode.com',
+    : PUBLIC_RPC_URLS[CHAIN_IDS.SEPOLIA],
   // Polygon Amoy
-  80002: 'https://rpc-amoy.polygon.technology',
+  [CHAIN_IDS.POLYGON_AMOY]: PUBLIC_RPC_URLS[CHAIN_IDS.POLYGON_AMOY],
   // Polygon Mainnet
-  137: 'https://polygon-rpc.com',
+  [CHAIN_IDS.POLYGON]: PUBLIC_RPC_URLS[CHAIN_IDS.POLYGON],
 };
 
 // Whitelist of allowed RPC methods (read-only and transaction submission)
@@ -109,9 +106,10 @@ function isValidJsonRpcResponse(data: unknown): data is { jsonrpc: string; id: u
 
 export async function POST(request: NextRequest) {
   try {
-    // Rate limiting check using centralized RateLimiter
+    // Rate limiting check using distributed RateLimiter (Redis with in-memory fallback)
     const clientId = getClientId(request);
-    if (!rateLimiter.isAllowed(clientId)) {
+    const isAllowed = await rateLimiter.isAllowed(clientId);
+    if (!isAllowed) {
       return addSecurityHeaders(NextResponse.json(
         { jsonrpc: '2.0', error: { code: -32005, message: 'Rate limit exceeded. Please try again later.' }, id: null },
         { status: 429 }
@@ -156,7 +154,7 @@ export async function POST(request: NextRequest) {
     }
 
     const chainIdHeader = request.headers.get('x-chain-id');
-    let chainId = 11155111; // Default to Sepolia
+    let chainId: number = CHAIN_IDS.SEPOLIA; // Default to Sepolia (from centralized config)
     if (chainIdHeader) {
       const parsed = parseInt(chainIdHeader, 10);
       if (!isNaN(parsed) && parsed > 0) {

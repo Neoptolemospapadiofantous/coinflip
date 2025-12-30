@@ -5,11 +5,54 @@ import { formatUnits } from 'viem';
 // Check if running in development mode
 const isDev = process.env.NODE_ENV === 'development';
 
+// Patterns that might contain sensitive data
+const SENSITIVE_PATTERNS = [
+  /0x[a-fA-F0-9]{64}/g,  // Private keys / 32-byte hashes
+  /eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+/g, // JWT tokens
+  /sk_[a-zA-Z0-9]+/g,    // API secret keys
+  /password['":\s]*['"][^'"]+['"]/gi, // Password fields
+  /secret['":\s]*['"][^'"]+['"]/gi,   // Secret fields
+  /api[_-]?key['":\s]*['"][^'"]+['"]/gi, // API keys
+];
+
+// Sanitize a single value for logging
+function sanitizeValue(value: unknown): unknown {
+  if (typeof value === 'string') {
+    let sanitized = value;
+    for (const pattern of SENSITIVE_PATTERNS) {
+      sanitized = sanitized.replace(pattern, '[REDACTED]');
+    }
+    return sanitized;
+  }
+  if (value instanceof Error) {
+    // Sanitize error message but keep stack trace structure
+    return {
+      name: value.name,
+      message: sanitizeValue(value.message),
+      stack: isDev ? value.stack : '[Stack hidden in production]',
+    };
+  }
+  if (typeof value === 'object' && value !== null) {
+    // In production, only show shallow object structure
+    if (!isDev) {
+      return '[Object]';
+    }
+  }
+  return value;
+}
+
 // Development-only logger - prevents sensitive data from leaking to production console
 export const devLog = {
   log: (...args: unknown[]) => isDev && console.log(...args),
   warn: (...args: unknown[]) => isDev && console.warn(...args),
-  error: (...args: unknown[]) => console.error(...args), // Always log errors
+  error: (...args: unknown[]) => {
+    // Always log errors but sanitize sensitive data in production
+    if (isDev) {
+      console.error(...args);
+    } else {
+      console.error(...args.map(sanitizeValue));
+    }
+  },
   info: (...args: unknown[]) => isDev && console.info(...args),
 };
 
@@ -97,19 +140,8 @@ export function formatTxHash(hash: string): string {
   return `${hash.slice(0, 10)}...${hash.slice(-8)}`;
 }
 
-// Get block explorer URL
-export function getBlockExplorerUrl(chainId: number, hash: string, type: 'tx' | 'address'): string {
-  const explorers: Record<number, string> = {
-    1: 'https://etherscan.io',         // Ethereum Mainnet
-    11155111: 'https://sepolia.etherscan.io', // Sepolia Testnet
-    137: 'https://polygonscan.com',     // Polygon Mainnet
-    80001: 'https://mumbai.polygonscan.com', // Mumbai Testnet (deprecated)
-    80002: 'https://amoy.polygonscan.com',   // Amoy Testnet
-  };
-
-  const baseUrl = explorers[chainId] || explorers[11155111]; // Default to Sepolia
-  return `${baseUrl}/${type}/${hash}`;
-}
+// Get block explorer URL - re-export from centralized config
+export { getBlockExplorerUrl } from './chainConfig';
 
 // Sleep utility
 export function sleep(ms: number): Promise<void> {

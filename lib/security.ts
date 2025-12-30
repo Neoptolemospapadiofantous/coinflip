@@ -5,6 +5,8 @@
  */
 
 import { isAddress } from 'viem';
+import { Redis } from '@upstash/redis';
+import { Ratelimit } from '@upstash/ratelimit';
 
 /**
  * Validate and sanitize Ethereum address
@@ -145,6 +147,123 @@ export class RateLimiter {
       }
     }
   }
+}
+
+/**
+ * Distributed Rate Limiter using Upstash Redis
+ * Falls back to in-memory rate limiting if Redis is not configured
+ */
+export class DistributedRateLimiter {
+  private ratelimit: Ratelimit | null = null;
+  private fallback: RateLimiter;
+  private useRedis: boolean = false;
+
+  constructor(
+    private maxRequests: number = 100,
+    private windowSeconds: number = 60,
+    private prefix: string = 'ratelimit'
+  ) {
+    // Initialize fallback in-memory limiter
+    this.fallback = new RateLimiter(maxRequests, windowSeconds * 1000);
+
+    // Try to initialize Redis rate limiter
+    this.initRedis();
+  }
+
+  private initRedis(): void {
+    const redisUrl = process.env.UPSTASH_REDIS_REST_URL;
+    const redisToken = process.env.UPSTASH_REDIS_REST_TOKEN;
+
+    if (redisUrl && redisToken) {
+      try {
+        const redis = new Redis({
+          url: redisUrl,
+          token: redisToken,
+        });
+
+        this.ratelimit = new Ratelimit({
+          redis,
+          limiter: Ratelimit.slidingWindow(this.maxRequests, `${this.windowSeconds} s`),
+          prefix: this.prefix,
+          analytics: true,
+        });
+
+        this.useRedis = true;
+        console.log('[RateLimiter] Using distributed Redis rate limiting');
+      } catch (error) {
+        console.warn('[RateLimiter] Failed to initialize Redis, using in-memory fallback:', error);
+        this.useRedis = false;
+      }
+    } else {
+      console.log('[RateLimiter] No Redis config found, using in-memory rate limiting');
+    }
+  }
+
+  /**
+   * Check if action is allowed for this key
+   */
+  async isAllowed(key: string): Promise<boolean> {
+    if (this.useRedis && this.ratelimit) {
+      try {
+        const { success } = await this.ratelimit.limit(key);
+        return success;
+      } catch (error) {
+        // On Redis error, fall back to in-memory
+        console.warn('[RateLimiter] Redis error, falling back to in-memory:', error);
+        return this.fallback.isAllowed(key);
+      }
+    }
+
+    return this.fallback.isAllowed(key);
+  }
+
+  /**
+   * Synchronous check (always uses fallback for sync contexts)
+   */
+  isAllowedSync(key: string): boolean {
+    return this.fallback.isAllowed(key);
+  }
+
+  /**
+   * Get remaining requests for a key (only works with Redis)
+   */
+  async getRemaining(key: string): Promise<{ remaining: number; reset: number } | null> {
+    if (this.useRedis && this.ratelimit) {
+      try {
+        const { remaining, reset } = await this.ratelimit.limit(key);
+        return { remaining, reset };
+      } catch {
+        return null;
+      }
+    }
+    return null;
+  }
+
+  /**
+   * Check if using Redis
+   */
+  isDistributed(): boolean {
+    return this.useRedis;
+  }
+
+  /**
+   * Clear old entries (only for in-memory fallback)
+   */
+  cleanup(): void {
+    this.fallback.cleanup();
+  }
+}
+
+/**
+ * Create a singleton distributed rate limiter for API routes
+ */
+let apiRateLimiter: DistributedRateLimiter | null = null;
+
+export function getApiRateLimiter(): DistributedRateLimiter {
+  if (!apiRateLimiter) {
+    apiRateLimiter = new DistributedRateLimiter(100, 60, 'api:rpc');
+  }
+  return apiRateLimiter;
 }
 
 /**

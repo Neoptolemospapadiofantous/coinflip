@@ -87,9 +87,15 @@ export function GameSessionModal({ game, open, onClose, userAddress, modalType }
     };
   }, [game?.creator_address, game?.joiner_address, game?.winner_address, userAddress]);
 
-  // Validate game state
+  // Validate game state with error handling
   const validation = useMemo(() => {
-    return game ? validateGameState(game) : { valid: false, errors: [] };
+    if (!game) return { valid: false, errors: ['No game data'] };
+    try {
+      return validateGameState(game);
+    } catch (error) {
+      console.error('Game validation error:', error);
+      return { valid: false, errors: ['Validation failed - please refresh'] };
+    }
   }, [game]);
 
   // Handle game changes and status transitions

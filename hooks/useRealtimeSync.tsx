@@ -54,7 +54,8 @@ export function useRealtimeSync() {
   const fallbackIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const fallbackRetryCountRef = useRef(0);
   const initialPollTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  const autoRemoveTimeoutsRef = useRef<Set<NodeJS.Timeout>>(new Set());
+  // Map game ID -> timeout for auto-removal (prevents duplicate timeouts)
+  const autoRemoveTimeoutsRef = useRef<Map<string, NodeJS.Timeout>>(new Map());
   const mountedRef = useRef(true);
 
   // Keep refs updated
@@ -202,15 +203,25 @@ export function useRealtimeSync() {
                   actionsRef.current.queueModal(game, 'matched');
                 } else if (game.status === 'resolved') {
                   actionsRef.current.queueModal(game, 'resolved');
-                  // Auto-remove from active games after delay (tracked for cleanup)
+                  // Auto-remove from active games after delay (prevent duplicates)
+                  const existingTimeout = autoRemoveTimeoutsRef.current.get(game.id);
+                  if (existingTimeout) {
+                    clearTimeout(existingTimeout);
+                  }
                   const timeoutId = setTimeout(() => {
-                    autoRemoveTimeoutsRef.current.delete(timeoutId);
+                    autoRemoveTimeoutsRef.current.delete(game.id);
                     if (mountedRef.current) {
                       actionsRef.current.removeActiveGame(game.id);
                     }
                   }, 5000);
-                  autoRemoveTimeoutsRef.current.add(timeoutId);
+                  autoRemoveTimeoutsRef.current.set(game.id, timeoutId);
                 } else if (game.status === 'cancelled') {
+                  // Clear any pending auto-remove timeout
+                  const existingTimeout = autoRemoveTimeoutsRef.current.get(game.id);
+                  if (existingTimeout) {
+                    clearTimeout(existingTimeout);
+                    autoRemoveTimeoutsRef.current.delete(game.id);
+                  }
                   actionsRef.current.removeActiveGame(game.id);
                 }
               }
@@ -320,8 +331,10 @@ export function useRealtimeSync() {
         clearTimeout(initialPollTimeoutRef.current);
         initialPollTimeoutRef.current = null;
       }
-      // Clear all auto-remove timeouts
-      autoRemoveTimeouts.forEach((timeout) => clearTimeout(timeout));
+      // Clear all auto-remove timeouts (Map values are the timeout IDs)
+      for (const timeout of autoRemoveTimeouts.values()) {
+        clearTimeout(timeout);
+      }
       autoRemoveTimeouts.clear();
       globalConnectionStatus = 'disconnected';
       notifyListeners();

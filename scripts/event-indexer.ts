@@ -20,7 +20,16 @@ config({ path: resolve(__dirname, '../.env.local') });
 
 // Environment variables
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
+const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+// Validate required service key - indexer requires elevated permissions
+if (!SUPABASE_SERVICE_KEY) {
+  console.error('❌ FATAL: SUPABASE_SERVICE_ROLE_KEY is required for the indexer.');
+  console.error('   The indexer needs service-level permissions to write to the database.');
+  console.error('   Set SUPABASE_SERVICE_ROLE_KEY in your .env.local file.');
+  process.exit(1);
+}
+
 const CONTRACT_ADDRESS = process.env.NEXT_PUBLIC_COINFLIP_CONTRACT_ADDRESS_SEPOLIA! as `0x${string}`;
 const RPC_URL = process.env.SEPOLIA_RPC_URL || 'https://rpc.sepolia.org';
 const WSS_URL = process.env.SEPOLIA_WSS_URL; // Optional WebSocket URL for real-time events
@@ -172,6 +181,83 @@ interface IndexerState {
   lastProcessedBlock: bigint;
 }
 
+// Type-safe event log interfaces
+interface BaseEventLog {
+  blockNumber: bigint;
+  transactionHash: `0x${string}`;
+}
+
+interface GameCreatedLog extends BaseEventLog {
+  args: {
+    gameId: bigint;
+    creator: `0x${string}`;
+    tier: number;
+    amount: bigint;
+    choice: boolean;
+  };
+}
+
+interface GameJoinedLog extends BaseEventLog {
+  args: {
+    gameId: bigint;
+    joiner: `0x${string}`;
+    totalPot: bigint;
+  };
+}
+
+interface GameResolvedLog extends BaseEventLog {
+  args: {
+    gameId: bigint;
+    winner: `0x${string}`;
+    loser: `0x${string}`;
+    coinResult: boolean;
+    payout: bigint;
+  };
+}
+
+interface GameCancelledLog extends BaseEventLog {
+  args: {
+    gameId: bigint;
+    creator: `0x${string}`;
+    refundAmount: bigint;
+  };
+}
+
+interface GameAutoCancelledLog extends BaseEventLog {
+  args: {
+    gameId: bigint;
+    creator: `0x${string}`;
+    refundAmount: bigint;
+    cancelledBy: `0x${string}`;
+  };
+}
+
+interface VrfTimeoutClaimedLog extends BaseEventLog {
+  args: {
+    gameId: bigint;
+    playerA: `0x${string}`;
+    playerB: `0x${string}`;
+    refundAmount: bigint;
+  };
+}
+
+interface EmergencyRefundLog extends BaseEventLog {
+  args: {
+    gameId: bigint;
+    playerA: `0x${string}`;
+    playerB: `0x${string}`;
+    totalRefund: bigint;
+  };
+}
+
+// Union type for processed logs with type discriminator
+interface TypedLog extends BaseEventLog {
+  type: 'created' | 'joined' | 'resolved' | 'cancelled' | 'auto_cancelled' | 'vrf_timeout' | 'emergency_refund';
+  args: GameCreatedLog['args'] | GameJoinedLog['args'] | GameResolvedLog['args'] |
+        GameCancelledLog['args'] | GameAutoCancelledLog['args'] |
+        VrfTimeoutClaimedLog['args'] | EmergencyRefundLog['args'];
+}
+
 // Load/save indexer state
 async function loadState(): Promise<IndexerState> {
   const { data } = await supabase
@@ -196,7 +282,7 @@ async function saveState(state: IndexerState): Promise<void> {
 }
 
 // Process GameCreated event
-async function processGameCreated(log: any) {
+async function processGameCreated(log: GameCreatedLog) {
   const { gameId, creator, tier, choice, amount } = log.args;
   const blockNumber = log.blockNumber;
   const txHash = log.transactionHash;
@@ -222,7 +308,7 @@ async function processGameCreated(log: any) {
 }
 
 // Process GameJoined event
-async function processGameJoined(log: any) {
+async function processGameJoined(log: GameJoinedLog) {
   // Note: Contract's GameJoined event only has (gameId, joiner, totalPot) - NOT choice
   // The joiner's choice is always the opposite of the creator's choice (it's a heads vs tails game)
   const { gameId, joiner } = log.args;
@@ -285,7 +371,7 @@ async function processGameJoined(log: any) {
 }
 
 // Process GameResolved event
-async function processGameResolved(log: any) {
+async function processGameResolved(log: GameResolvedLog) {
   const { gameId, winner, loser, coinResult, payout } = log.args;
   const blockNumber = log.blockNumber;
   const txHash = log.transactionHash;
@@ -368,7 +454,7 @@ async function processGameResolved(log: any) {
 }
 
 // Process GameCancelled event (manual cancel by creator)
-async function processGameCancelled(log: any) {
+async function processGameCancelled(log: GameCancelledLog) {
   const { gameId, creator } = log.args;
   const blockNumber = log.blockNumber;
   const txHash = log.transactionHash;
@@ -396,7 +482,7 @@ async function processGameCancelled(log: any) {
 }
 
 // Process GameAutoCancelled event (Chainlink Automation auto-cancel after 5 min)
-async function processGameAutoCancelled(log: any) {
+async function processGameAutoCancelled(log: GameAutoCancelledLog) {
   const { gameId, creator } = log.args;
   const blockNumber = log.blockNumber;
   const txHash = log.transactionHash;
@@ -425,7 +511,7 @@ async function processGameAutoCancelled(log: any) {
 
 // Process VrfTimeoutClaimed event
 // This occurs when a matched game's VRF request times out and players claim refund
-async function processVrfTimeoutClaimed(log: any) {
+async function processVrfTimeoutClaimed(log: VrfTimeoutClaimedLog) {
   const { gameId, playerA, playerB, refundAmount } = log.args;
   const blockNumber = log.blockNumber;
   const txHash = log.transactionHash;
@@ -454,7 +540,7 @@ async function processVrfTimeoutClaimed(log: any) {
 
 // Process EmergencyRefund event
 // This occurs when admin issues emergency refund for stuck games
-async function processEmergencyRefund(log: any) {
+async function processEmergencyRefund(log: EmergencyRefundLog) {
   const { gameId, playerA, playerB, totalRefund } = log.args;
   const blockNumber = log.blockNumber;
   const txHash = log.transactionHash;
@@ -489,13 +575,13 @@ async function indexEvents(fromBlock: bigint, toBlock: bigint) {
 
   console.log(`\n🔍 Indexing blocks ${fromBlock} to ${toBlock} (${totalBlocks} blocks)...`);
 
-  let allCreatedLogs: any[] = [];
-  let allJoinedLogs: any[] = [];
-  let allResolvedLogs: any[] = [];
-  let allCancelledLogs: any[] = [];
-  let allAutoCancelledLogs: any[] = [];
-  let allVrfTimeoutLogs: any[] = [];
-  let allEmergencyRefundLogs: any[] = [];
+  let allCreatedLogs: GameCreatedLog[] = [];
+  let allJoinedLogs: GameJoinedLog[] = [];
+  let allResolvedLogs: GameResolvedLog[] = [];
+  let allCancelledLogs: GameCancelledLog[] = [];
+  let allAutoCancelledLogs: GameAutoCancelledLog[] = [];
+  let allVrfTimeoutLogs: VrfTimeoutClaimedLog[] = [];
+  let allEmergencyRefundLogs: EmergencyRefundLog[] = [];
 
   // Process in chunks to avoid rate limits
   for (let start = fromBlock; start <= toBlock; start += CHUNK_SIZE) {
@@ -550,19 +636,20 @@ async function indexEvents(fromBlock: bigint, toBlock: bigint) {
         }),
       ]);
 
-      allCreatedLogs = [...allCreatedLogs, ...createdLogs];
-      allJoinedLogs = [...allJoinedLogs, ...joinedLogs];
-      allResolvedLogs = [...allResolvedLogs, ...resolvedLogs];
-      allCancelledLogs = [...allCancelledLogs, ...cancelledLogs];
-      allAutoCancelledLogs = [...allAutoCancelledLogs, ...autoCancelledLogs];
-      allVrfTimeoutLogs = [...allVrfTimeoutLogs, ...vrfTimeoutLogs];
-      allEmergencyRefundLogs = [...allEmergencyRefundLogs, ...emergencyRefundLogs];
+      allCreatedLogs = [...allCreatedLogs, ...createdLogs as unknown as GameCreatedLog[]];
+      allJoinedLogs = [...allJoinedLogs, ...joinedLogs as unknown as GameJoinedLog[]];
+      allResolvedLogs = [...allResolvedLogs, ...resolvedLogs as unknown as GameResolvedLog[]];
+      allCancelledLogs = [...allCancelledLogs, ...cancelledLogs as unknown as GameCancelledLog[]];
+      allAutoCancelledLogs = [...allAutoCancelledLogs, ...autoCancelledLogs as unknown as GameAutoCancelledLog[]];
+      allVrfTimeoutLogs = [...allVrfTimeoutLogs, ...vrfTimeoutLogs as unknown as VrfTimeoutClaimedLog[]];
+      allEmergencyRefundLogs = [...allEmergencyRefundLogs, ...emergencyRefundLogs as unknown as EmergencyRefundLog[]];
 
       // Delay to avoid rate limiting
       await new Promise(resolve => setTimeout(resolve, CHUNK_DELAY));
-    } catch (error: any) {
+    } catch (error: unknown) {
       // Handle rate limit errors
-      if (error.status === 429 || error.message?.includes('rate limit')) {
+      const errObj = error as { status?: number; message?: string };
+      if (errObj.status === 429 || errObj.message?.includes('rate limit')) {
         console.log('⏳ Rate limited! Waiting 10 seconds before retry...');
         await new Promise(resolve => setTimeout(resolve, 10000));
         start -= CHUNK_SIZE; // Retry this chunk

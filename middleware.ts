@@ -70,10 +70,13 @@ function getCSP() {
   }
 
   // Production: Stricter CSP
+  // Note: Next.js generates inline scripts that require 'unsafe-inline' or nonces
+  // For proper CSP without 'unsafe-inline', configure next.config.js with nonce-based CSP
+  // See: https://nextjs.org/docs/app/building-your-application/configuring/content-security-policy
   return `
     default-src 'self';
-    script-src 'self' 'sha256-YOUR_INLINE_SCRIPT_HASH';
-    style-src 'self' 'sha256-YOUR_INLINE_STYLE_HASH' https://fonts.googleapis.com;
+    script-src 'self' 'unsafe-inline' 'unsafe-eval';
+    style-src 'self' 'unsafe-inline' https://fonts.googleapis.com;
     font-src 'self' https://fonts.gstatic.com;
     img-src 'self' data: https: blob:;
     connect-src 'self' https://*.supabase.co wss://*.supabase.co https://*.alchemy.com https://*.infura.io https://*.walletconnect.com https://*.walletconnect.org https://*.web3modal.org wss://*.walletconnect.com wss://*.walletconnect.org;

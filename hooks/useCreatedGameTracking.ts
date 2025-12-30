@@ -265,17 +265,24 @@ export function useCreatedGameTracking({
     const pollForGame = async () => {
       if (!mountedRef.current || gameIdRef.current) return;
 
-      const game = await fetchGameFromDB(txHash);
-      if (game && mountedRef.current) {
-        handleGameFound(game);
+      try {
+        const game = await fetchGameFromDB(txHash);
+        if (game && mountedRef.current) {
+          handleGameFound(game);
+        }
+      } catch (error) {
+        // Log but don't throw - polling will retry
+        devLog.warn('🔍 [GameTracking] Poll error:', error instanceof Error ? error.message : 'Unknown error');
       }
     };
 
-    // Initial poll
-    pollForGame();
+    // Initial poll (fire-and-forget with error handling built in)
+    void pollForGame();
 
     // Continue polling until found
-    pollIntervalRef.current = setInterval(pollForGame, POLL_INTERVAL);
+    pollIntervalRef.current = setInterval(() => {
+      void pollForGame();
+    }, POLL_INTERVAL);
 
     // Timeout
     timeoutRef.current = setTimeout(() => {

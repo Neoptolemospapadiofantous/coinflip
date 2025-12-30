@@ -28,19 +28,36 @@ import {
   ShieldAlert,
   Wallet,
 } from 'lucide-react';
+import { showToast } from '@/lib/toast';
 
-// Admin whitelist - add authorized wallet addresses here
-const ADMIN_ADDRESSES: string[] = [
-  // Add admin addresses in lowercase
-  // Example: '0x1234...'.toLowerCase()
-];
+// Admin whitelist - configure via NEXT_PUBLIC_ADMIN_ADDRESSES env var
+// Format: comma-separated addresses (e.g., "0x123...,0x456...")
+const ADMIN_ADDRESSES: string[] = (() => {
+  const envAddresses = process.env.NEXT_PUBLIC_ADMIN_ADDRESSES;
+  if (!envAddresses) return [];
+  return envAddresses
+    .split(',')
+    .map(addr => addr.trim().toLowerCase())
+    .filter(addr => addr.startsWith('0x') && addr.length === 42);
+})();
 
-// Check if address is admin (also allow access in development with no admins configured)
+// Check if address is admin
+// SECURITY: In production, ADMIN_ADDRESSES must be configured via env var
 function isAdmin(address: string | undefined): boolean {
   if (!address) return false;
-  // If no admins configured, allow in development only
+
+  // Production: require explicit admin list
+  if (process.env.NODE_ENV === 'production') {
+    if (ADMIN_ADDRESSES.length === 0) {
+      console.warn('[SECURITY] No admin addresses configured in production!');
+      return false;
+    }
+    return ADMIN_ADDRESSES.includes(address.toLowerCase());
+  }
+
+  // Development: allow if no admins configured (for local testing)
   if (ADMIN_ADDRESSES.length === 0) {
-    return process.env.NODE_ENV === 'development';
+    return true;
   }
   return ADMIN_ADDRESSES.includes(address.toLowerCase());
 }
@@ -57,8 +74,13 @@ export default function SetupPage() {
     try {
       const result = await runDatabaseHealthCheck();
       setHealth(result);
+      if (!result.overall) {
+        showToast.error('Some database checks failed. See details below.');
+      }
     } catch (error) {
       console.error('Health check failed:', error);
+      showToast.error('Health check failed. Check console for details.');
+      setHealth(null);
     } finally {
       setLoading(false);
     }

@@ -17,10 +17,33 @@ interface NotificationState {
 }
 
 // In-memory cache to avoid repeated DB calls within a session
+// LRU cache with max size to prevent memory leaks
+const MAX_CACHE_SIZE = 100;
 const notificationCache = new Map<string, NotificationState>();
+const cacheAccessOrder: string[] = []; // Track access order for LRU
 
 function getCacheKey(userAddress: string, gameId: string): string {
   return `${userAddress.toLowerCase()}-${gameId}`;
+}
+
+// LRU cache helper - moves key to end (most recently used)
+function touchCacheKey(key: string): void {
+  const index = cacheAccessOrder.indexOf(key);
+  if (index > -1) {
+    cacheAccessOrder.splice(index, 1);
+  }
+  cacheAccessOrder.push(key);
+}
+
+// Evict oldest entries if cache exceeds max size
+function evictOldCacheEntries(): void {
+  while (notificationCache.size > MAX_CACHE_SIZE && cacheAccessOrder.length > 0) {
+    const oldestKey = cacheAccessOrder.shift();
+    if (oldestKey) {
+      notificationCache.delete(oldestKey);
+      devLog.log(`🔔 [Notification] Evicted cache entry: ${oldestKey}`);
+    }
+  }
 }
 
 /**
@@ -68,7 +91,7 @@ export function useNotificationState() {
       }
 
       if (data) {
-        // Update cache
+        // Update cache with LRU tracking
         notificationCache.set(cacheKey, {
           matched_modal_shown: data.matched_modal_shown,
           resolved_modal_shown: data.resolved_modal_shown,
@@ -76,6 +99,8 @@ export function useNotificationState() {
           matched_sound_played: data.matched_sound_played,
           resolved_sound_played: data.resolved_sound_played,
         });
+        touchCacheKey(cacheKey);
+        evictOldCacheEntries();
 
         const field = `${type}_modal_shown` as keyof typeof data;
         if (data[field]) {
@@ -150,7 +175,7 @@ export function useNotificationState() {
       } else {
         devLog.log(`🔔 [Notification] Marked modal shown: ${type} for game ${gameId}`);
 
-        // Update cache
+        // Update cache with LRU tracking
         const cached = notificationCache.get(cacheKey) || {
           matched_modal_shown: false,
           resolved_modal_shown: false,
@@ -160,6 +185,8 @@ export function useNotificationState() {
         };
         cached[`${type}_modal_shown` as keyof NotificationState] = true;
         notificationCache.set(cacheKey, cached);
+        touchCacheKey(cacheKey);
+        evictOldCacheEntries();
       }
     } catch (err) {
       devLog.warn(`🔔 [Notification] Error:`, err);
@@ -200,7 +227,7 @@ export function useNotificationState() {
       } else {
         devLog.log(`🔔 [Notification] Marked sound played: ${type} for game ${gameId}`);
 
-        // Update cache
+        // Update cache with LRU tracking
         const cached = notificationCache.get(cacheKey) || {
           matched_modal_shown: false,
           resolved_modal_shown: false,
@@ -210,6 +237,8 @@ export function useNotificationState() {
         };
         cached[`${type}_sound_played` as keyof NotificationState] = true;
         notificationCache.set(cacheKey, cached);
+        touchCacheKey(cacheKey);
+        evictOldCacheEntries();
       }
     } catch (err) {
       devLog.warn(`🔔 [Notification] Error:`, err);
@@ -237,7 +266,7 @@ export function useNotificationState() {
         return;
       }
 
-      // Populate cache
+      // Populate cache with LRU tracking
       for (const row of data || []) {
         const cacheKey = getCacheKey(address, String(row.game_id));
         notificationCache.set(cacheKey, {
@@ -247,7 +276,9 @@ export function useNotificationState() {
           matched_sound_played: row.matched_sound_played,
           resolved_sound_played: row.resolved_sound_played,
         });
+        touchCacheKey(cacheKey);
       }
+      evictOldCacheEntries();
 
       devLog.log(`🔔 [Notification] Prefetched ${data?.length || 0} notification states`);
     } catch (err) {
@@ -259,6 +290,7 @@ export function useNotificationState() {
   useEffect(() => {
     if (!address) {
       notificationCache.clear();
+      cacheAccessOrder.length = 0; // Clear LRU tracking array
     }
   }, [address]);
 

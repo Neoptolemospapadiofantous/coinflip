@@ -5,6 +5,11 @@ import { usePublicClient } from 'wagmi';
 import { useGameStore } from '@/store/gameStore';
 import { devLog } from '@/lib/utils';
 
+// Track cancelled watchers to prevent stale callbacks
+interface WatcherState {
+  cancelled: boolean;
+}
+
 /**
  * Global hook that watches pending transactions and updates the store
  * when they are confirmed, rejected, or failed.
@@ -23,6 +28,8 @@ export function usePendingTransactionWatcher() {
     finishJoiningGame,
   } = useGameStore();
 
+  // Map of txKey -> watcher state for cancellation
+  const watcherStatesRef = useRef<Map<string, WatcherState>>(new Map());
   const watchingRef = useRef<Set<string>>(new Set());
   const hadPendingBeforeBlurRef = useRef<Set<string>>(new Set());
   const focusTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -97,6 +104,12 @@ export function usePendingTransactionWatcher() {
         clearTimeout(focusTimeoutRef.current);
         focusTimeoutRef.current = null;
       }
+      // Cancel all active watchers to prevent stale callbacks
+      for (const watcherState of watcherStatesRef.current.values()) {
+        watcherState.cancelled = true;
+      }
+      watcherStatesRef.current.clear();
+      watchingRef.current.clear();
     };
   }, [handleBlur, handleFocus]);
 
@@ -112,17 +125,21 @@ export function usePendingTransactionWatcher() {
       // Skip if already watching this transaction
       if (watchingRef.current.has(key)) continue;
 
-      // Mark as watching
+      // Mark as watching and create watcher state
       watchingRef.current.add(key);
+      const watcherState: WatcherState = { cancelled: false };
+      watcherStatesRef.current.set(key, watcherState);
 
       devLog.log(`👀 [TxWatcher] Watching transaction: ${key} (${tx.txHash})`);
 
       // Watch the transaction
       publicClient.waitForTransactionReceipt({ hash: tx.txHash })
         .then((receipt) => {
-          // Guard against unmounted component
-          if (!mountedRef.current) {
+          // Guard against cancelled watcher or unmounted component
+          if (watcherState.cancelled || !mountedRef.current) {
+            devLog.log(`🚫 [TxWatcher] Ignoring stale callback for: ${key}`);
             watchingRef.current.delete(key);
+            watcherStatesRef.current.delete(key);
             return;
           }
 
@@ -152,11 +169,14 @@ export function usePendingTransactionWatcher() {
 
           // Stop watching
           watchingRef.current.delete(key);
+          watcherStatesRef.current.delete(key);
         })
         .catch((error) => {
-          // Guard against unmounted component
-          if (!mountedRef.current) {
+          // Guard against cancelled watcher or unmounted component
+          if (watcherState.cancelled || !mountedRef.current) {
+            devLog.log(`🚫 [TxWatcher] Ignoring stale error for: ${key}`);
             watchingRef.current.delete(key);
+            watcherStatesRef.current.delete(key);
             return;
           }
 
@@ -172,13 +192,21 @@ export function usePendingTransactionWatcher() {
 
           // Stop watching
           watchingRef.current.delete(key);
+          watcherStatesRef.current.delete(key);
         });
     }
 
-    // Cleanup stale entries from watchingRef
+    // Cleanup stale entries from watchingRef and cancel their watchers
     for (const key of watchingRef.current) {
       if (!pendingTransactions.has(key)) {
+        // Cancel the watcher before removing
+        const watcherState = watcherStatesRef.current.get(key);
+        if (watcherState) {
+          watcherState.cancelled = true;
+          watcherStatesRef.current.delete(key);
+        }
         watchingRef.current.delete(key);
+        devLog.log(`🧹 [TxWatcher] Cancelled stale watcher: ${key}`);
       }
     }
   }, [pendingTransactions, publicClient, removePendingTransaction, finishCancellingGame, finishJoiningGame]);

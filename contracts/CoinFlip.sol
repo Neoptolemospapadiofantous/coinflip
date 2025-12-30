@@ -47,6 +47,9 @@ contract CoinFlip is ReentrancyGuard, Pausable, Ownable, AutomationCompatibleInt
     /// @notice Number of random words requested from VRF
     uint32 public constant VRF_NUM_WORDS = 1;
 
+    /// @notice Maximum number of open games (prevents unbounded array growth)
+    uint256 public constant MAX_OPEN_GAMES = 1000;
+
     // =============================================================
     //                      IMMUTABLES
     // =============================================================
@@ -90,6 +93,9 @@ contract CoinFlip is ReentrancyGuard, Pausable, Ownable, AutomationCompatibleInt
 
     /// @notice Mapping of game ID to its index in openGameIds array (+ 1 to distinguish from 0)
     mapping(uint256 => uint256) public openGameIndex;
+
+    /// @notice Mapping to track stuck funds from failed refunds (gameId => amount)
+    mapping(uint256 => uint256) public stuckFunds;
 
     // =============================================================
     //                      ENUMS
@@ -196,6 +202,18 @@ contract CoinFlip is ReentrancyGuard, Pausable, Ownable, AutomationCompatibleInt
         address indexed newRecipient
     );
 
+    event StuckFundsRecovered(
+        uint256 indexed gameId,
+        address indexed recipient,
+        uint256 amount
+    );
+
+    event RefundFailed(
+        uint256 indexed gameId,
+        address indexed player,
+        uint256 amount
+    );
+
     // =============================================================
     //                        ERRORS
     // =============================================================
@@ -213,6 +231,9 @@ contract CoinFlip is ReentrancyGuard, Pausable, Ownable, AutomationCompatibleInt
     error TransferFailed();
     error NoFeesToWithdraw();
     error InvalidFeeRecipient();
+    error TooManyOpenGames();
+    error InvalidTierAmount();
+    error NoStuckFunds();
 
     // =============================================================
     //                      CONSTRUCTOR
@@ -262,7 +283,9 @@ contract CoinFlip is ReentrancyGuard, Pausable, Ownable, AutomationCompatibleInt
         // Validations
         if (tier >= MAX_TIERS) revert InvalidTier();
         if (!t.enabled) revert TierDisabled();
+        if (t.amount == 0) revert InvalidTierAmount();
         if (msg.value != t.amount) revert IncorrectBetAmount();
+        if (openGameIds.length >= MAX_OPEN_GAMES) revert TooManyOpenGames();
 
         // Create game
         gameId = nextGameId++;
@@ -530,6 +553,37 @@ contract CoinFlip is ReentrancyGuard, Pausable, Ownable, AutomationCompatibleInt
     }
 
     /**
+     * @notice Recover stuck funds from a failed refund
+     * @dev Can only recover funds that are tracked in stuckFunds mapping
+     * @param gameId The game ID to recover funds for
+     */
+    function recoverStuckFunds(uint256 gameId)
+        external
+        onlyOwner
+        nonReentrant
+    {
+        uint256 amount = stuckFunds[gameId];
+        if (amount == 0) revert NoStuckFunds();
+
+        Game storage game = games[gameId];
+        address recipient = game.playerA;
+
+        // Clear stuck funds first (CEI pattern)
+        stuckFunds[gameId] = 0;
+
+        // Attempt to send to original recipient
+        (bool success, ) = recipient.call{value: amount}("");
+        if (!success) {
+            // If still fails, send to fee recipient as fallback
+            (bool fallbackSuccess, ) = feeRecipient.call{value: amount}("");
+            if (!fallbackSuccess) revert TransferFailed();
+            recipient = feeRecipient;
+        }
+
+        emit StuckFundsRecovered(gameId, recipient, amount);
+    }
+
+    /**
      * @notice Pause the contract (emergency)
      */
     function pause() external onlyOwner {
@@ -615,9 +669,11 @@ contract CoinFlip is ReentrancyGuard, Pausable, Ownable, AutomationCompatibleInt
 
                 if (success) {
                     emit GameAutoCancelled(gameId, game.playerA, refundAmount, msg.sender);
+                } else {
+                    // Track stuck funds for later recovery
+                    stuckFunds[gameId] = refundAmount;
+                    emit RefundFailed(gameId, game.playerA, refundAmount);
                 }
-                // Note: If refund fails, game is still cancelled but funds are stuck
-                // This is rare and can be handled via emergencyRefund if needed
             }
         }
     }
@@ -763,8 +819,13 @@ contract CoinFlip is ReentrancyGuard, Pausable, Ownable, AutomationCompatibleInt
         uint256 gameId = vrfRequests[requestId];
         Game storage game = games[gameId];
 
-        // Validate state
-        if (game.state != GameState.LOCKED) revert InvalidGameState();
+        // Gracefully handle race condition where game was cancelled via claimVrfTimeout
+        // before VRF callback arrived. Simply return without processing.
+        if (game.state != GameState.LOCKED) {
+            // Clear the request mapping to prevent future issues
+            delete vrfRequests[requestId];
+            return;
+        }
 
         // Determine coin flip result (50/50 odds)
         bool coinResult = (randomWords[0] % 2) == 1;
