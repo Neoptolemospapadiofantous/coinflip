@@ -62,7 +62,7 @@ export function useOptimisticUpdates() {
 
     devLog.log(`⚡ [Optimistic] Created game with tx: ${txHash.slice(0, 10)}...`);
 
-    // Add to pending games cache (with deduplication)
+    // Add to pending games cache (with deduplication) - shows in lobby immediately
     queryClient.setQueryData(['games', 'pending'], (old: Game[] | undefined) => {
       if (!old) return [optimisticGame];
       // Check if this optimistic game already exists to prevent duplicates
@@ -74,30 +74,32 @@ export function useOptimisticUpdates() {
       return [optimisticGame, ...old];
     });
 
-    // Add to active games in store
-    addActiveGame(optimisticGame);
+    // NOTE: We no longer add to Zustand store - ActiveGamesPanel uses DB-backed
+    // pending_transactions instead. The React Query cache update above is still
+    // needed to show the game in the lobby/queue page immediately.
 
     return optimisticGame;
-  }, [address, queryClient, addActiveGame]);
+  }, [address, queryClient]);
 
   /**
    * Remove optimistic game when real game arrives
-   * Called by RealtimeSync when INSERT with matching tx_hash is received
+   * Called when INSERT with matching tx_hash is received
+   * Only removes from React Query cache (not Zustand - we don't add there anymore)
    */
   const removeOptimisticGame = useCallback((txHash: string) => {
     const optimisticId = `optimistic-${txHash.toLowerCase().slice(0, 10)}`;
 
-    devLog.log(`⚡ [Optimistic] Removing optimistic game: ${optimisticId}`);
+    devLog.log(`⚡ [Optimistic] Removing optimistic game from cache: ${optimisticId}`);
 
-    // Remove from pending games cache
+    // Remove from pending games cache (lobby display)
     queryClient.setQueryData(['games', 'pending'], (old: Game[] | undefined) => {
       if (!old) return [];
       return old.filter(g => g.id !== optimisticId);
     });
 
-    // Remove from active games
-    removeActiveGame(optimisticId);
-  }, [queryClient, removeActiveGame]);
+    // NOTE: No longer removing from Zustand activeGames - we don't add optimistic games there anymore
+    // ActiveGamesPanel uses DB-backed pending_transactions instead
+  }, [queryClient]);
 
   /**
    * Optimistically update a game to matched status
@@ -158,6 +160,7 @@ export function useOptimisticUpdates() {
 
   /**
    * Rollback optimistic create if transaction fails
+   * Only removes from React Query cache (not Zustand - we don't add there anymore)
    */
   const rollbackOptimisticCreate = useCallback((txHash: string) => {
     const optimisticId = `optimistic-${txHash.toLowerCase().slice(0, 10)}`;
@@ -168,8 +171,8 @@ export function useOptimisticUpdates() {
       old?.filter(g => g.id !== optimisticId) || []
     );
 
-    removeActiveGame(optimisticId);
-  }, [queryClient, removeActiveGame]);
+    // NOTE: No longer removing from Zustand - we don't add optimistic games there anymore
+  }, [queryClient]);
 
   /**
    * Rollback optimistic join if transaction fails

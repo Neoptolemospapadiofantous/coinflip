@@ -36,6 +36,7 @@ import { playSound } from '@/lib/sounds';
 import { Game } from '@/types/game';
 import { Tier } from '@/types/tier';
 import { usePendingTransactions } from '@/hooks/usePendingTransactions';
+import { useNotificationState } from '@/hooks/useNotificationState';
 
 // Type for selected game with attached tier info
 // Use tierInfo to avoid conflict with Game.tier (which is number)
@@ -144,6 +145,9 @@ export default function QueuePage() {
     markFailed,
     removePendingTransaction,
   } = usePendingTransactions();
+
+  // DB-backed notification state for deduplication across devices/tabs
+  const { markModalShown } = useNotificationState();
   const queryClient = useQueryClient();
 
   // Refs for cleanup
@@ -190,7 +194,8 @@ export default function QueuePage() {
       // Update game in store to matched status
       updateActiveGame(matchedGame);
 
-      // Immediately queue the matched modal (don't wait for realtime)
+      // Mark as shown in DB BEFORE queuing to prevent duplicates across tabs/refreshes
+      markModalShown(matchedGame.id, 'matched');
       queueModal(matchedGame, 'matched');
 
       // Show success feedback
@@ -201,7 +206,7 @@ export default function QueuePage() {
       setIsDialogOpen(false);
       setSelectedGame(null);
     }
-  }, [isSuccess, joinedGameId, selectedGame, address, queryClient, finishJoiningGame, updateActiveGame, queueModal]);
+  }, [isSuccess, joinedGameId, selectedGame, address, queryClient, finishJoiningGame, updateActiveGame, queueModal, markModalShown]);
 
   // Handle join error - revert optimistic update
   useEffect(() => {

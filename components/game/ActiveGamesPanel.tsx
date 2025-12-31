@@ -4,12 +4,14 @@ import { useMemo, useState, useEffect, memo } from 'react';
 import { Card, Flex, Heading, Text, Badge, ScrollArea, IconButton } from '@radix-ui/themes';
 import { useGameStore, MAX_CONCURRENT_GAMES } from '@/store/gameStore';
 import { useUserActiveGames } from '@/hooks/useGames';
+import { usePendingTransactions, PendingTransaction } from '@/hooks/usePendingTransactions';
 import { Game } from '@/types/game';
 import { Users, Loader2, Trophy, ChevronRight, Wifi, WifiOff, Clock, ChevronDown, ChevronUp, RefreshCw } from 'lucide-react';
-import { formatCurrency, formatGameId, safeStorage, devLog } from '@/lib/utils';
+import { formatCurrency, formatGameId, safeStorage } from '@/lib/utils';
 import { useAccount } from 'wagmi';
 import { useConnectionStatus } from '@/hooks/useRealtimeSync';
 import { formatGameTimeRemaining, isGameWarning, isGameExpired } from '@/hooks/useGameTimeout';
+import { parseEther } from 'viem';
 
 const PANEL_COLLAPSED_KEY = 'coinflip_active_games_collapsed';
 
@@ -44,6 +46,57 @@ function ConnectionStatusIndicator() {
   );
 }
 
+// Card for DB-backed pending transactions (Confirming... state)
+interface PendingTxCardProps {
+  tx: PendingTransaction;
+}
+
+const PendingTxCard = memo(function PendingTxCard({ tx }: PendingTxCardProps) {
+  // Use amount_eth from pending transaction (stored as string, e.g., "0.001")
+  const amount = tx.amount_eth ? parseEther(tx.amount_eth) : BigInt(0);
+
+  const getTypeLabel = () => {
+    switch (tx.tx_type) {
+      case 'create': return 'Creating Game';
+      case 'join': return 'Joining Game';
+      case 'cancel': return 'Cancelling Game';
+      default: return 'Processing';
+    }
+  };
+
+  return (
+    <Card className="card-simple opacity-75 transition-all">
+      <Flex direction="column" gap="2" p="3">
+        <Flex justify="between" align="center">
+          <Text size="1" className="font-mono text-gray-500">
+            Pending...
+          </Text>
+          <Badge size="1" color="purple" variant="soft">
+            <Flex align="center" gap="1">
+              <Loader2 className="w-3 h-3 animate-spin" />
+              Confirming...
+            </Flex>
+          </Badge>
+        </Flex>
+
+        <Flex justify="between" align="center">
+          <Flex align="center" gap="2">
+            <Text size="2">{tx.choice ? '🪙' : '👑'}</Text>
+            <Text size="2" weight="bold">
+              {formatCurrency(amount)}
+            </Text>
+          </Flex>
+          <Text size="1" className="text-purple-400">{getTypeLabel()}</Text>
+        </Flex>
+
+        <Text size="1" className="text-purple-400">
+          Waiting for blockchain confirmation...
+        </Text>
+      </Flex>
+    </Card>
+  );
+});
+
 interface ActiveGameCardProps {
   game: Game;
   onViewGame: (game: Game) => void;
@@ -51,22 +104,17 @@ interface ActiveGameCardProps {
 }
 
 // Memoized to prevent re-renders when parent updates but props haven't changed
+// This component now only handles real DB-backed games (not optimistic/pending transactions)
 const ActiveGameCard = memo(function ActiveGameCard({ game, onViewGame, userAddress }: ActiveGameCardProps) {
   const isCreator = game.creator_address?.toLowerCase() === userAddress?.toLowerCase();
   const isWinner = game.winner_address?.toLowerCase() === userAddress?.toLowerCase();
   const userChoice = isCreator ? game.creator_choice : game.joiner_choice;
 
-  // Check if this is an optimistic (unconfirmed) game
-  const isOptimistic = game.id.startsWith('optimistic-');
-
-  // Time-based states for pending games (not applicable for optimistic games)
-  const warning = !isOptimistic && game.status === 'pending' && isGameWarning(game);
-  const expired = !isOptimistic && game.status === 'pending' && isGameExpired(game);
+  // Time-based states for pending games
+  const warning = game.status === 'pending' && isGameWarning(game);
+  const expired = game.status === 'pending' && isGameExpired(game);
 
   const getStatusColor = () => {
-    // Optimistic games show as confirming (purple/blue)
-    if (isOptimistic) return 'purple';
-
     if (game.status === 'pending') {
       if (expired) return 'red';
       if (warning) return 'orange';
@@ -83,9 +131,6 @@ const ActiveGameCard = memo(function ActiveGameCard({ game, onViewGame, userAddr
   };
 
   const getStatusIcon = () => {
-    // Optimistic games show spinner
-    if (isOptimistic) return <Loader2 className="w-3 h-3 animate-spin" />;
-
     switch (game.status) {
       case 'pending':
         return <Users className="w-3 h-3" />;
@@ -99,9 +144,6 @@ const ActiveGameCard = memo(function ActiveGameCard({ game, onViewGame, userAddr
   };
 
   const getStatusText = () => {
-    // Optimistic games show "Confirming"
-    if (isOptimistic) return 'Confirming...';
-
     switch (game.status) {
       case 'pending':
         return 'Waiting';
@@ -123,13 +165,13 @@ const ActiveGameCard = memo(function ActiveGameCard({ game, onViewGame, userAddr
 
   return (
     <Card
-      className={`card-simple ${isOptimistic ? 'opacity-75' : 'cursor-pointer hover:border-cyan-500/50'} transition-all ${getBorderClass()}`}
-      onClick={() => !isOptimistic && onViewGame(game)}
+      className={`card-simple cursor-pointer hover:border-cyan-500/50 transition-all ${getBorderClass()}`}
+      onClick={() => onViewGame(game)}
     >
       <Flex direction="column" gap="2" p="3">
         <Flex justify="between" align="center">
           <Text size="1" className="font-mono text-gray-500">
-            {isOptimistic ? 'Pending...' : formatGameId(game.id)}
+            {formatGameId(game.id)}
           </Text>
           <Badge size="1" color={getStatusColor()} variant="soft">
             <Flex align="center" gap="1">
@@ -149,21 +191,14 @@ const ActiveGameCard = memo(function ActiveGameCard({ game, onViewGame, userAddr
           <ChevronRight className="w-4 h-4 text-gray-500" />
         </Flex>
 
-        {/* Countdown timer for pending games (not for optimistic) */}
-        {game.status === 'pending' && !isOptimistic && (
+        {/* Countdown timer for pending games */}
+        {game.status === 'pending' && (
           <Flex align="center" gap="1">
             <Clock className={`w-3 h-3 ${expired ? 'text-red-400' : warning ? 'text-yellow-400' : 'text-gray-400'}`} />
             <Text size="1" className={expired ? 'text-red-400' : warning ? 'text-yellow-400' : 'text-gray-400'}>
               {formatGameTimeRemaining(game)}
             </Text>
           </Flex>
-        )}
-
-        {/* Show confirming message for optimistic games */}
-        {isOptimistic && (
-          <Text size="1" className="text-purple-400">
-            Waiting for blockchain confirmation...
-          </Text>
         )}
 
         {game.status === 'resolved' && (
@@ -176,64 +211,32 @@ const ActiveGameCard = memo(function ActiveGameCard({ game, onViewGame, userAddr
   );
 });
 
-// Maximum time to wait for optimistic game confirmation (2 minutes)
-const OPTIMISTIC_TIMEOUT_MS = 2 * 60 * 1000;
-
 export function ActiveGamesPanel() {
   const { address } = useAccount();
   // DB-backed active games (source of truth)
   const { data: dbActiveGames = [] } = useUserActiveGames(address);
-  // Get raw activeGames map from Zustand (stable reference)
-  const activeGamesMap = useGameStore((state) => state.activeGames);
-  const { queueModal, removeActiveGame } = useGameStore();
+  // DB-backed pending transactions (Confirming... state)
+  const { pendingTransactions } = usePendingTransactions();
+  const { queueModal } = useGameStore();
 
-  // Extract optimistic games from the map (filtered in useMemo for stability)
-  const optimisticGames = useMemo(() => {
-    const games: Game[] = [];
-    activeGamesMap.forEach((entry) => {
-      if (entry.game.id.startsWith('optimistic-')) {
-        games.push(entry.game);
-      }
-    });
-    return games;
-  }, [activeGamesMap]);
   const [, setTick] = useState(0);
   const [isCollapsed, setIsCollapsed] = useState(() => {
     return safeStorage.getItem(PANEL_COLLAPSED_KEY) === 'true';
   });
 
-  // Merge DB games with optimistic games (optimistic first, then DB)
-  const activeGames = useMemo(() => {
-    const dbGameIds = new Set(dbActiveGames.map(g => g.id));
-    // Filter out optimistic games that have been confirmed (exist in DB)
-    const pendingOptimistic = optimisticGames.filter(g => {
-      // Check if real game exists by matching tx_hash
-      const txHashPrefix = g.tx_hash?.toLowerCase().slice(0, 10) || '';
-      return !dbActiveGames.some(dbGame =>
-        dbGame.tx_hash?.toLowerCase().startsWith(txHashPrefix)
-      );
-    });
-    return [...pendingOptimistic, ...dbActiveGames];
-  }, [dbActiveGames, optimisticGames]);
+  // Filter pending transactions to only show 'create' type (game creation confirmations)
+  // Join/cancel transactions don't need to show in the panel as separate items
+  const pendingCreateTxs = useMemo(() => {
+    return pendingTransactions.filter(tx => tx.tx_type === 'create');
+  }, [pendingTransactions]);
 
   // Force re-render every second to update countdown timers
-  // Also cleanup stale optimistic games
   useEffect(() => {
     const interval = setInterval(() => {
       setTick(t => t + 1);
-
-      // Cleanup stale optimistic games (those pending for > 2 minutes)
-      const now = Date.now();
-      optimisticGames.forEach(game => {
-        const createdTime = new Date(game.created_at).getTime();
-        if (now - createdTime > OPTIMISTIC_TIMEOUT_MS) {
-          devLog.log(`🧹 Removing stale optimistic game: ${game.id}`);
-          removeActiveGame(game.id);
-        }
-      });
     }, 1000);
     return () => clearInterval(interval);
-  }, [optimisticGames, removeActiveGame]);
+  }, []);
 
   // Persist collapse state
   const toggleCollapsed = () => {
@@ -256,17 +259,20 @@ export function ActiveGamesPanel() {
   // Also deduplicate by ID as a safeguard against race conditions
   const visibleGames = useMemo(() => {
     const seen = new Set<string>();
-    return activeGames
+    return dbActiveGames
       .filter((g) => g.status === 'pending' || g.status === 'matched')
       .filter((g) => {
         if (seen.has(g.id)) return false;
         seen.add(g.id);
         return true;
       });
-  }, [activeGames]);
+  }, [dbActiveGames]);
 
-  // Don't render if no visible games
-  if (visibleGames.length === 0) {
+  // Total count includes both pending transactions and visible games
+  const totalCount = pendingCreateTxs.length + visibleGames.length;
+
+  // Don't render if nothing to show
+  if (totalCount === 0) {
     return null;
   }
 
@@ -277,7 +283,7 @@ export function ActiveGamesPanel() {
           <Flex align="center" gap="2">
             <Heading size="3">Active Games</Heading>
             <Badge size="1" color="cyan">
-              {visibleGames.length}/{MAX_CONCURRENT_GAMES}
+              {totalCount}/{MAX_CONCURRENT_GAMES}
             </Badge>
           </Flex>
           <IconButton
@@ -295,6 +301,11 @@ export function ActiveGamesPanel() {
           <>
             <ScrollArea style={{ maxHeight: '200px' }}>
               <Flex direction="column" gap="2">
+                {/* Pending transactions (Confirming...) - shown first */}
+                {pendingCreateTxs.map((tx) => (
+                  <PendingTxCard key={`tx-${tx.id}`} tx={tx} />
+                ))}
+                {/* DB-backed active games */}
                 {visibleGames.map((game) => (
                   <ActiveGameCard
                     key={game.id}

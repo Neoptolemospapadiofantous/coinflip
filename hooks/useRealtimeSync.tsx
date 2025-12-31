@@ -51,13 +51,13 @@ function notifyListeners() {
 export function useRealtimeSync() {
   const queryClient = useQueryClient();
   const { address } = useAccount();
-  const { updateActiveGame, addActiveGame, removeActiveGame, queueModal } = useGameStore();
+  const { updateActiveGame, addActiveGame, removeActiveGame } = useGameStore();
   const [isConnected, setIsConnected] = useState(false);
 
   // Use refs to avoid recreating callbacks and breaking the subscription
   const queryClientRef = useRef(queryClient);
   const addressRef = useRef(address);
-  const actionsRef = useRef({ updateActiveGame, addActiveGame, removeActiveGame, queueModal });
+  const actionsRef = useRef({ updateActiveGame, addActiveGame, removeActiveGame });
   const fallbackIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const fallbackRetryCountRef = useRef(0);
   const initialPollTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -68,7 +68,7 @@ export function useRealtimeSync() {
   // Keep refs updated
   queryClientRef.current = queryClient;
   addressRef.current = address;
-  actionsRef.current = { updateActiveGame, addActiveGame, removeActiveGame, queueModal };
+  actionsRef.current = { updateActiveGame, addActiveGame, removeActiveGame };
 
   // Fallback polling function
   const fallbackPoll = () => {
@@ -128,14 +128,11 @@ export function useRealtimeSync() {
               queryClientRef.current.invalidateQueries({ queryKey: ['games', 'active'] });
             }
 
-            // If this is the user's game, update active games (replace optimistic with real)
+            // If this is the user's game, add to active games for modal tracking
+            // NOTE: We no longer remove optimistic games from Zustand - we don't add them there anymore
+            // ActiveGamesPanel uses DB-backed pending_transactions instead
             const userAddress = addressRef.current?.toLowerCase();
             if (userAddress && game.creator_address?.toLowerCase() === userAddress) {
-              // Remove optimistic game from active games (if exists)
-              if (optimisticId) {
-                actionsRef.current.removeActiveGame(optimisticId);
-              }
-              // Add the real game
               actionsRef.current.updateActiveGame(game);
             }
 
@@ -208,12 +205,11 @@ export function useRealtimeSync() {
               actionsRef.current.updateActiveGame(game);
 
               // Handle status transitions
+              // NOTE: Modal queuing is handled by useActiveGameMonitor with DB-backed deduplication
+              // This hook only handles cache updates and active game state management
               if (statusChanged) {
                 devLog.log('🔄 [RealtimeSync] User game status changed:', game.id, cachedStatus, '→', game.status);
-                if (game.status === 'matched') {
-                  actionsRef.current.queueModal(game, 'matched');
-                } else if (game.status === 'resolved') {
-                  actionsRef.current.queueModal(game, 'resolved');
+                if (game.status === 'resolved') {
                   // Auto-remove from active games after delay (prevent duplicates)
                   const existingTimeout = autoRemoveTimeoutsRef.current.get(game.id);
                   if (existingTimeout) {

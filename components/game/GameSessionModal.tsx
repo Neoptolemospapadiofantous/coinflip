@@ -133,11 +133,16 @@ export function GameSessionModal({ game, open, onClose, userAddress, modalType }
 
     // Handle status transitions
     if (game.status === 'matched') {
-      // Start VRF timer if not already started
-      if (!vrfStartTimeRef.current) {
-        vrfStartTimeRef.current = Date.now();
-        setVrfElapsedSeconds(0);
-        setVrfTimedOut(false);
+      // Use matched_at from DB as the VRF start time (persists across refreshes)
+      // Fall back to Date.now() if matched_at is not yet available
+      const matchedTime = game.matched_at ? new Date(game.matched_at).getTime() : Date.now();
+
+      if (!vrfStartTimeRef.current || vrfStartTimeRef.current !== matchedTime) {
+        vrfStartTimeRef.current = matchedTime;
+        // Calculate initial elapsed time from DB timestamp
+        const initialElapsed = Math.floor((Date.now() - matchedTime) / 1000);
+        setVrfElapsedSeconds(initialElapsed);
+        setVrfTimedOut(initialElapsed >= VRF_TIMEOUT_SECONDS);
       }
 
       // Play match sound and show toast once (check DB to prevent repeats across refreshes)
@@ -175,8 +180,8 @@ export function GameSessionModal({ game, open, onClose, userAddress, modalType }
       }
       setVrfTimedOut(false);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- Intentionally using game?.id and game?.status to prevent re-renders
-  }, [game?.id, game?.status, validation.valid, alwaysSkipAnimation]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- Intentionally using specific game fields to prevent re-renders
+  }, [game?.id, game?.status, game?.matched_at, validation.valid, alwaysSkipAnimation]);
 
   // Auto-refetch on validation errors (incomplete VRF data)
   useEffect(() => {

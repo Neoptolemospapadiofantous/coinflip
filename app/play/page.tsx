@@ -18,7 +18,7 @@ import {
 import { Layout } from '@/components/layout/Layout';
 import { TierSelector } from '@/components/game/TierSelector';
 import { CoinChoice } from '@/components/game/CoinChoice';
-import { useGameStore, MAX_CONCURRENT_GAMES, useActiveGamesList, useSelectedTier, useCoinChoice, usePendingGamesCount } from '@/store/gameStore';
+import { useGameStore, MAX_CONCURRENT_GAMES, useSelectedTier, useCoinChoice } from '@/store/gameStore';
 import { useCreateGame, useCancelGame } from '@/hooks/useContract';
 import { useTiers } from '@/hooks/useTiers';
 import { useCreatedGameTracking } from '@/hooks/useCreatedGameTracking';
@@ -32,8 +32,9 @@ import { useQueryClient } from '@tanstack/react-query';
 import { invalidateGameQueries, removeGameFromPendingCache } from '@/lib/queryUtils';
 import { showToast } from '@/lib/toast';
 import { playSound } from '@/lib/sounds';
-import { usePendingTransactions } from '@/hooks/usePendingTransactions';
+import { usePendingTransactions, useGameLimits } from '@/hooks/usePendingTransactions';
 import { useUserPreferences } from '@/hooks/useUserPreferences';
+import { useNotificationState } from '@/hooks/useNotificationState';
 
 enum GameStep {
   SELECT_TIER = 'select_tier',
@@ -51,19 +52,19 @@ export default function PlayPage() {
   // Use optimized selectors for state to prevent unnecessary re-renders
   const selectedTier = useSelectedTier();
   const coinChoice = useCoinChoice();
-  const pendingGamesCount = usePendingGamesCount();
   // Actions are stable references, safe to destructure directly
   const {
     resetGameCreation,
     addActiveGame,
     updateActiveGame,
     queueModal,
-    getActiveGamesCount,
-    canCreateNewGame,
     startCancellingGame,
     finishCancellingGame,
     isGameCancelling,
   } = useGameStore();
+
+  // DB-backed game limits (replaces Zustand-based getActiveGamesCount/canCreateNewGame)
+  const { activeGamesCount, canCreateNewGame, confirmedActiveCount: pendingGamesCount } = useGameLimits();
 
   // DB-backed pending transactions for persistence across refreshes
   const {
@@ -76,14 +77,16 @@ export default function PlayPage() {
   // DB-backed user preferences for quick re-bet
   const { lastGameSettings, clearLastGameSettings } = useUserPreferences();
 
+  // DB-backed notification state for deduplication across devices/tabs
+  const { markModalShown } = useNotificationState();
+
   // Ref to track the DB pending tx ID for the current create operation
   const pendingTxIdRef = useRef<number | null>(null);
   const { createGame, isLoading, isSuccess, txHash, error, wasRejected: createWasRejected, reset: resetCreateGame } = useCreateGame();
   const { cancelGame, isLoading: isCancelling, error: cancelError, isSuccess: cancelSuccess, wasRejected: cancelWasRejected, reset: resetCancelState } = useCancelGame();
   const { data: tiers } = useTiers();
-  const activeGames = useActiveGamesList();
   const queryClient = useQueryClient();
-  const { optimisticCreateGame, rollbackOptimisticCreate, optimisticCancelGame, rollbackOptimisticCancel } = useOptimisticUpdates();
+  const { optimisticCreateGame, rollbackOptimisticCreate, optimisticCancelGame, rollbackOptimisticCancel, removeOptimisticGame } = useOptimisticUpdates();
 
   // Refs for race condition prevention
   const isCancellingRef = useRef(false);
@@ -93,8 +96,7 @@ export default function PlayPage() {
   const cancellingGameIdRef = useRef<string | null>(null);
 
   const currentTier = tiers?.find((t) => t.id === selectedTier);
-  const activeGamesCount = getActiveGamesCount();
-  const canCreate = canCreateNewGame();
+  const canCreate = canCreateNewGame;
 
   // Stable reset function - only resets the creation form, not active games
   const handleReset = useCallback(() => {
@@ -121,18 +123,24 @@ export default function PlayPage() {
       markDbTxConfirmed(pendingTxIdRef.current);
       pendingTxIdRef.current = null;
     }
-    // Add to active games
+    // Remove optimistic game now that real one exists
+    if (game.tx_hash) {
+      removeOptimisticGame(game.tx_hash);
+    }
+    // Add the real game to active games
     addActiveGame(game);
     // Show toast and play sound
     showToast.gameCreated(formatGameId(game.id));
     playSound.success();
-  }, [addActiveGame, markDbTxConfirmed]);
+  }, [addActiveGame, markDbTxConfirmed, removeOptimisticGame]);
 
   const handleGameMatched = useCallback((game: Game) => {
     if (!mountedRef.current) return;
     isMatchedRef.current = true;
     devLog.log('🎮 Game matched! Queueing modal...');
     updateActiveGame(game);
+    // Mark as shown in DB BEFORE queuing to prevent duplicates across tabs/refreshes
+    markModalShown(game.id, 'matched');
     queueModal(game, 'matched');
     // Reset creation UI after a brief delay to show transition
     setTimeout(() => {
@@ -142,18 +150,20 @@ export default function PlayPage() {
         setStep(GameStep.SELECT_TIER);
       }
     }, 500);
-  }, [updateActiveGame, queueModal, resetGameCreation]);
+  }, [updateActiveGame, queueModal, resetGameCreation, markModalShown]);
 
   const handleGameResolved = useCallback((game: Game) => {
     if (!mountedRef.current) return;
     devLog.log('🎮 Game resolved:', game.winner_address);
     updateActiveGame(game);
+    // Mark as shown in DB BEFORE queuing to prevent duplicates across tabs/refreshes
+    markModalShown(game.id, 'resolved');
     queueModal(game, 'resolved');
     // Reset creation UI immediately
     cancelTrackingRef.current?.();
     resetGameCreation();
     setStep(GameStep.SELECT_TIER);
-  }, [updateActiveGame, queueModal, resetGameCreation]);
+  }, [updateActiveGame, queueModal, resetGameCreation, markModalShown]);
 
   const handleGameCancelled = useCallback((_game: Game) => {
     if (!mountedRef.current) return;

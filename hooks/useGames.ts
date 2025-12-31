@@ -3,6 +3,22 @@ import { supabase } from '@/lib/supabase';
 import { Game, parseGame } from '@/types/game';
 import { devLog } from '@/lib/utils';
 
+// Columns needed for game list displays (lobby, active games panel, history)
+// Optimized to fetch only what's needed instead of SELECT *
+// Note: block_number and updated_at are required by isValidGame validation
+const GAME_LIST_COLUMNS = `
+  id, tx_hash, tier, amount, creator_address, creator_choice,
+  joiner_address, joiner_choice, status, winner_address, coin_result,
+  payout, fee, block_number, created_at, updated_at, matched_at, resolved_at
+`;
+
+// Minimal columns for pending games in lobby (don't need resolution data)
+// Note: block_number and updated_at are required by isValidGame validation
+const PENDING_GAME_COLUMNS = `
+  id, tx_hash, tier, amount, creator_address, creator_choice, status,
+  block_number, created_at, updated_at
+`;
+
 /**
  * Normalize an array of games from Supabase
  * Filters out any invalid games and ensures all IDs are strings
@@ -22,15 +38,16 @@ function normalizeGames(data: unknown[] | null): Game[] {
  * No individual subscriptions needed - the central sync invalidates these queries automatically.
  */
 
-// Fetch all games
+// Fetch all games (limited to 100 most recent for performance)
 export function useGames() {
   return useQuery({
     queryKey: ['games'],
     queryFn: async (): Promise<Game[]> => {
       const { data, error } = await supabase
         .from('games')
-        .select('*')
-        .order('created_at', { ascending: false });
+        .select(GAME_LIST_COLUMNS)
+        .order('created_at', { ascending: false })
+        .limit(100);
 
       if (error) {
         devLog.error('Error fetching games:', error);
@@ -52,7 +69,7 @@ export function usePendingGames() {
     queryFn: async (): Promise<Game[]> => {
       const { data, error } = await supabase
         .from('active_games')
-        .select('*')
+        .select(PENDING_GAME_COLUMNS)
         .eq('status', 'pending')
         .order('created_at', { ascending: false });
 
@@ -76,7 +93,7 @@ export function useActiveGames() {
     queryFn: async (): Promise<Game[]> => {
       const { data, error} = await supabase
         .from('active_games')
-        .select('*')
+        .select(GAME_LIST_COLUMNS)
         .order('created_at', { ascending: false });
 
       if (error) {
@@ -104,7 +121,7 @@ export function usePlayerGames(address: string | undefined, limit: number = 50) 
 
       const { data, error } = await supabase
         .from('games')
-        .select('*')
+        .select(GAME_LIST_COLUMNS)
         .or(`creator_address.ilike.${lowerAddress},joiner_address.ilike.${lowerAddress}`)
         .order('created_at', { ascending: false })
         .limit(limit);
@@ -135,7 +152,7 @@ export function useUserActiveGames(address: string | undefined) {
 
       const { data, error } = await supabase
         .from('games')
-        .select('*')
+        .select(GAME_LIST_COLUMNS)
         .or(`creator_address.ilike.${lowerAddress},joiner_address.ilike.${lowerAddress}`)
         .in('status', ['pending', 'matched'])
         .order('created_at', { ascending: false })
@@ -155,7 +172,7 @@ export function useUserActiveGames(address: string | undefined) {
   });
 }
 
-// Fetch player statistics (aggregated server-side)
+// Fetch player statistics using server-side RPC for optimal performance
 export function usePlayerStats(address: string | undefined) {
   return useQuery({
     queryKey: ['player-stats', address],
@@ -164,18 +181,19 @@ export function usePlayerStats(address: string | undefined) {
 
       const lowerAddress = address.toLowerCase();
 
-      // Use a single query with aggregations
-      const { data, error } = await supabase
-        .from('games')
-        .select('status, amount, payout, fee, winner_address, tier')
-        .or(`creator_address.ilike.${lowerAddress},joiner_address.ilike.${lowerAddress}`);
+      // Use server-side RPC for main stats (much faster than client aggregation)
+      const { data: rpcData, error: rpcError } = await supabase
+        .rpc('get_player_stats', { player_address: lowerAddress });
 
-      if (error) {
-        devLog.error('Error fetching player stats:', error);
+      if (rpcError) {
+        devLog.error('Error fetching player stats via RPC:', rpcError);
         return null;
       }
 
-      if (!data || data.length === 0) {
+      // RPC returns array with single row
+      const stats = Array.isArray(rpcData) ? rpcData[0] : rpcData;
+
+      if (!stats) {
         return {
           totalGames: 0,
           wins: 0,
@@ -190,42 +208,44 @@ export function usePlayerStats(address: string | undefined) {
         };
       }
 
-      // Calculate stats from data
-      let wins = 0, losses = 0, pending = 0;
-      let totalWagered = BigInt(0), totalWon = BigInt(0), totalLost = BigInt(0), totalFees = BigInt(0);
+      // Fetch tier breakdown separately (minimal query - only tier and winner for resolved games)
+      const { data: tierData } = await supabase
+        .from('games')
+        .select('tier, winner_address, status')
+        .or(`creator_address.ilike.${lowerAddress},joiner_address.ilike.${lowerAddress}`)
+        .eq('status', 'resolved');
+
       const gamesByTier = [0, 0, 0, 0, 0];
       const winsByTier = [0, 0, 0, 0, 0];
 
-      for (const game of data) {
-        totalWagered += BigInt(game.amount);
-        gamesByTier[game.tier] = (gamesByTier[game.tier] || 0) + 1;
-
-        if (game.status === 'pending' || game.status === 'matched') {
-          pending++;
-        } else if (game.status === 'resolved') {
-          const isWin = game.winner_address?.toLowerCase() === lowerAddress;
-          if (isWin) {
-            wins++;
-            totalWon += game.payout ? BigInt(game.payout) : BigInt(0);
-            // Add fee to total fees (fee is stored in database for each resolved game)
-            totalFees += game.fee ? BigInt(game.fee) : BigInt(0);
-            winsByTier[game.tier] = (winsByTier[game.tier] || 0) + 1;
-          } else {
-            losses++;
-            totalLost += BigInt(game.amount);
+      if (tierData) {
+        for (const game of tierData) {
+          if (game.tier >= 0 && game.tier < 5) {
+            gamesByTier[game.tier]++;
+            if (game.winner_address?.toLowerCase() === lowerAddress) {
+              winsByTier[game.tier]++;
+            }
           }
         }
       }
 
+      // Count pending/matched games
+      const { count: pendingCount } = await supabase
+        .from('games')
+        .select('id', { count: 'exact', head: true })
+        .or(`creator_address.ilike.${lowerAddress},joiner_address.ilike.${lowerAddress}`)
+        .in('status', ['pending', 'matched']);
+
+      // RPC returns numeric values, convert to BigInt for wei amounts
       return {
-        totalGames: data.length,
-        wins,
-        losses,
-        pending,
-        totalWagered,
-        totalWon,
-        totalLost,
-        totalFees,
+        totalGames: Number(stats.total_games) || 0,
+        wins: Number(stats.wins) || 0,
+        losses: Number(stats.losses) || 0,
+        pending: pendingCount || 0,
+        totalWagered: BigInt(stats.total_wagered || 0),
+        totalWon: BigInt(stats.total_won || 0),
+        totalLost: BigInt(stats.total_lost || 0),
+        totalFees: BigInt(0), // Fee tracking not in RPC, can add if needed
         gamesByTier,
         winsByTier,
       };

@@ -5,6 +5,8 @@ import { useAccount } from 'wagmi';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
 import { devLog } from '@/lib/utils';
+import { useUserActiveGames } from './useGames';
+import { MAX_CONCURRENT_GAMES } from '@/store/gameStore';
 
 export type PendingTxType = 'create' | 'cancel' | 'join';
 export type PendingTxStatus = 'pending' | 'submitted' | 'confirmed' | 'failed' | 'expired';
@@ -349,5 +351,42 @@ export function usePendingTransactionSync() {
     pendingTransactions,
     markConfirmed,
     refetch,
+  };
+}
+
+/**
+ * Hook to get DB-backed game limits for concurrent game enforcement
+ * Combines pending transactions (confirming) + active games (pending/matched)
+ *
+ * This replaces the Zustand-based getActiveGamesCount/canCreateNewGame
+ * to ensure consistent counting from the database source of truth.
+ */
+export function useGameLimits() {
+  const { address } = useAccount();
+  const { pendingTransactions } = usePendingTransactions();
+  const { data: dbActiveGames = [] } = useUserActiveGames(address);
+
+  // Count pending create transactions (games being confirmed on blockchain)
+  const pendingCreateCount = pendingTransactions.filter(
+    tx => tx.tx_type === 'create'
+  ).length;
+
+  // Count DB active games (pending/matched status)
+  // Note: useUserActiveGames already filters to pending/matched
+  const confirmedActiveCount = dbActiveGames.length;
+
+  // Total count - these should not overlap because:
+  // - pending_transactions is removed when game appears in DB
+  // - But during brief overlap, it's better to over-count than under-count
+  const totalCount = pendingCreateCount + confirmedActiveCount;
+
+  return {
+    // Total active games (confirming + confirmed)
+    activeGamesCount: totalCount,
+    // Can create a new game?
+    canCreateNewGame: totalCount < MAX_CONCURRENT_GAMES,
+    // Breakdown for debugging
+    pendingCreateCount,
+    confirmedActiveCount,
   };
 }
