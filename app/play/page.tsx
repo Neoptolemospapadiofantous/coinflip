@@ -18,7 +18,7 @@ import {
 import { Layout } from '@/components/layout/Layout';
 import { TierSelector } from '@/components/game/TierSelector';
 import { CoinChoice } from '@/components/game/CoinChoice';
-import { useGameStore, MAX_CONCURRENT_GAMES, useActiveGamesList } from '@/store/gameStore';
+import { useGameStore, MAX_CONCURRENT_GAMES, useActiveGamesList, useSelectedTier, useCoinChoice, usePendingGamesCount } from '@/store/gameStore';
 import { useCreateGame, useCancelGame } from '@/hooks/useContract';
 import { useTiers } from '@/hooks/useTiers';
 import { useCreatedGameTracking } from '@/hooks/useCreatedGameTracking';
@@ -48,9 +48,12 @@ export default function PlayPage() {
   const searchParams = useSearchParams();
   const isQuickRebet = searchParams.get('quickRebet') === 'true';
   const [step, setStep] = useState<GameStep>(GameStep.SELECT_TIER);
+  // Use optimized selectors for state to prevent unnecessary re-renders
+  const selectedTier = useSelectedTier();
+  const coinChoice = useCoinChoice();
+  const pendingGamesCount = usePendingGamesCount();
+  // Actions are stable references, safe to destructure directly
   const {
-    selectedTier,
-    coinChoice,
     resetGameCreation,
     addActiveGame,
     updateActiveGame,
@@ -405,9 +408,6 @@ export default function PlayPage() {
   // Update step based on selection
   const canProceedToChooseSide = selectedTier !== null;
   const canProceedToConfirm = selectedTier !== null && coinChoice !== null;
-
-  // Count pending games (waiting for opponent)
-  const pendingGamesCount = activeGames.filter((g) => g.status === 'pending').length;
 
   if (!isConnected) {
     return (

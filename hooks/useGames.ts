@@ -123,6 +123,38 @@ export function usePlayerGames(address: string | undefined, limit: number = 50) 
   });
 }
 
+// Fetch user's active games (pending/matched) from database
+// This is the source of truth for the Active Games panel
+export function useUserActiveGames(address: string | undefined) {
+  return useQuery({
+    queryKey: ['games', 'user-active', address],
+    queryFn: async (): Promise<Game[]> => {
+      if (!address) return [];
+
+      const lowerAddress = address.toLowerCase();
+
+      const { data, error } = await supabase
+        .from('games')
+        .select('*')
+        .or(`creator_address.ilike.${lowerAddress},joiner_address.ilike.${lowerAddress}`)
+        .in('status', ['pending', 'matched'])
+        .order('created_at', { ascending: false })
+        .limit(10);
+
+      if (error) {
+        devLog.error('Error fetching user active games:', error);
+        throw new Error(`Failed to fetch user active games: ${error.message}`);
+      }
+
+      return normalizeGames(data);
+    },
+    enabled: !!address,
+    staleTime: 5000, // 5 seconds - keep fresh for active games
+    refetchInterval: false, // Realtime sync handles updates
+    retry: 2,
+  });
+}
+
 // Fetch player statistics (aggregated server-side)
 export function usePlayerStats(address: string | undefined) {
   return useQuery({

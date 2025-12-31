@@ -1,8 +1,9 @@
 'use client';
 
-import { useMemo, useState, useEffect } from 'react';
+import { useMemo, useState, useEffect, memo } from 'react';
 import { Card, Flex, Heading, Text, Badge, ScrollArea, IconButton } from '@radix-ui/themes';
-import { useActiveGamesList, useGameStore, MAX_CONCURRENT_GAMES } from '@/store/gameStore';
+import { useGameStore, MAX_CONCURRENT_GAMES } from '@/store/gameStore';
+import { useUserActiveGames } from '@/hooks/useGames';
 import { Game } from '@/types/game';
 import { Users, Loader2, Trophy, ChevronRight, Wifi, WifiOff, Clock, ChevronDown, ChevronUp, RefreshCw } from 'lucide-react';
 import { formatCurrency, formatGameId, safeStorage, devLog } from '@/lib/utils';
@@ -49,7 +50,8 @@ interface ActiveGameCardProps {
   userAddress?: string;
 }
 
-function ActiveGameCard({ game, onViewGame, userAddress }: ActiveGameCardProps) {
+// Memoized to prevent re-renders when parent updates but props haven't changed
+const ActiveGameCard = memo(function ActiveGameCard({ game, onViewGame, userAddress }: ActiveGameCardProps) {
   const isCreator = game.creator_address?.toLowerCase() === userAddress?.toLowerCase();
   const isWinner = game.winner_address?.toLowerCase() === userAddress?.toLowerCase();
   const userChoice = isCreator ? game.creator_choice : game.joiner_choice;
@@ -172,19 +174,47 @@ function ActiveGameCard({ game, onViewGame, userAddress }: ActiveGameCardProps) 
       </Flex>
     </Card>
   );
-}
+});
 
 // Maximum time to wait for optimistic game confirmation (2 minutes)
 const OPTIMISTIC_TIMEOUT_MS = 2 * 60 * 1000;
 
 export function ActiveGamesPanel() {
   const { address } = useAccount();
-  const activeGames = useActiveGamesList();
+  // DB-backed active games (source of truth)
+  const { data: dbActiveGames = [] } = useUserActiveGames(address);
+  // Get raw activeGames map from Zustand (stable reference)
+  const activeGamesMap = useGameStore((state) => state.activeGames);
   const { queueModal, removeActiveGame } = useGameStore();
+
+  // Extract optimistic games from the map (filtered in useMemo for stability)
+  const optimisticGames = useMemo(() => {
+    const games: Game[] = [];
+    activeGamesMap.forEach((entry) => {
+      if (entry.game.id.startsWith('optimistic-')) {
+        games.push(entry.game);
+      }
+    });
+    return games;
+  }, [activeGamesMap]);
   const [, setTick] = useState(0);
   const [isCollapsed, setIsCollapsed] = useState(() => {
     return safeStorage.getItem(PANEL_COLLAPSED_KEY) === 'true';
   });
+
+  // Merge DB games with optimistic games (optimistic first, then DB)
+  const activeGames = useMemo(() => {
+    const dbGameIds = new Set(dbActiveGames.map(g => g.id));
+    // Filter out optimistic games that have been confirmed (exist in DB)
+    const pendingOptimistic = optimisticGames.filter(g => {
+      // Check if real game exists by matching tx_hash
+      const txHashPrefix = g.tx_hash?.toLowerCase().slice(0, 10) || '';
+      return !dbActiveGames.some(dbGame =>
+        dbGame.tx_hash?.toLowerCase().startsWith(txHashPrefix)
+      );
+    });
+    return [...pendingOptimistic, ...dbActiveGames];
+  }, [dbActiveGames, optimisticGames]);
 
   // Force re-render every second to update countdown timers
   // Also cleanup stale optimistic games
@@ -194,18 +224,16 @@ export function ActiveGamesPanel() {
 
       // Cleanup stale optimistic games (those pending for > 2 minutes)
       const now = Date.now();
-      activeGames.forEach(game => {
-        if (game.id.startsWith('optimistic-')) {
-          const createdTime = new Date(game.created_at).getTime();
-          if (now - createdTime > OPTIMISTIC_TIMEOUT_MS) {
-            devLog.log(`🧹 Removing stale optimistic game: ${game.id}`);
-            removeActiveGame(game.id);
-          }
+      optimisticGames.forEach(game => {
+        const createdTime = new Date(game.created_at).getTime();
+        if (now - createdTime > OPTIMISTIC_TIMEOUT_MS) {
+          devLog.log(`🧹 Removing stale optimistic game: ${game.id}`);
+          removeActiveGame(game.id);
         }
       });
     }, 1000);
     return () => clearInterval(interval);
-  }, [activeGames, removeActiveGame]);
+  }, [optimisticGames, removeActiveGame]);
 
   // Persist collapse state
   const toggleCollapsed = () => {
@@ -216,8 +244,7 @@ export function ActiveGamesPanel() {
     });
   };
 
-  // Real-time updates are handled centrally by useRealtimeSync (in Providers)
-  // This component just displays the games from the Zustand store
+  // Real-time updates handled by useRealtimeSync invalidating the query
 
   const handleViewGame = (game: Game) => {
     if (game.status === 'matched' || game.status === 'resolved') {

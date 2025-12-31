@@ -78,6 +78,7 @@ export function useRealtimeSync() {
     queryClientRef.current.invalidateQueries({ queryKey: ['game-stats'] });
     if (addressRef.current) {
       queryClientRef.current.invalidateQueries({ queryKey: ['games', 'player', addressRef.current] });
+      queryClientRef.current.invalidateQueries({ queryKey: ['games', 'user-active', addressRef.current] });
     }
   };
 
@@ -109,6 +110,7 @@ export function useRealtimeSync() {
             const optimisticId = txHashPrefix ? `optimistic-${txHashPrefix}` : '';
 
             // Add new pending game directly to cache for instant UI update
+            // Using setQueryData instead of invalidate to avoid redundant refetch
             if (game.status === 'pending') {
               queryClientRef.current.setQueryData(['games', 'pending'], (old: Game[] | undefined) => {
                 if (!old) return [game];
@@ -118,11 +120,13 @@ export function useRealtimeSync() {
                 );
                 return [game, ...filtered]; // Add real game to front
               });
+              // Only invalidate active games (lightweight) - pending cache is already updated
+              queryClientRef.current.invalidateQueries({ queryKey: ['games', 'active'] });
+            } else {
+              // For non-pending games (rare on INSERT), invalidate to fetch
+              queryClientRef.current.invalidateQueries({ queryKey: ['games', 'pending'] });
+              queryClientRef.current.invalidateQueries({ queryKey: ['games', 'active'] });
             }
-
-            // Also invalidate to ensure consistency
-            queryClientRef.current.invalidateQueries({ queryKey: ['games', 'pending'] });
-            queryClientRef.current.invalidateQueries({ queryKey: ['games', 'active'] });
 
             // If this is the user's game, update active games (replace optimistic with real)
             const userAddress = addressRef.current?.toLowerCase();
@@ -233,8 +237,9 @@ export function useRealtimeSync() {
                 }
               }
 
-              // Invalidate player games
+              // Invalidate player games and active games panel
               queryClientRef.current.invalidateQueries({ queryKey: ['games', 'player', addressRef.current] });
+              queryClientRef.current.invalidateQueries({ queryKey: ['games', 'user-active', addressRef.current] });
             }
 
             // Update stats on resolved games

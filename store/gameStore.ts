@@ -458,3 +458,30 @@ export function useActiveGamesList() {
     .sort((a, b) => b.addedAt - a.addedAt)
     .map((entry) => entry.game);
 }
+
+// ============================================
+// OPTIMIZED SELECTORS - Use these instead of destructuring the whole store
+// ============================================
+
+// State selectors - only re-render when specific state changes
+export const useSelectedTier = () => useGameStore((state) => state.selectedTier);
+export const useCoinChoice = () => useGameStore((state) => state.coinChoice);
+export const useCurrentModalGame = () => useGameStore((state) => state.currentModalGame);
+export const useCurrentModalType = () => useGameStore((state) => state.currentModalType);
+export const useShowGameModal = () => useGameStore((state) => state.showGameModal);
+
+// Computed selectors - derived state
+export const usePendingGamesCount = () => {
+  const activeGames = useGameStore((state) => state.activeGames);
+  let count = 0;
+  activeGames.forEach((entry) => {
+    if (entry.game.status === 'pending') count++;
+  });
+  return count;
+};
+
+export const useActiveGamesCount = () => {
+  const activeGames = useGameStore((state) => state.activeGames);
+  return activeGames.size;
+};
+

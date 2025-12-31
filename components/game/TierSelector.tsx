@@ -18,7 +18,9 @@ export function TierSelector() {
     chainId: chain?.id,
     query: {
       enabled: Boolean(address && chain?.id),
-      refetchInterval: 30000, // Refetch every 30 seconds
+      // Use Wagmi defaults (4s poll) + refetch on focus for better UX after transactions
+      refetchOnWindowFocus: true,
+      staleTime: 10000, // Consider data stale after 10s
     },
   });
 
