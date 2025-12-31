@@ -8,8 +8,8 @@ import { Game, parseGame } from '@/types/game';
 import { useAccount } from 'wagmi';
 import { devLog } from '@/lib/utils';
 
-// Fallback polling with exponential backoff (capped at 15s for better UX)
-const FALLBACK_POLL_INTERVALS = [3000, 5000, 10000, 15000]; // 3s, 5s, 10s, 15s max
+// Fallback polling with exponential backoff (starts at 5s to reduce server load)
+const FALLBACK_POLL_INTERVALS = [5000, 10000, 20000, 30000]; // 5s, 10s, 20s, 30s max
 
 // Add jitter to prevent thundering herd (returns random offset between -25% and +25%)
 function addJitter(interval: number): number {

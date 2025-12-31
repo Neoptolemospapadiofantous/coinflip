@@ -17,6 +17,7 @@ import { Trophy, TrendingUp, Zap, Crown } from 'lucide-react';
 import { formatAddress, formatCurrency } from '@/lib/utils';
 import { createAvatar } from '@dicebear/core';
 import { identicon } from '@dicebear/collection';
+import { memo, useMemo } from 'react';
 
 // Mock leaderboard data (will be replaced with real data from database)
 const mockLeaders = [
@@ -62,20 +63,24 @@ const mockLeaders = [
   },
 ];
 
-function PlayerAvatar({ address }: { address: string }) {
-  const avatar = createAvatar(identicon, {
-    seed: address,
-    size: 40,
-  });
+// Memoized avatar component - prevents regenerating SVG on every render
+const PlayerAvatar = memo(function PlayerAvatar({ address }: { address: string }) {
+  const avatarSrc = useMemo(() => {
+    const avatar = createAvatar(identicon, {
+      seed: address,
+      size: 40,
+    });
+    return avatar.toDataUri();
+  }, [address]);
 
   return (
     <img
-      src={avatar.toDataUri()}
+      src={avatarSrc}
       alt={`Avatar for ${address.slice(0, 6)}...${address.slice(-4)}`}
       className="w-10 h-10 rounded-full overflow-hidden border-2 border-cyan-500/30"
     />
   );
-}
+});
 
 function RankBadge({ rank }: { rank: number }) {
   // 5-Color System: 1st=Yellow(gold), 2nd=Cyan(silver), 3rd=Purple(bronze)

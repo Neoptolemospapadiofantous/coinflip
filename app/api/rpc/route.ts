@@ -91,12 +91,14 @@ const RPC_TIMEOUT = 15000;
 // =============================================================
 
 // Cache TTLs in milliseconds per method
+// Optimized to reduce RPC calls while maintaining reasonable freshness
 const CACHE_TTLS: Record<string, number> = {
   'eth_chainId': 3600000,       // 1 hour (chain ID never changes)
-  'eth_blockNumber': 2000,      // 2 seconds (new block every ~12s on Sepolia)
-  'eth_gasPrice': 5000,         // 5 seconds (gas price changes slowly)
-  'eth_maxPriorityFeePerGas': 5000,
+  'eth_blockNumber': 6000,      // 6 seconds (new block every ~12s, half block time is sufficient)
+  'eth_gasPrice': 15000,        // 15 seconds (gas price doesn't change rapidly)
+  'eth_maxPriorityFeePerGas': 15000, // 15 seconds
   'net_version': 3600000,       // 1 hour (network version doesn't change)
+  'eth_getBalance': 10000,      // 10 seconds (balance updates after tx confirmation)
 };
 
 // Methods that should NOT be cached (state-dependent or transaction-related)
