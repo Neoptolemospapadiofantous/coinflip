@@ -81,8 +81,7 @@ interface GameState {
   removeActiveGame: (gameId: string) => void;
   clearAllActiveGames: () => void;
   getActiveGame: (gameId: string) => Game | undefined;
-  getActiveGamesCount: () => number;
-  canCreateNewGame: () => boolean;
+  // NOTE: getActiveGamesCount and canCreateNewGame removed - use useGameLimits hook instead
 
   // Actions - Optimistic cancel
   startCancellingGame: (gameId: string) => void;
@@ -213,9 +212,7 @@ export const useGameStore = create<GameState>((set, get) => ({
     return entry?.game;
   },
 
-  getActiveGamesCount: () => get().activeGames.size,
-
-  canCreateNewGame: () => get().activeGames.size < MAX_CONCURRENT_GAMES,
+  // NOTE: getActiveGamesCount and canCreateNewGame removed - use useGameLimits hook instead
 
   // Optimistic cancel actions
   startCancellingGame: (gameId) =>
@@ -451,14 +448,6 @@ export const useGameStore = create<GameState>((set, get) => ({
     }),
 }));
 
-// Helper hook to get active games as array (sorted by creation time)
-export function useActiveGamesList() {
-  const activeGames = useGameStore((state) => state.activeGames);
-  return Array.from(activeGames.values())
-    .sort((a, b) => b.addedAt - a.addedAt)
-    .map((entry) => entry.game);
-}
-
 // ============================================
 // OPTIMIZED SELECTORS - Use these instead of destructuring the whole store
 // ============================================
@@ -470,18 +459,7 @@ export const useCurrentModalGame = () => useGameStore((state) => state.currentMo
 export const useCurrentModalType = () => useGameStore((state) => state.currentModalType);
 export const useShowGameModal = () => useGameStore((state) => state.showGameModal);
 
-// Computed selectors - derived state
-export const usePendingGamesCount = () => {
-  const activeGames = useGameStore((state) => state.activeGames);
-  let count = 0;
-  activeGames.forEach((entry) => {
-    if (entry.game.status === 'pending') count++;
-  });
-  return count;
-};
-
-export const useActiveGamesCount = () => {
-  const activeGames = useGameStore((state) => state.activeGames);
-  return activeGames.size;
-};
+// NOTE: useActiveGamesList, usePendingGamesCount, useActiveGamesCount removed
+// Use useGameLimits from usePendingTransactions.ts for DB-backed counts
+// Use useUserActiveGames from useGames.ts for DB-backed game lists
 

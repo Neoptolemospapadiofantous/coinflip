@@ -83,35 +83,9 @@ describe('store/gameStore', () => {
       expect(game).toBeUndefined();
     });
 
-    it('should track active games count', () => {
-      const { addActiveGame, getActiveGamesCount } = useGameStore.getState();
-
-      expect(getActiveGamesCount()).toBe(0);
-
-      addActiveGame(mockGame);
-      expect(getActiveGamesCount()).toBe(1);
-
-      addActiveGame({ ...mockGame, id: '2' });
-      expect(getActiveGamesCount()).toBe(2);
-    });
-
-    it('should enforce max concurrent games limit', () => {
-      const { addActiveGame, canCreateNewGame } = useGameStore.getState();
-
-      // Add maximum games
-      for (let i = 0; i < MAX_CONCURRENT_GAMES; i++) {
-        addActiveGame({ ...mockGame, id: String(i) });
-      }
-
-      expect(canCreateNewGame()).toBe(false);
-    });
-
-    it('should allow new game when under limit', () => {
-      const { addActiveGame, canCreateNewGame } = useGameStore.getState();
-
-      addActiveGame(mockGame);
-      expect(canCreateNewGame()).toBe(true);
-    });
+    // NOTE: getActiveGamesCount and canCreateNewGame tests removed
+    // These functions were moved to useGameLimits hook (DB-backed)
+    // See hooks/usePendingTransactions.ts for the new implementation
   });
 
   describe('Optimistic Cancel', () => {

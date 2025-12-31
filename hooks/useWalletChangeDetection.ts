@@ -3,6 +3,7 @@
 import { useEffect, useRef, useCallback } from 'react';
 import { useAccount } from 'wagmi';
 import { useGameStore } from '@/store/gameStore';
+import { useGameLimits } from '@/hooks/usePendingTransactions';
 import { showToast } from '@/lib/toast';
 import { playSound } from '@/lib/sounds';
 import { devLog } from '@/lib/utils';
@@ -14,7 +15,9 @@ import { devLog } from '@/lib/utils';
 export function useWalletChangeDetection() {
   const { address, isConnected } = useAccount();
   const previousAddressRef = useRef<string | null>(null);
-  const { activeGames, clearAllActiveGames } = useGameStore();
+  const { clearAllActiveGames } = useGameStore();
+  // Use DB-backed game count instead of Zustand
+  const { activeGamesCount } = useGameLimits();
   const hasShownWarningRef = useRef(false);
 
   // Track wallet changes
@@ -34,15 +37,15 @@ export function useWalletChangeDetection() {
       if (currentAddress !== previousAddress) {
         devLog.log(`🔄 Wallet changed from ${previousAddress.slice(0, 8)}... to ${currentAddress.slice(0, 8)}...`);
 
-        // Check if there were active games with the previous wallet
-        const hasActiveGames = activeGames.size > 0;
+        // Check if there were active games with the previous wallet (DB-backed)
+        const hasActiveGames = activeGamesCount > 0;
 
         if (hasActiveGames && !hasShownWarningRef.current) {
           hasShownWarningRef.current = true;
           playSound.error();
           showToast.warning('Wallet changed - Active games from previous wallet are no longer visible');
 
-          // Clear active games from the previous wallet
+          // Clear active games from the previous wallet (clears Zustand state)
           clearAllActiveGames();
         }
 
@@ -62,14 +65,14 @@ export function useWalletChangeDetection() {
       previousAddressRef.current = address.toLowerCase();
       hasShownWarningRef.current = false;
     }
-  }, [address, activeGames, clearAllActiveGames]);
+  }, [address, activeGamesCount, clearAllActiveGames]);
 
   // Reset warning flag when games change
   useEffect(() => {
-    if (activeGames.size === 0) {
+    if (activeGamesCount === 0) {
       hasShownWarningRef.current = false;
     }
-  }, [activeGames]);
+  }, [activeGamesCount]);
 
   const getCurrentWallet = useCallback(() => {
     return address?.toLowerCase() || null;

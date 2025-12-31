@@ -4,6 +4,7 @@ import { useCallback, useMemo, useEffect, useRef } from 'react';
 import { useAccount } from 'wagmi';
 import { useQueryClient } from '@tanstack/react-query';
 import { useGameStore } from '@/store/gameStore';
+import { useUserActiveGames } from '@/hooks/useGames';
 import { Game } from '@/types/game';
 import { playSound } from '@/lib/sounds';
 import { devLog } from '@/lib/utils';
@@ -72,26 +73,22 @@ export function isGameExpired(game: Game): boolean {
  */
 export function useGameTimeout() {
   const { address } = useAccount();
-  const { activeGames, queueModal } = useGameStore();
+  const { queueModal } = useGameStore();
+  // Use DB-backed active games instead of Zustand
+  const { data: dbActiveGames = [] } = useUserActiveGames(address);
   const queryClient = useQueryClient();
   const pollingRef = useRef<NodeJS.Timeout | null>(null);
   // Track which games have already shown expired modal to avoid duplicates
   const expiredModalShownRef = useRef<Set<string>>(new Set());
 
-  // Get user's pending games from active games (Map -> Array)
+  // Get user's pending games from DB (already filtered by user in useUserActiveGames)
   const userPendingGames = useMemo(() => {
-    const games: Game[] = [];
-    activeGames.forEach((entry) => {
-      const game = entry.game;
-      if (
+    return dbActiveGames.filter(
+      (game) =>
         game.status === 'pending' &&
         game.creator_address?.toLowerCase() === address?.toLowerCase()
-      ) {
-        games.push(game);
-      }
-    });
-    return games;
-  }, [activeGames, address]);
+    );
+  }, [dbActiveGames, address]);
 
   // Calculate pending timeouts from user pending games (for display only)
   const pendingTimeouts = useMemo(() => {
