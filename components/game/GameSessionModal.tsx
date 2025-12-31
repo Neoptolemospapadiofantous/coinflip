@@ -46,7 +46,7 @@ export function GameSessionModal({ game, open, onClose, userAddress, modalType }
   const [showConfetti, setShowConfetti] = useState(false);
   const [expiredElapsedSeconds, setExpiredElapsedSeconds] = useState(0);
   const [currentRetryCount, setCurrentRetryCount] = useState(0);
-  const { resetGame, updateActiveGame, removeActiveGame, startCancellingGame, finishCancellingGame, modalQueue, setupQuickRebet } = useGameStore();
+  const { resetGame, updateActiveGame, removeActiveGame, modalQueue } = useGameStore();
 
   // User preferences from database (skip animation, last game settings)
   const { skipAnimation: alwaysSkipAnimation, setSkipAnimation, saveLastGameSettings } = useUserPreferences();
@@ -284,9 +284,8 @@ export function GameSessionModal({ game, open, onClose, userAddress, modalType }
   useEffect(() => {
     if (cancelSuccess) {
       setCancelStatus('success');
-      // Complete the cancellation in store
+      // Complete the cancellation - remove from active games
       if (game?.id) {
-        finishCancellingGame(game.id, true);
         removeActiveGame(game.id);
 
         // Immediately invalidate all game queries to update the UI everywhere
@@ -297,14 +296,11 @@ export function GameSessionModal({ game, open, onClose, userAddress, modalType }
       }
     } else if (cancelError) {
       setCancelStatus('error');
-      // Cancel failed, revert optimistic update
-      if (game?.id) {
-        finishCancellingGame(game.id, false);
-      }
+      // Cancel failed - nothing to revert since we use local state
     } else if (isCancelling) {
       setCancelStatus('cancelling');
     }
-  }, [cancelSuccess, cancelError, isCancelling, game?.id, removeActiveGame, finishCancellingGame, queryClient]);
+  }, [cancelSuccess, cancelError, isCancelling, game?.id, removeActiveGame, queryClient]);
 
   // Reset cancel status when modal closes or game changes
   useEffect(() => {
@@ -318,8 +314,6 @@ export function GameSessionModal({ game, open, onClose, userAddress, modalType }
   const handleCancelGame = async () => {
     if (!game?.id) return;
     setCancelStatus('cancelling');
-    // Start optimistic update
-    startCancellingGame(game.id);
     await cancelGame(game.id);
   };
 
@@ -388,8 +382,8 @@ export function GameSessionModal({ game, open, onClose, userAddress, modalType }
   };
 
   // Quick re-bet: same tier and choice, navigate to play page
+  // Settings are already saved to DB in playResultEffects via saveLastGameSettings
   const handleQuickRebet = () => {
-    setupQuickRebet();
     handleClose();
     router.push('/play?quickRebet=true');
   };

@@ -15,45 +15,18 @@ interface ModalQueueEntry {
   type: 'matched' | 'resolved' | 'expired';
 }
 
-// Pending transaction tracking (for cross-page state)
-export type PendingTxType = 'create' | 'cancel' | 'join';
-
-export interface PendingTransaction {
-  type: PendingTxType;
-  gameId?: string; // For cancel/join - the game being acted on
-  txHash?: `0x${string}`; // Set once transaction is submitted
-  tier?: number; // For create - the tier being created
-  choice?: boolean; // For create - the coin choice
-  startedAt: number;
-}
-
-// Quick re-bet settings from last game
-export interface LastGameSettings {
-  tier: number;
-  choice: boolean; // false = heads, true = tails
-  wasWin: boolean;
-  amount: string; // For display purposes
-}
+// NOTE: PendingTxType, PendingTransaction, LastGameSettings removed
+// These are now handled by:
+// - usePendingTransactions hook (DB-backed pending transactions)
+// - useUserPreferences hook (DB-backed user preferences including quick re-bet)
 
 interface GameState {
   // Current game creation flow
   selectedTier: number | null;
   coinChoice: boolean | null; // false = heads, true = tails
 
-  // Quick re-bet from last game
-  lastGameSettings: LastGameSettings | null;
-
-  // Multiple active games tracking
+  // Multiple active games tracking (for modal system)
   activeGames: Map<string, ActiveGameEntry>;
-
-  // Games being cancelled (for optimistic UI)
-  cancellingGames: Set<string>;
-
-  // Games being joined (for optimistic UI)
-  joiningGames: Set<string>;
-
-  // Pending transactions awaiting wallet approval (persists across pages)
-  pendingTransactions: Map<string, PendingTransaction>;
 
   // Current focused game (for modal display)
   currentModalGame: Game | null;
@@ -70,11 +43,6 @@ interface GameState {
   setCoinChoice: (choice: boolean | null) => void;
   resetGameCreation: () => void;
 
-  // Actions - Quick re-bet
-  saveLastGameSettings: (tier: number, choice: boolean, wasWin: boolean, amount: string) => void;
-  setupQuickRebet: () => void; // Sets tier/choice from last game
-  clearLastGameSettings: () => void;
-
   // Actions - Active games management
   addActiveGame: (game: Game) => void;
   updateActiveGame: (game: Game) => void;
@@ -82,25 +50,7 @@ interface GameState {
   clearAllActiveGames: () => void;
   getActiveGame: (gameId: string) => Game | undefined;
   // NOTE: getActiveGamesCount and canCreateNewGame removed - use useGameLimits hook instead
-
-  // Actions - Optimistic cancel
-  startCancellingGame: (gameId: string) => void;
-  finishCancellingGame: (gameId: string, success: boolean) => void;
-  isGameCancelling: (gameId: string) => boolean;
-
-  // Actions - Optimistic join
-  startJoiningGame: (gameId: string) => void;
-  finishJoiningGame: (gameId: string, success: boolean) => void;
-  isGameJoining: (gameId: string) => boolean;
-
-  // Actions - Pending transaction tracking
-  addPendingTransaction: (key: string, tx: PendingTransaction) => void;
-  updatePendingTransaction: (key: string, updates: Partial<PendingTransaction>) => void;
-  removePendingTransaction: (key: string) => void;
-  getPendingTransaction: (key: string) => PendingTransaction | undefined;
-  hasPendingTransaction: (type: PendingTxType, gameId?: string) => boolean;
-  getPendingCreate: () => PendingTransaction | undefined;
-  getPendingCancel: (gameId: string) => PendingTransaction | undefined;
+  // NOTE: Optimistic cancel/join removed - use usePendingTransactions hook instead
 
   // Actions - Modal queue management
   queueModal: (game: Game, type: 'matched' | 'resolved' | 'expired') => void;
@@ -121,11 +71,7 @@ export const useGameStore = create<GameState>((set, get) => ({
   // Initial state
   selectedTier: null,
   coinChoice: null,
-  lastGameSettings: null,
   activeGames: new Map(),
-  cancellingGames: new Set(),
-  joiningGames: new Set(),
-  pendingTransactions: new Map(),
   currentModalGame: null,
   currentModalType: null,
   modalQueue: [],
@@ -145,24 +91,6 @@ export const useGameStore = create<GameState>((set, get) => ({
       selectedTier: null,
       coinChoice: null,
     }),
-
-  // Quick re-bet actions
-  saveLastGameSettings: (tier, choice, wasWin, amount) =>
-    set({
-      lastGameSettings: { tier, choice, wasWin, amount },
-    }),
-
-  setupQuickRebet: () => {
-    const { lastGameSettings } = get();
-    if (lastGameSettings) {
-      set({
-        selectedTier: lastGameSettings.tier,
-        coinChoice: lastGameSettings.choice,
-      });
-    }
-  },
-
-  clearLastGameSettings: () => set({ lastGameSettings: null }),
 
   // Active games management
   addActiveGame: (game) =>
@@ -194,9 +122,6 @@ export const useGameStore = create<GameState>((set, get) => ({
   clearAllActiveGames: () =>
     set({
       activeGames: new Map(),
-      cancellingGames: new Set(),
-      joiningGames: new Set(),
-      pendingTransactions: new Map(), // Clear pending transactions on wallet change
       modalQueue: [],
       currentModalGame: null,
       currentModalType: null,
@@ -210,107 +135,6 @@ export const useGameStore = create<GameState>((set, get) => ({
   getActiveGame: (gameId) => {
     const entry = get().activeGames.get(gameId);
     return entry?.game;
-  },
-
-  // NOTE: getActiveGamesCount and canCreateNewGame removed - use useGameLimits hook instead
-
-  // Optimistic cancel actions
-  startCancellingGame: (gameId) =>
-    set((state) => {
-      const newSet = new Set(state.cancellingGames);
-      newSet.add(gameId);
-      return { cancellingGames: newSet };
-    }),
-
-  finishCancellingGame: (gameId, success) =>
-    set((state) => {
-      const newSet = new Set(state.cancellingGames);
-      newSet.delete(gameId);
-
-      // If success, remove from active games
-      if (success) {
-        const newMap = new Map(state.activeGames);
-        newMap.delete(gameId);
-        return { cancellingGames: newSet, activeGames: newMap };
-      }
-
-      return { cancellingGames: newSet };
-    }),
-
-  isGameCancelling: (gameId) => get().cancellingGames.has(gameId),
-
-  // Optimistic join actions
-  startJoiningGame: (gameId) =>
-    set((state) => {
-      const newSet = new Set(state.joiningGames);
-      newSet.add(gameId);
-      return { joiningGames: newSet };
-    }),
-
-  finishJoiningGame: (gameId, _success) =>
-    set((state) => {
-      const newSet = new Set(state.joiningGames);
-      newSet.delete(gameId);
-      return { joiningGames: newSet };
-    }),
-
-  isGameJoining: (gameId) => get().joiningGames.has(gameId),
-
-  // Pending transaction tracking
-  addPendingTransaction: (key, tx) =>
-    set((state) => {
-      const newMap = new Map(state.pendingTransactions);
-      newMap.set(key, tx);
-      devLog.log(`📝 [GameStore] Added pending tx: ${key}`, tx);
-      return { pendingTransactions: newMap };
-    }),
-
-  updatePendingTransaction: (key, updates) =>
-    set((state) => {
-      const newMap = new Map(state.pendingTransactions);
-      const existing = newMap.get(key);
-      if (existing) {
-        newMap.set(key, { ...existing, ...updates });
-        devLog.log(`📝 [GameStore] Updated pending tx: ${key}`, updates);
-      }
-      return { pendingTransactions: newMap };
-    }),
-
-  removePendingTransaction: (key) =>
-    set((state) => {
-      const newMap = new Map(state.pendingTransactions);
-      newMap.delete(key);
-      devLog.log(`📝 [GameStore] Removed pending tx: ${key}`);
-      return { pendingTransactions: newMap };
-    }),
-
-  getPendingTransaction: (key) => get().pendingTransactions.get(key),
-
-  hasPendingTransaction: (type, gameId) => {
-    const txs = get().pendingTransactions;
-    for (const tx of txs.values()) {
-      if (tx.type === type) {
-        if (gameId && tx.gameId !== gameId) continue;
-        return true;
-      }
-    }
-    return false;
-  },
-
-  getPendingCreate: () => {
-    const txs = get().pendingTransactions;
-    for (const tx of txs.values()) {
-      if (tx.type === 'create') return tx;
-    }
-    return undefined;
-  },
-
-  getPendingCancel: (gameId) => {
-    const txs = get().pendingTransactions;
-    for (const [key, tx] of txs.entries()) {
-      if (tx.type === 'cancel' && tx.gameId === gameId) return tx;
-    }
-    return undefined;
   },
 
   // Modal queue management
@@ -459,7 +283,11 @@ export const useCurrentModalGame = () => useGameStore((state) => state.currentMo
 export const useCurrentModalType = () => useGameStore((state) => state.currentModalType);
 export const useShowGameModal = () => useGameStore((state) => state.showGameModal);
 
-// NOTE: useActiveGamesList, usePendingGamesCount, useActiveGamesCount removed
-// Use useGameLimits from usePendingTransactions.ts for DB-backed counts
-// Use useUserActiveGames from useGames.ts for DB-backed game lists
-
+// NOTE: Removed exports:
+// - useActiveGamesList, usePendingGamesCount, useActiveGamesCount
+//   → Use useGameLimits from usePendingTransactions.ts for DB-backed counts
+//   → Use useUserActiveGames from useGames.ts for DB-backed game lists
+// - PendingTxType, PendingTransaction, LastGameSettings types
+//   → Now in usePendingTransactions.ts and useUserPreferences.ts
+// - Optimistic cancel/join functions (startCancellingGame, finishCancellingGame, etc.)
+//   → Use usePendingTransactions hook for DB-backed tracking

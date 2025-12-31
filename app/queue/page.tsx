@@ -128,22 +128,19 @@ export default function QueuePage() {
   const [joinedGameId, setJoinedGameId] = useState<string | null>(null);
   const [cancelingGameId, setCancelingGameId] = useState<string | null>(null);
   const [now, setNow] = useState(Date.now()); // For live time updates
-  const {
-    addActiveGame, updateActiveGame, queueModal,
-    startCancellingGame, finishCancellingGame,
-    startJoiningGame, finishJoiningGame,
-  } = useGameStore();
+  const { addActiveGame, updateActiveGame, queueModal } = useGameStore();
 
   // DB-backed pending transactions (persists across refreshes/devices)
+  // Now handles cancel/join tracking instead of Zustand
   const {
     getPendingCreate,
     getPendingCancel,
+    getPendingJoin,
     isGameCancelling,
     isGameJoining,
     addPendingTransaction,
     markConfirmed,
     markFailed,
-    removePendingTransaction,
   } = usePendingTransactions();
 
   // DB-backed notification state for deduplication across devices/tabs
@@ -177,8 +174,11 @@ export default function QueuePage() {
   // Handle join success - immediately show matched modal (no waiting for realtime)
   useEffect(() => {
     if (isSuccess && joinedGameId && selectedGame && address) {
-      // Complete the optimistic join
-      finishJoiningGame(joinedGameId, true);
+      // Mark DB pending transaction as confirmed
+      const pendingJoin = getPendingJoin(joinedGameId);
+      if (pendingJoin) {
+        markConfirmed(pendingJoin.id);
+      }
 
       // Immediately invalidate queries for real-time sync
       invalidateGameQueries(queryClient, joinedGameId);
@@ -206,22 +206,23 @@ export default function QueuePage() {
       setIsDialogOpen(false);
       setSelectedGame(null);
     }
-  }, [isSuccess, joinedGameId, selectedGame, address, queryClient, finishJoiningGame, updateActiveGame, queueModal, markModalShown]);
+  }, [isSuccess, joinedGameId, selectedGame, address, queryClient, getPendingJoin, markConfirmed, updateActiveGame, queueModal, markModalShown]);
 
-  // Handle join error - revert optimistic update
+  // Handle join error - mark DB pending transaction as failed
   useEffect(() => {
     if (error && joinedGameId) {
-      finishJoiningGame(joinedGameId, false);
+      const pendingJoin = getPendingJoin(joinedGameId);
+      if (pendingJoin) {
+        markFailed(pendingJoin.id, error.message || 'Join failed');
+      }
     }
-  }, [error, joinedGameId, finishJoiningGame]);
+  }, [error, joinedGameId, getPendingJoin, markFailed]);
 
-  // Handle cancel success/error
+  // Handle cancel success - mark DB pending transaction as confirmed
   useEffect(() => {
     if (isCancelSuccess && cancelingGameId) {
-      finishCancellingGame(cancelingGameId, true);
-
-      // Clear any pending cancel transaction (DB trigger will also handle this)
-      const pendingCancel = getPendingCancel(Number(cancelingGameId));
+      // Mark DB pending cancel transaction as confirmed
+      const pendingCancel = getPendingCancel(cancelingGameId);
       if (pendingCancel) {
         markConfirmed(pendingCancel.id);
       }
@@ -235,29 +236,36 @@ export default function QueuePage() {
       setCancelingGameId(null);
       resetCancelState();
     }
-  }, [isCancelSuccess, cancelingGameId, resetCancelState, finishCancellingGame, queryClient, getPendingCancel, markConfirmed]);
+  }, [isCancelSuccess, cancelingGameId, resetCancelState, queryClient, getPendingCancel, markConfirmed]);
 
+  // Handle cancel error - mark DB pending transaction as failed
   useEffect(() => {
     if (cancelError && cancelingGameId) {
-      finishCancellingGame(cancelingGameId, false);
+      const pendingCancel = getPendingCancel(cancelingGameId);
+      if (pendingCancel) {
+        markFailed(pendingCancel.id, cancelError.message || 'Cancel failed');
+      }
       setCancelingGameId(null);
       resetCancelState();
       // Refresh list to get current state after error
       invalidateGameQueries(queryClient);
     }
-  }, [cancelError, cancelingGameId, resetCancelState, finishCancellingGame, queryClient]);
+  }, [cancelError, cancelingGameId, resetCancelState, queryClient, getPendingCancel, markFailed]);
 
-  // Handle user rejection - silently revert without error
+  // Handle user rejection - mark as failed and revert
   useEffect(() => {
     if (cancelWasRejected && cancelingGameId) {
       devLog.log('🎮 Cancel rejected by user, reverting UI for game:', cancelingGameId);
-      finishCancellingGame(cancelingGameId, false);
+      const pendingCancel = getPendingCancel(cancelingGameId);
+      if (pendingCancel) {
+        markFailed(pendingCancel.id, 'User rejected');
+      }
       // Refetch pending games to restore the optimistically removed game
       invalidateGameQueries(queryClient, cancelingGameId);
       setCancelingGameId(null);
       resetCancelState();
     }
-  }, [cancelWasRejected, cancelingGameId, resetCancelState, finishCancellingGame, queryClient]);
+  }, [cancelWasRejected, cancelingGameId, resetCancelState, queryClient, getPendingCancel, markFailed]);
 
   // Separate user's games from other games
   // User's games: show even when cancelling (to display cancelling state)
@@ -287,14 +295,22 @@ export default function QueuePage() {
     setIsDialogOpen(true);
   }, [resetJoinState]);
 
-  const handleConfirmJoin = useCallback(() => {
+  const handleConfirmJoin = useCallback(async () => {
     if (selectedGame) {
       // Joiner automatically gets opposite of creator's choice (contract enforces this)
       const joinerChoice = !selectedGame.creator_choice;
       setJoinedGameId(selectedGame.id);
 
-      // Optimistic UI - mark game as being joined (removes from list immediately)
-      startJoiningGame(selectedGame.id);
+      // Create DB pending transaction for join (persists across refresh)
+      // Convert wei amount to ETH string for storage
+      const amountEth = (BigInt(selectedGame.tierInfo.amount) / BigInt(10 ** 18)).toString();
+      await addPendingTransaction({
+        tx_type: 'join',
+        game_id: selectedGame.id,
+        tier: selectedGame.tier,
+        choice: joinerChoice,
+        amount_eth: amountEth,
+      });
 
       // Add game to active games store immediately for tracking
       addActiveGame({
@@ -306,10 +322,10 @@ export default function QueuePage() {
       // Note: Contract doesn't take choice param - joiner always bets opposite
       joinGame(selectedGame.id, selectedGame.tierInfo.amount);
     }
-  }, [selectedGame, joinGame, addActiveGame, startJoiningGame]);
+  }, [selectedGame, joinGame, addActiveGame, addPendingTransaction]);
 
   const handleCancelGame = useCallback(async (gameId: string) => {
-    // Check if already cancelling
+    // Check if already cancelling (using DB state)
     if (isGameCancelling(gameId) || cancelingGameId === gameId) {
       return;
     }
@@ -322,12 +338,17 @@ export default function QueuePage() {
     }
 
     setCancelingGameId(gameId);
-    // Optimistic UI update
-    startCancellingGame(gameId);
+
+    // Create DB pending transaction for cancel (persists across refresh)
+    await addPendingTransaction({
+      tx_type: 'cancel',
+      game_id: gameId,
+    });
+
     // Optimistically remove from pending games cache for instant UI update
     removeGameFromPendingCache(queryClient, gameId);
     cancelGame(gameId);
-  }, [cancelGame, resetCancelState, startCancellingGame, isGameCancelling, cancelingGameId, queryClient]);
+  }, [cancelGame, resetCancelState, isGameCancelling, cancelingGameId, queryClient, addPendingTransaction]);
 
   const handleDialogClose = useCallback((resetJoinedGame = true) => {
     setIsDialogOpen(false);

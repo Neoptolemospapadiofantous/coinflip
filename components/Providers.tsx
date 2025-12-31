@@ -7,15 +7,11 @@ import { config } from '@/lib/wagmi';
 import { useState } from 'react';
 import { GameMonitor } from './GameMonitor';
 import { RealtimeSyncProvider } from '@/hooks/useRealtimeSync';
-import { usePendingTransactionWatcher } from '@/hooks/usePendingTransactionWatcher';
 
 import '@rainbow-me/rainbowkit/styles.css';
 
-// Component that runs the global transaction watcher
-function GlobalTransactionWatcher() {
-  usePendingTransactionWatcher();
-  return null;
-}
+// NOTE: GlobalTransactionWatcher removed - now using DB-backed pending_transactions
+// with real-time subscriptions instead of polling blockchain
 
 export function Providers({ children }: { children: React.ReactNode }) {
   const [queryClient] = useState(() => new QueryClient());
@@ -27,7 +23,6 @@ export function Providers({ children }: { children: React.ReactNode }) {
           <RealtimeSyncProvider>
             {children}
             <GameMonitor />
-            <GlobalTransactionWatcher />
           </RealtimeSyncProvider>
         </RainbowKitProvider>
       </QueryClientProvider>

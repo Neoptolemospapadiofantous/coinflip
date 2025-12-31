@@ -58,10 +58,10 @@ export default function PlayPage() {
     addActiveGame,
     updateActiveGame,
     queueModal,
-    startCancellingGame,
-    finishCancellingGame,
-    isGameCancelling,
   } = useGameStore();
+
+  // Local state for cancel tracking (no longer using Zustand optimistic cancel)
+  const [isCancellingGame, setIsCancellingGame] = useState(false);
 
   // DB-backed game limits (replaces Zustand-based getActiveGamesCount/canCreateNewGame)
   const { activeGamesCount, canCreateNewGame, confirmedActiveCount: pendingGamesCount } = useGameLimits();
@@ -221,7 +221,7 @@ export default function PlayPage() {
     if (cancelSuccess && mountedRef.current && cancellingGameIdRef.current) {
       const gameId = cancellingGameIdRef.current;
       devLog.log('🎮 Game cancelled successfully:', gameId);
-      finishCancellingGame(gameId, true);
+      setIsCancellingGame(false);
 
       // Invalidate all game queries for real-time sync across pages
       invalidateGameQueries(queryClient, gameId);
@@ -233,32 +233,32 @@ export default function PlayPage() {
       cancelTracking();
       handleReset();
     }
-  }, [cancelSuccess, cancelTracking, handleReset, finishCancellingGame, queryClient]);
+  }, [cancelSuccess, cancelTracking, handleReset, queryClient]);
 
   // Handle cancel error - revert optimistic update
   useEffect(() => {
     if (cancelError && mountedRef.current && cancellingGameIdRef.current) {
       devLog.log('🎮 Game cancel failed, reverting');
-      finishCancellingGame(cancellingGameIdRef.current, false);
+      setIsCancellingGame(false);
       // Refetch pending games to restore the optimistically removed game
       invalidateGameQueries(queryClient, cancellingGameIdRef.current);
       isCancellingRef.current = false;
       cancellingGameIdRef.current = null;
     }
-  }, [cancelError, finishCancellingGame, queryClient]);
+  }, [cancelError, queryClient]);
 
   // Handle user rejection - silently revert without error
   useEffect(() => {
     if (cancelWasRejected && mountedRef.current && cancellingGameIdRef.current) {
       devLog.log('🎮 Cancel rejected by user, reverting UI for game:', cancellingGameIdRef.current);
-      finishCancellingGame(cancellingGameIdRef.current, false);
+      setIsCancellingGame(false);
       // Refetch pending games to restore the optimistically removed game
       invalidateGameQueries(queryClient, cancellingGameIdRef.current);
       isCancellingRef.current = false;
       cancellingGameIdRef.current = null;
       resetCancelState();
     }
-  }, [cancelWasRejected, finishCancellingGame, resetCancelState, queryClient]);
+  }, [cancelWasRejected, resetCancelState, queryClient]);
 
   // Handle create game rejection - reset UI and mark pending tx as failed
   useEffect(() => {
@@ -336,7 +336,7 @@ export default function PlayPage() {
   const handleCancelGame = useCallback(() => {
     if (!trackedGame?.id) return;
 
-    if (isCancellingRef.current || isGameCancelling(trackedGame.id)) {
+    if (isCancellingRef.current || isCancellingGame) {
       devLog.warn('Cancel already in progress');
       return;
     }
@@ -353,11 +353,11 @@ export default function PlayPage() {
     isCancellingRef.current = true;
     cancellingGameIdRef.current = trackedGame.id;
     // Optimistic UI update - mark as cancelling immediately
-    startCancellingGame(trackedGame.id);
+    setIsCancellingGame(true);
     // Optimistically remove from pending games cache for instant UI update
     removeGameFromPendingCache(queryClient, trackedGame.id);
     cancelGame(trackedGame.id);
-  }, [trackedGame, cancelGame, startCancellingGame, isGameCancelling, queryClient]);
+  }, [trackedGame, cancelGame, isCancellingGame, queryClient]);
 
   const handleCreateAnother = useCallback(() => {
     cancelTracking();

@@ -14,8 +14,6 @@ describe('store/gameStore', () => {
       selectedTier: null,
       coinChoice: null,
       activeGames: new Map(),
-      cancellingGames: new Set(),
-      joiningGames: new Set(),
       currentModalGame: null,
       currentModalType: null,
       modalQueue: [],
@@ -88,64 +86,11 @@ describe('store/gameStore', () => {
     // See hooks/usePendingTransactions.ts for the new implementation
   });
 
-  describe('Optimistic Cancel', () => {
-    it('should track cancelling state', () => {
-      const { startCancellingGame, isGameCancelling } = useGameStore.getState();
-
-      expect(isGameCancelling('1')).toBe(false);
-
-      startCancellingGame('1');
-      expect(isGameCancelling('1')).toBe(true);
-    });
-
-    it('should finish cancelling on success', () => {
-      const { startCancellingGame, finishCancellingGame, isGameCancelling } = useGameStore.getState();
-
-      startCancellingGame('1');
-      finishCancellingGame('1', true);
-
-      expect(isGameCancelling('1')).toBe(false);
-    });
-
-    it('should finish cancelling on failure', () => {
-      const { startCancellingGame, finishCancellingGame, isGameCancelling } = useGameStore.getState();
-
-      startCancellingGame('1');
-      finishCancellingGame('1', false);
-
-      expect(isGameCancelling('1')).toBe(false);
-    });
-
-    it('should remove active game on successful cancel', () => {
-      const { addActiveGame, startCancellingGame, finishCancellingGame, getActiveGame } = useGameStore.getState();
-
-      addActiveGame(mockGame);
-      startCancellingGame(mockGame.id);
-      finishCancellingGame(mockGame.id, true);
-
-      expect(getActiveGame(mockGame.id)).toBeUndefined();
-    });
-  });
-
-  describe('Optimistic Join', () => {
-    it('should track joining state', () => {
-      const { startJoiningGame, isGameJoining } = useGameStore.getState();
-
-      expect(isGameJoining('1')).toBe(false);
-
-      startJoiningGame('1');
-      expect(isGameJoining('1')).toBe(true);
-    });
-
-    it('should finish joining on success', () => {
-      const { startJoiningGame, finishJoiningGame, isGameJoining } = useGameStore.getState();
-
-      startJoiningGame('1');
-      finishJoiningGame('1', true);
-
-      expect(isGameJoining('1')).toBe(false);
-    });
-  });
+  // NOTE: Optimistic Cancel and Optimistic Join tests removed
+  // These functions (startCancellingGame, finishCancellingGame, isGameCancelling,
+  // startJoiningGame, finishJoiningGame, isGameJoining) were removed from gameStore.
+  // Cancel/join tracking is now handled by DB-backed pending_transactions table
+  // via the usePendingTransactions hook.
 
   describe('Modal Queue', () => {
     it('should show modal immediately when none showing', () => {

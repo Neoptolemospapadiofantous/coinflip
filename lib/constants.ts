@@ -82,8 +82,8 @@ export const POST_EVENT_RETRY_INTERVAL_MS = 500;
 /** Maximum retries when waiting for indexer after event */
 export const POST_EVENT_MAX_RETRIES = 10;
 
-/** Optimistic game confirmation timeout (2 minutes) - auto-remove if not confirmed */
-export const OPTIMISTIC_GAME_TIMEOUT_MS = 2 * 60 * 1000;
+// NOTE: OPTIMISTIC_GAME_TIMEOUT_MS removed - optimistic games are no longer used
+// All game tracking is now DB-backed via pending_transactions table
 
 // ============================================
 // LIMITS
