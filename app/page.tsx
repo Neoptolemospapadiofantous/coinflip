@@ -67,8 +67,8 @@ export default function Home() {
             <Box className="w-full max-w-4xl mt-8">
               <GlobalStatsGrid
                 totalGames={gameStats?.total_games ?? 0}
-                activePlayers={gameStats?.unique_players ?? 0}
-                totalVolume={gameStats?.total_payouts?.toString() ?? '0'}
+                activePlayers={gameStats?.total_unique_players ?? 0}
+                totalVolume={gameStats?.total_volume_wei?.toString() ?? '0'}
                 avgWinRate={50} // Coinflip is always 50/50
               />
             </Box>

@@ -309,11 +309,10 @@ export function useGame(gameId: string | null) {
   });
 }
 
-// Columns for game statistics (only fetch what's needed)
+// Columns for game statistics - must match the game_statistics view exactly
 const GAME_STATS_COLUMNS = `
-  total_games, total_wagered, games_completed,
-  pending_games, matched_games, resolved_games, cancelled_games,
-  unique_players, total_payouts, avg_game_duration_seconds
+  total_games, pending_games, matched_games, resolved_games, cancelled_games,
+  avg_game_duration_seconds, total_volume_wei, total_unique_players, games_by_tier
 `;
 
 // Fetch game statistics
