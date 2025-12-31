@@ -1,23 +1,56 @@
 import toast from 'react-hot-toast';
 
+// Deduplication: Track recent toasts to prevent spam
+const recentToasts = new Map<string, number>();
+const DEDUPE_WINDOW_MS = 2000; // 2 seconds
+
+// Clean up old entries periodically
+setInterval(() => {
+  const now = Date.now();
+  for (const [key, timestamp] of recentToasts.entries()) {
+    if (now - timestamp > DEDUPE_WINDOW_MS) {
+      recentToasts.delete(key);
+    }
+  }
+}, 5000);
+
+// Check if toast was recently shown (returns true if duplicate)
+function isDuplicate(type: string, message: string): boolean {
+  const key = `${type}:${message}`;
+  const lastShown = recentToasts.get(key);
+  const now = Date.now();
+
+  if (lastShown && now - lastShown < DEDUPE_WINDOW_MS) {
+    return true; // Duplicate
+  }
+
+  recentToasts.set(key, now);
+  return false;
+}
+
 export const showToast = {
   success: (message: string) => {
+    if (isDuplicate('success', message)) return;
     toast.success(message);
   },
 
   error: (message: string) => {
+    if (isDuplicate('error', message)) return;
     toast.error(message);
   },
 
   info: (message: string) => {
+    if (isDuplicate('info', message)) return;
     toast(message, { icon: 'ℹ️' });
   },
 
   warning: (message: string) => {
+    if (isDuplicate('warning', message)) return;
     toast(message, { icon: '⚠️' });
   },
 
   loading: (message: string) => {
+    // Loading toasts are typically managed manually, don't dedupe
     return toast.loading(message);
   },
 

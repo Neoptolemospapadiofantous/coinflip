@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState, useEffect, memo } from 'react';
+import { useMemo, useState, memo } from 'react';
 import { Card, Flex, Heading, Text, Badge, ScrollArea, IconButton } from '@radix-ui/themes';
 import { useGameStore, MAX_CONCURRENT_GAMES } from '@/store/gameStore';
 import { useUserActiveGames } from '@/hooks/useGames';
@@ -12,6 +12,7 @@ import { useAccount } from 'wagmi';
 import { useConnectionStatus } from '@/hooks/useRealtimeSync';
 import { formatGameTimeRemaining, isGameWarning, isGameExpired } from '@/hooks/useGameTimeout';
 import { parseEther } from 'viem';
+import { useSharedTimer } from '@/hooks/useSharedTimer';
 
 const PANEL_COLLAPSED_KEY = 'coinflip_active_games_collapsed';
 
@@ -110,14 +111,9 @@ const ActiveGameCard = memo(function ActiveGameCard({ game, onViewGame, userAddr
   const isWinner = game.winner_address?.toLowerCase() === userAddress?.toLowerCase();
   const userChoice = isCreator ? game.creator_choice : game.joiner_choice;
 
-  // Local ticker for countdown timer - only for pending games
-  // This prevents re-rendering the entire panel every second
-  const [, setTick] = useState(0);
-  useEffect(() => {
-    if (game.status !== 'pending') return;
-    const interval = setInterval(() => setTick(t => t + 1), 1000);
-    return () => clearInterval(interval);
-  }, [game.status]);
+  // Use shared timer for countdown - only enabled for pending games
+  // This uses a single global timer shared across all cards
+  useSharedTimer(1000, game.status === 'pending');
 
   // Time-based states for pending games
   const warning = game.status === 'pending' && isGameWarning(game);

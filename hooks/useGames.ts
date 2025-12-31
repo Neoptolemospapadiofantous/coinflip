@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
 import { Game, parseGame } from '@/types/game';
 import { devLog } from '@/lib/utils';
+import { queryKeys } from '@/lib/queryKeys';
 
 // Columns needed for game list displays (lobby, active games panel, history)
 // Optimized to fetch only what's needed instead of SELECT *
@@ -41,7 +42,7 @@ function normalizeGames(data: unknown[] | null): Game[] {
 // Fetch all games (limited to 100 most recent for performance)
 export function useGames() {
   return useQuery({
-    queryKey: ['games'],
+    queryKey: queryKeys.games.all,
     queryFn: async (): Promise<Game[]> => {
       const { data, error } = await supabase
         .from('games')
@@ -65,7 +66,7 @@ export function useGames() {
 // Fetch pending games (waiting for second player)
 export function usePendingGames() {
   return useQuery({
-    queryKey: ['games', 'pending'],
+    queryKey: queryKeys.games.pending,
     queryFn: async (): Promise<Game[]> => {
       const { data, error } = await supabase
         .from('active_games')
@@ -89,7 +90,7 @@ export function usePendingGames() {
 // Fetch active games (pending + matched)
 export function useActiveGames() {
   return useQuery({
-    queryKey: ['games', 'active'],
+    queryKey: queryKeys.games.active,
     queryFn: async (): Promise<Game[]> => {
       const { data, error} = await supabase
         .from('active_games')
@@ -113,7 +114,7 @@ export function useActiveGames() {
 // Real-time updates handled by central sync (useRealtimeSync)
 export function usePlayerGames(address: string | undefined, limit: number = 50) {
   return useQuery({
-    queryKey: ['games', 'player', address, limit],
+    queryKey: [...queryKeys.games.player(address || ''), limit],
     queryFn: async (): Promise<Game[]> => {
       if (!address) return [];
 
@@ -144,7 +145,7 @@ export function usePlayerGames(address: string | undefined, limit: number = 50) 
 // This is the source of truth for the Active Games panel
 export function useUserActiveGames(address: string | undefined) {
   return useQuery({
-    queryKey: ['games', 'user-active', address],
+    queryKey: queryKeys.games.userActive(address || ''),
     queryFn: async (): Promise<Game[]> => {
       if (!address) return [];
 
@@ -176,7 +177,7 @@ export function useUserActiveGames(address: string | undefined) {
 // Uses get_player_stats_v2 which returns all data in a single query (3 queries → 1)
 export function usePlayerStats(address: string | undefined) {
   return useQuery({
-    queryKey: ['player-stats', address],
+    queryKey: queryKeys.stats.player(address || ''),
     queryFn: async () => {
       if (!address) return null;
 
@@ -257,7 +258,7 @@ export function usePlayerStats(address: string | undefined) {
 // Fetch single game by ID
 export function useGame(gameId: string | null) {
   return useQuery({
-    queryKey: ['game', gameId],
+    queryKey: queryKeys.games.single(gameId || ''),
     queryFn: async (): Promise<Game | null> => {
       if (!gameId) return null;
 
@@ -284,7 +285,7 @@ export function useGame(gameId: string | null) {
 // Real-time updates handled by central sync (useRealtimeSync)
 export function useGameStats() {
   return useQuery({
-    queryKey: ['game-stats'],
+    queryKey: queryKeys.stats.game,
     queryFn: async () => {
       const { data, error } = await supabase
         .from('game_statistics')

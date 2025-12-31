@@ -148,6 +148,27 @@ export function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+/**
+ * Debounce function - delays execution until after wait ms have elapsed
+ * since the last time it was invoked. Useful for high-frequency events.
+ */
+export function debounce<TArgs extends unknown[]>(
+  fn: (...args: TArgs) => void,
+  wait: number
+): (...args: TArgs) => void {
+  let timeoutId: ReturnType<typeof setTimeout> | null = null;
+
+  return function debounced(...args: TArgs) {
+    if (timeoutId) {
+      clearTimeout(timeoutId);
+    }
+    timeoutId = setTimeout(() => {
+      fn(...args);
+      timeoutId = null;
+    }, wait);
+  };
+}
+
 // Safe localStorage helpers - handles SSR, incognito mode, and quota errors
 export const safeStorage = {
   getItem: (key: string): string | null => {

@@ -293,7 +293,7 @@ export function usePendingTransactions() {
     return hasPendingTransaction('join', gameId);
   }, [hasPendingTransaction]);
 
-  // Cleanup expired transactions on mount
+  // Cleanup expired transactions on mount and periodically
   useEffect(() => {
     if (!address) return;
 
@@ -308,6 +308,15 @@ export function usePendingTransactions() {
     cleanupExpired().catch(() => {
       // Error already logged in cleanupExpired
     });
+
+    // Run cleanup every 5 minutes to catch any stale transactions
+    const cleanupInterval = setInterval(() => {
+      cleanupExpired().catch(() => {});
+    }, 5 * 60 * 1000);
+
+    return () => {
+      clearInterval(cleanupInterval);
+    };
   }, [address]);
 
   return {

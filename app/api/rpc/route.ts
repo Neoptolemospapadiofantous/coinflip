@@ -119,9 +119,11 @@ const UNCACHEABLE_METHODS = new Set([
 interface CacheEntry {
   response: unknown;
   expiresAt: number;
+  lastAccessed: number; // For LRU tracking
 }
 
-// Simple in-memory cache with automatic cleanup
+// LRU cache with automatic cleanup
+// Using Map which maintains insertion order, combined with lastAccessed tracking
 const responseCache = new Map<string, CacheEntry>();
 const MAX_CACHE_SIZE = 1000;
 
@@ -133,24 +135,45 @@ function getCachedResponse(key: string): unknown | null {
   const entry = responseCache.get(key);
   if (!entry) return null;
 
-  if (Date.now() > entry.expiresAt) {
+  const now = Date.now();
+  if (now > entry.expiresAt) {
     responseCache.delete(key);
     return null;
   }
+
+  // LRU: Update access time and move to end of Map (most recently used)
+  entry.lastAccessed = now;
+  responseCache.delete(key);
+  responseCache.set(key, entry);
 
   return entry.response;
 }
 
 function setCachedResponse(key: string, response: unknown, ttlMs: number): void {
-  // Evict oldest entries if cache is too large
+  const now = Date.now();
+
+  // LRU eviction: Remove least recently used entries if cache is full
   if (responseCache.size >= MAX_CACHE_SIZE) {
-    const oldestKey = responseCache.keys().next().value;
-    if (oldestKey) responseCache.delete(oldestKey);
+    // Find and remove the least recently accessed entry
+    let lruKey: string | null = null;
+    let lruTime = Infinity;
+
+    for (const [k, v] of responseCache.entries()) {
+      if (v.lastAccessed < lruTime) {
+        lruTime = v.lastAccessed;
+        lruKey = k;
+      }
+    }
+
+    if (lruKey) {
+      responseCache.delete(lruKey);
+    }
   }
 
   responseCache.set(key, {
     response,
-    expiresAt: Date.now() + ttlMs,
+    expiresAt: now + ttlMs,
+    lastAccessed: now,
   });
 }
 

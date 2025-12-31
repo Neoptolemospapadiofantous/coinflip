@@ -6,6 +6,7 @@ import { useCallback } from 'react';
 import { Game } from '@/types/game';
 import { useGameStore } from '@/store/gameStore';
 import { devLog } from '@/lib/utils';
+import { queryKeys } from '@/lib/queryKeys';
 
 /**
  * Hook for optimistic UI updates
@@ -70,7 +71,7 @@ export function useOptimisticUpdates() {
     devLog.log(`⚡ [Optimistic] Created game with tx: ${txHash.slice(0, 10)}...`);
 
     // Add to pending games cache (with deduplication) - shows in lobby immediately
-    queryClient.setQueryData(['games', 'pending'], (old: Game[] | undefined) => {
+    queryClient.setQueryData(queryKeys.games.pending, (old: Game[] | undefined) => {
       if (!old) return [optimisticGame];
       // Check if this optimistic game already exists to prevent duplicates
       const existingIndex = old.findIndex(g => g.id === optimisticGame.id);
@@ -99,7 +100,7 @@ export function useOptimisticUpdates() {
     devLog.log(`⚡ [Optimistic] Removing optimistic game from cache: ${optimisticId}`);
 
     // Remove from pending games cache (lobby display)
-    queryClient.setQueryData(['games', 'pending'], (old: Game[] | undefined) => {
+    queryClient.setQueryData(queryKeys.games.pending, (old: Game[] | undefined) => {
       if (!old) return [];
       return old.filter(g => g.id !== optimisticId);
     });
@@ -119,7 +120,7 @@ export function useOptimisticUpdates() {
     devLog.log(`⚡ [Optimistic] Joining game: ${gameId}`);
 
     // Get current game from cache
-    const cachedPendingGames = queryClient.getQueryData(['games', 'pending']) as Game[] | undefined;
+    const cachedPendingGames = queryClient.getQueryData(queryKeys.games.pending) as Game[] | undefined;
     const existingGame = cachedPendingGames?.find(g => g.id === gameId);
 
     if (existingGame) {
@@ -133,12 +134,12 @@ export function useOptimisticUpdates() {
       };
 
       // Remove from pending cache
-      queryClient.setQueryData(['games', 'pending'], (old: Game[] | undefined) =>
+      queryClient.setQueryData(queryKeys.games.pending, (old: Game[] | undefined) =>
         old?.filter(g => g.id !== gameId) || []
       );
 
       // Update individual game cache
-      queryClient.setQueryData(['game', gameId], optimisticGame);
+      queryClient.setQueryData(queryKeys.games.single(gameId), optimisticGame);
 
       // Add to active games
       addActiveGame(optimisticGame);
@@ -157,7 +158,7 @@ export function useOptimisticUpdates() {
     devLog.log(`⚡ [Optimistic] Cancelling game: ${gameId}`);
 
     // Remove from pending games cache
-    queryClient.setQueryData(['games', 'pending'], (old: Game[] | undefined) =>
+    queryClient.setQueryData(queryKeys.games.pending, (old: Game[] | undefined) =>
       old?.filter(g => g.id !== gameId) || []
     );
 
@@ -174,7 +175,7 @@ export function useOptimisticUpdates() {
 
     devLog.log(`⚡ [Optimistic] Rolling back create: ${optimisticId}`);
 
-    queryClient.setQueryData(['games', 'pending'], (old: Game[] | undefined) =>
+    queryClient.setQueryData(queryKeys.games.pending, (old: Game[] | undefined) =>
       old?.filter(g => g.id !== optimisticId) || []
     );
 
@@ -188,14 +189,14 @@ export function useOptimisticUpdates() {
     devLog.log(`⚡ [Optimistic] Rolling back join: ${gameId}`);
 
     // Restore to pending cache
-    queryClient.setQueryData(['games', 'pending'], (old: Game[] | undefined) => {
+    queryClient.setQueryData(queryKeys.games.pending, (old: Game[] | undefined) => {
       if (!old) return [originalGame];
       if (old.some(g => g.id === gameId)) return old;
       return [originalGame, ...old];
     });
 
     // Update individual game cache
-    queryClient.setQueryData(['game', gameId], originalGame);
+    queryClient.setQueryData(queryKeys.games.single(gameId), originalGame);
 
     // Remove from active games
     removeActiveGame(gameId);
@@ -208,7 +209,7 @@ export function useOptimisticUpdates() {
     devLog.log(`⚡ [Optimistic] Rolling back cancel: ${game.id}`);
 
     // Restore to pending cache
-    queryClient.setQueryData(['games', 'pending'], (old: Game[] | undefined) => {
+    queryClient.setQueryData(queryKeys.games.pending, (old: Game[] | undefined) => {
       if (!old) return [game];
       if (old.some(g => g.id === game.id)) return old;
       return [game, ...old];
