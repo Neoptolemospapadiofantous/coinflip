@@ -4,9 +4,10 @@ import { useCallback, useEffect, useRef } from 'react';
 import { useAccount } from 'wagmi';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
-import { devLog } from '@/lib/utils';
+import { devLog, isValidAddress } from '@/lib/utils';
 import { useUserActiveGames } from './useGames';
 import { MAX_CONCURRENT_GAMES } from '@/store/gameStore';
+import { PENDING_TX_CLEANUP_INTERVAL_MS, PENDING_TX_STALE_TIME_MS } from '@/lib/constants';
 
 export type PendingTxType = 'create' | 'cancel' | 'join';
 export type PendingTxStatus = 'pending' | 'submitted' | 'confirmed' | 'failed' | 'expired';
@@ -68,7 +69,7 @@ export function usePendingTransactions() {
       return data || [];
     },
     enabled: !!address,
-    staleTime: 5000, // 5 seconds
+    staleTime: PENDING_TX_STALE_TIME_MS,
     gcTime: 60 * 1000, // 1 minute
     // No polling - use realtime subscription instead
   });
@@ -309,10 +310,10 @@ export function usePendingTransactions() {
       // Error already logged in cleanupExpired
     });
 
-    // Run cleanup every 5 minutes to catch any stale transactions
+    // Run cleanup periodically to catch any stale transactions
     const cleanupInterval = setInterval(() => {
       cleanupExpired().catch(() => {});
-    }, 5 * 60 * 1000);
+    }, PENDING_TX_CLEANUP_INTERVAL_MS);
 
     return () => {
       clearInterval(cleanupInterval);

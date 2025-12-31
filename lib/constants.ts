@@ -86,6 +86,67 @@ export const POST_EVENT_MAX_RETRIES = 10;
 // All game tracking is now DB-backed via pending_transactions table
 
 // ============================================
+// REALTIME SYNC CONSTANTS
+// ============================================
+
+/** Debounce delay for realtime event processing (ms) */
+export const REALTIME_DEBOUNCE_MS = 100;
+
+/** Max listeners for connection status (prevents memory leaks) */
+export const MAX_CONNECTION_LISTENERS = 100;
+
+/** Debounce delay for connection status updates (ms) */
+export const CONNECTION_STATUS_DEBOUNCE_MS = 50;
+
+// ============================================
+// TOAST CONSTANTS
+// ============================================
+
+/** Toast deduplication window (ms) */
+export const TOAST_DEDUPE_WINDOW_MS = 2000;
+
+/** Toast cleanup interval (ms) */
+export const TOAST_CLEANUP_INTERVAL_MS = 5000;
+
+// ============================================
+// PENDING TRANSACTION CONSTANTS
+// ============================================
+
+/** Periodic cleanup interval for expired pending transactions (ms) */
+export const PENDING_TX_CLEANUP_INTERVAL_MS = 5 * 60 * 1000;
+
+/** Stale time for pending transactions query (ms) */
+export const PENDING_TX_STALE_TIME_MS = 5000;
+
+// ============================================
+// QUERY CACHE CONSTANTS
+// ============================================
+
+/** Stale time for pending games query (ms) */
+export const PENDING_GAMES_STALE_TIME_MS = 15000;
+
+/** Stale time for active games query (ms) */
+export const ACTIVE_GAMES_STALE_TIME_MS = 15000;
+
+/** Stale time for player games query (ms) */
+export const PLAYER_GAMES_STALE_TIME_MS = 30000;
+
+/** Stale time for user active games query (ms) */
+export const USER_ACTIVE_GAMES_STALE_TIME_MS = 5000;
+
+/** Stale time for game stats query (ms) */
+export const GAME_STATS_STALE_TIME_MS = 30000;
+
+/** Stale time for player stats query (ms) */
+export const PLAYER_STATS_STALE_TIME_MS = 60000;
+
+/** Stale time for all games query (ms) */
+export const ALL_GAMES_STALE_TIME_MS = 60000;
+
+/** Stale time for single game query (ms) */
+export const SINGLE_GAME_STALE_TIME_MS = 60000;
+
+// ============================================
 // LIMITS
 // ============================================
 

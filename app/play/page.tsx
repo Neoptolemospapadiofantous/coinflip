@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback, useEffect, useRef } from 'react';
+import { useState, useCallback, useEffect, useRef, useMemo } from 'react';
 import { useAccount } from 'wagmi';
 import { useSearchParams } from 'next/navigation';
 import { ConnectButton } from '@rainbow-me/rainbowkit';
@@ -95,7 +95,11 @@ export default function PlayPage() {
   const cancelTrackingRef = useRef<(() => void) | null>(null);
   const cancellingGameIdRef = useRef<string | null>(null);
 
-  const currentTier = tiers?.find((t) => t.id === selectedTier);
+  // Memoize computed values to prevent unnecessary re-renders
+  const currentTier = useMemo(() =>
+    tiers?.find((t) => t.id === selectedTier),
+    [tiers, selectedTier]
+  );
   const canCreate = canCreateNewGame;
 
   // Stable reset function - only resets the creation form, not active games

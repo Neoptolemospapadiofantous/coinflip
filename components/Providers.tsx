@@ -9,6 +9,7 @@ import { GameMonitor } from './GameMonitor';
 import { RealtimeSyncProvider } from '@/hooks/useRealtimeSync';
 import { devLog } from '@/lib/utils';
 import { showToast } from '@/lib/toast';
+import { WebVitals } from './WebVitals';
 
 import '@rainbow-me/rainbowkit/styles.css';
 
@@ -72,6 +73,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
             <RealtimeSyncProvider>
               {children}
               <GameMonitor />
+              <WebVitals />
             </RealtimeSyncProvider>
           </GlobalErrorHandler>
         </RainbowKitProvider>

@@ -1,18 +1,18 @@
 import toast from 'react-hot-toast';
+import { TOAST_DEDUPE_WINDOW_MS, TOAST_CLEANUP_INTERVAL_MS } from './constants';
 
 // Deduplication: Track recent toasts to prevent spam
 const recentToasts = new Map<string, number>();
-const DEDUPE_WINDOW_MS = 2000; // 2 seconds
 
 // Clean up old entries periodically
 setInterval(() => {
   const now = Date.now();
   for (const [key, timestamp] of recentToasts.entries()) {
-    if (now - timestamp > DEDUPE_WINDOW_MS) {
+    if (now - timestamp > TOAST_DEDUPE_WINDOW_MS) {
       recentToasts.delete(key);
     }
   }
-}, 5000);
+}, TOAST_CLEANUP_INTERVAL_MS);
 
 // Check if toast was recently shown (returns true if duplicate)
 function isDuplicate(type: string, message: string): boolean {
@@ -20,7 +20,7 @@ function isDuplicate(type: string, message: string): boolean {
   const lastShown = recentToasts.get(key);
   const now = Date.now();
 
-  if (lastShown && now - lastShown < DEDUPE_WINDOW_MS) {
+  if (lastShown && now - lastShown < TOAST_DEDUPE_WINDOW_MS) {
     return true; // Duplicate
   }
 

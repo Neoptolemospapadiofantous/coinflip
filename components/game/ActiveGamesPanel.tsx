@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState, memo } from 'react';
+import { useMemo, useState, memo, useCallback } from 'react';
 import { Card, Flex, Heading, Text, Badge, ScrollArea, IconButton } from '@radix-ui/themes';
 import { useGameStore, MAX_CONCURRENT_GAMES } from '@/store/gameStore';
 import { useUserActiveGames } from '@/hooks/useGames';
@@ -247,11 +247,12 @@ export function ActiveGamesPanel() {
 
   // Real-time updates handled by useRealtimeSync invalidating the query
 
-  const handleViewGame = (game: Game) => {
+  // Memoized handler to prevent ActiveGameCard memo invalidation
+  const handleViewGame = useCallback((game: Game) => {
     if (game.status === 'matched' || game.status === 'resolved') {
       queueModal(game, game.status === 'matched' ? 'matched' : 'resolved');
     }
-  };
+  }, [queueModal]);
 
   // Filter to only show pending/matched games (resolved ones auto-close)
   // Also deduplicate by ID as a safeguard against race conditions

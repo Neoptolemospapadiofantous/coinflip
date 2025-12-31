@@ -8,15 +8,12 @@ import { Game, parseGame } from '@/types/game';
 import { useAccount } from 'wagmi';
 import { devLog, debounce } from '@/lib/utils';
 import { queryKeys } from '@/lib/queryKeys';
-
-// Fallback polling with exponential backoff (starts at 5s to reduce server load)
-const FALLBACK_POLL_INTERVALS = [5000, 10000, 20000, 30000]; // 5s, 10s, 20s, 30s max
-
-// Debounce delay for high-frequency realtime events (ms)
-const REALTIME_DEBOUNCE_MS = 100;
-
-// Max listeners to prevent memory leaks (should never hit this in normal usage)
-const MAX_LISTENERS = 100;
+import {
+  FALLBACK_POLL_INTERVALS_MS,
+  REALTIME_DEBOUNCE_MS,
+  MAX_CONNECTION_LISTENERS,
+  CONNECTION_STATUS_DEBOUNCE_MS,
+} from '@/lib/constants';
 
 // Add jitter to prevent thundering herd (returns random offset between -25% and +25%)
 function addJitter(interval: number): number {
@@ -46,7 +43,7 @@ const globalListeners = new Set<() => void>();
 // Subscribe to connection status changes (with memory leak protection)
 export function subscribeToConnectionStatus(callback: () => void) {
   // Prevent memory leaks - limit max listeners
-  if (globalListeners.size >= MAX_LISTENERS) {
+  if (globalListeners.size >= MAX_CONNECTION_LISTENERS) {
     devLog.warn('[RealtimeSync] Max listeners reached, cleaning oldest');
     const first = globalListeners.values().next().value;
     if (first) globalListeners.delete(first);
@@ -60,7 +57,7 @@ export function subscribeToConnectionStatus(callback: () => void) {
 // Debounced notify to prevent UI flickering during rapid status changes
 const notifyListeners = debounce(() => {
   globalListeners.forEach((l) => l());
-}, 50);
+}, CONNECTION_STATUS_DEBOUNCE_MS);
 
 export function useRealtimeSync() {
   const queryClient = useQueryClient();
@@ -335,8 +332,8 @@ export function useRealtimeSync() {
             fallbackPoll();
 
             // Get next interval with backoff + jitter (prevents thundering herd)
-            const intervalIndex = Math.min(fallbackRetryCountRef.current, FALLBACK_POLL_INTERVALS.length - 1);
-            const baseInterval = FALLBACK_POLL_INTERVALS[intervalIndex];
+            const intervalIndex = Math.min(fallbackRetryCountRef.current, FALLBACK_POLL_INTERVALS_MS.length - 1);
+            const baseInterval = FALLBACK_POLL_INTERVALS_MS[intervalIndex];
             const nextInterval = addJitter(baseInterval);
             fallbackRetryCountRef.current++;
 

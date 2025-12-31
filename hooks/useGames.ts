@@ -1,8 +1,18 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
 import { Game, parseGame } from '@/types/game';
-import { devLog } from '@/lib/utils';
+import { devLog, isValidAddress } from '@/lib/utils';
 import { queryKeys } from '@/lib/queryKeys';
+import {
+  PENDING_GAMES_STALE_TIME_MS,
+  ACTIVE_GAMES_STALE_TIME_MS,
+  PLAYER_GAMES_STALE_TIME_MS,
+  USER_ACTIVE_GAMES_STALE_TIME_MS,
+  GAME_STATS_STALE_TIME_MS,
+  PLAYER_STATS_STALE_TIME_MS,
+  ALL_GAMES_STALE_TIME_MS,
+  SINGLE_GAME_STALE_TIME_MS,
+} from '@/lib/constants';
 
 // Columns needed for game list displays (lobby, active games panel, history)
 // Optimized to fetch only what's needed instead of SELECT *
@@ -57,7 +67,7 @@ export function useGames() {
 
       return normalizeGames(data);
     },
-    staleTime: 60000, // 1 minute - central sync handles freshness
+    staleTime: ALL_GAMES_STALE_TIME_MS,
     refetchInterval: false, // Disabled - central sync invalidates when needed
     retry: 2,
   });
@@ -81,7 +91,7 @@ export function usePendingGames() {
 
       return normalizeGames(data);
     },
-    staleTime: 15000, // 15 seconds - kept short for active game updates
+    staleTime: PENDING_GAMES_STALE_TIME_MS,
     refetchInterval: false, // Disabled - central sync handles updates
     retry: 2,
   });
@@ -104,7 +114,7 @@ export function useActiveGames() {
 
       return normalizeGames(data);
     },
-    staleTime: 15000, // 15 seconds - kept short for active game updates
+    staleTime: ACTIVE_GAMES_STALE_TIME_MS,
     refetchInterval: false, // Disabled - central sync handles updates
     retry: 2,
   });
@@ -117,6 +127,12 @@ export function usePlayerGames(address: string | undefined, limit: number = 50) 
     queryKey: [...queryKeys.games.player(address || ''), limit],
     queryFn: async (): Promise<Game[]> => {
       if (!address) return [];
+
+      // Validate address format before querying
+      if (!isValidAddress(address)) {
+        devLog.warn('Invalid address format for player games query:', address);
+        return [];
+      }
 
       const lowerAddress = address.toLowerCase();
 
@@ -135,7 +151,7 @@ export function usePlayerGames(address: string | undefined, limit: number = 50) 
       return normalizeGames(data);
     },
     enabled: !!address,
-    staleTime: 30000, // 30 seconds
+    staleTime: PLAYER_GAMES_STALE_TIME_MS,
     refetchInterval: false, // Disabled - central sync handles updates
     retry: 2,
   });
@@ -148,6 +164,12 @@ export function useUserActiveGames(address: string | undefined) {
     queryKey: queryKeys.games.userActive(address || ''),
     queryFn: async (): Promise<Game[]> => {
       if (!address) return [];
+
+      // Validate address format before querying
+      if (!isValidAddress(address)) {
+        devLog.warn('Invalid address format for user active games query:', address);
+        return [];
+      }
 
       const lowerAddress = address.toLowerCase();
 
@@ -167,7 +189,7 @@ export function useUserActiveGames(address: string | undefined) {
       return normalizeGames(data);
     },
     enabled: !!address,
-    staleTime: 5000, // 5 seconds - keep fresh for active games
+    staleTime: USER_ACTIVE_GAMES_STALE_TIME_MS,
     refetchInterval: false, // Realtime sync handles updates
     retry: 2,
   });
@@ -180,6 +202,12 @@ export function usePlayerStats(address: string | undefined) {
     queryKey: queryKeys.stats.player(address || ''),
     queryFn: async () => {
       if (!address) return null;
+
+      // Validate address format before querying
+      if (!isValidAddress(address)) {
+        devLog.warn('Invalid address format for player stats query:', address);
+        return null;
+      }
 
       const lowerAddress = address.toLowerCase();
 
@@ -249,7 +277,7 @@ export function usePlayerStats(address: string | undefined) {
       };
     },
     enabled: !!address,
-    staleTime: 60000, // 1 minute - stats don't need to be super fresh
+    staleTime: PLAYER_STATS_STALE_TIME_MS,
     refetchInterval: false,
     retry: 2,
   });
@@ -264,7 +292,7 @@ export function useGame(gameId: string | null) {
 
       const { data, error } = await supabase
         .from('games')
-        .select('*')
+        .select(GAME_LIST_COLUMNS)
         .eq('id', gameId)
         .single();
 
@@ -276,10 +304,17 @@ export function useGame(gameId: string | null) {
       return data ? parseGame(data) : null;
     },
     enabled: !!gameId,
-    staleTime: 60000, // 1 minute
+    staleTime: SINGLE_GAME_STALE_TIME_MS,
     refetchInterval: false, // Disabled - useGameSync handles real-time updates
   });
 }
+
+// Columns for game statistics (only fetch what's needed)
+const GAME_STATS_COLUMNS = `
+  total_games, total_wagered, games_completed,
+  pending_games, matched_games, resolved_games, cancelled_games,
+  unique_players, total_payouts, avg_game_duration_seconds
+`;
 
 // Fetch game statistics
 // Real-time updates handled by central sync (useRealtimeSync)
@@ -289,7 +324,7 @@ export function useGameStats() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('game_statistics')
-        .select('*')
+        .select(GAME_STATS_COLUMNS)
         .single();
 
       if (error) {
@@ -299,7 +334,7 @@ export function useGameStats() {
 
       return data;
     },
-    staleTime: 30000, // 30 seconds
+    staleTime: GAME_STATS_STALE_TIME_MS,
     refetchInterval: false, // Disabled - central sync handles updates
   });
 }

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getApiRateLimiter, sanitizeJson } from '@/lib/security';
 import { ALLOWED_CHAIN_IDS, CHAIN_IDS, PUBLIC_RPC_URLS } from '@/lib/chainConfig';
 import { devLog } from '@/lib/utils';
+import { MAX_RPC_CACHE_SIZE, RPC_TIMEOUT_MS } from '@/lib/constants';
 
 // =============================================================
 // RATE LIMITING (using distributed RateLimiter with Redis/fallback)
@@ -83,8 +84,8 @@ const ALLOWED_METHODS = new Set([
   'eth_sendRawTransaction',
 ]);
 
-// RPC request timeout in milliseconds
-const RPC_TIMEOUT = 15000;
+// RPC request timeout from constants
+const RPC_TIMEOUT = RPC_TIMEOUT_MS;
 
 // =============================================================
 // RESPONSE CACHING (for read-only methods)
@@ -125,7 +126,6 @@ interface CacheEntry {
 // LRU cache with automatic cleanup
 // Using Map which maintains insertion order, combined with lastAccessed tracking
 const responseCache = new Map<string, CacheEntry>();
-const MAX_CACHE_SIZE = 1000;
 
 function getCacheKey(chainId: number, method: string, params?: unknown[]): string {
   return `${chainId}:${method}:${params ? JSON.stringify(params) : ''}`;
@@ -153,7 +153,7 @@ function setCachedResponse(key: string, response: unknown, ttlMs: number): void 
   const now = Date.now();
 
   // LRU eviction: Remove least recently used entries if cache is full
-  if (responseCache.size >= MAX_CACHE_SIZE) {
+  if (responseCache.size >= MAX_RPC_CACHE_SIZE) {
     // Find and remove the least recently accessed entry
     let lruKey: string | null = null;
     let lruTime = Infinity;
