@@ -173,6 +173,7 @@ export function useUserActiveGames(address: string | undefined) {
 }
 
 // Fetch player statistics using server-side RPC for optimal performance
+// Uses get_player_stats_v2 which returns all data in a single query (3 queries → 1)
 export function usePlayerStats(address: string | undefined) {
   return useQuery({
     queryKey: ['player-stats', address],
@@ -181,12 +182,32 @@ export function usePlayerStats(address: string | undefined) {
 
       const lowerAddress = address.toLowerCase();
 
-      // Use server-side RPC for main stats (much faster than client aggregation)
+      // Use enhanced RPC that returns everything in one query
+      // (basic stats + tier breakdown + pending count)
       const { data: rpcData, error: rpcError } = await supabase
-        .rpc('get_player_stats', { player_address: lowerAddress });
+        .rpc('get_player_stats_v2', { player_address: lowerAddress });
 
       if (rpcError) {
         devLog.error('Error fetching player stats via RPC:', rpcError);
+        // Fallback to basic RPC if v2 doesn't exist yet
+        if (rpcError.code === '42883') { // function does not exist
+          devLog.warn('get_player_stats_v2 not found, falling back to basic stats');
+          const { data: fallbackData } = await supabase
+            .rpc('get_player_stats', { player_address: lowerAddress });
+          const stats = Array.isArray(fallbackData) ? fallbackData[0] : fallbackData;
+          return {
+            totalGames: Number(stats?.total_games) || 0,
+            wins: Number(stats?.wins) || 0,
+            losses: Number(stats?.losses) || 0,
+            pending: 0,
+            totalWagered: BigInt(stats?.total_wagered || 0),
+            totalWon: BigInt(stats?.total_won || 0),
+            totalLost: BigInt(stats?.total_lost || 0),
+            totalFees: BigInt(0),
+            gamesByTier: [0, 0, 0, 0, 0],
+            winsByTier: [0, 0, 0, 0, 0],
+          };
+        }
         return null;
       }
 
@@ -208,46 +229,22 @@ export function usePlayerStats(address: string | undefined) {
         };
       }
 
-      // Fetch tier breakdown separately (minimal query - only tier and winner for resolved games)
-      const { data: tierData } = await supabase
-        .from('games')
-        .select('tier, winner_address, status')
-        .or(`creator_address.ilike.${lowerAddress},joiner_address.ilike.${lowerAddress}`)
-        .eq('status', 'resolved');
-
-      const gamesByTier = [0, 0, 0, 0, 0];
-      const winsByTier = [0, 0, 0, 0, 0];
-
-      if (tierData) {
-        for (const game of tierData) {
-          if (game.tier >= 0 && game.tier < 5) {
-            gamesByTier[game.tier]++;
-            if (game.winner_address?.toLowerCase() === lowerAddress) {
-              winsByTier[game.tier]++;
-            }
-          }
-        }
-      }
-
-      // Count pending/matched games
-      const { count: pendingCount } = await supabase
-        .from('games')
-        .select('id', { count: 'exact', head: true })
-        .or(`creator_address.ilike.${lowerAddress},joiner_address.ilike.${lowerAddress}`)
-        .in('status', ['pending', 'matched']);
+      // Parse tier arrays from JSON (already numbers from PostgreSQL)
+      const gamesByTier = stats.games_by_tier || [0, 0, 0, 0, 0];
+      const winsByTier = stats.wins_by_tier || [0, 0, 0, 0, 0];
 
       // RPC returns numeric values, convert to BigInt for wei amounts
       return {
         totalGames: Number(stats.total_games) || 0,
         wins: Number(stats.wins) || 0,
         losses: Number(stats.losses) || 0,
-        pending: pendingCount || 0,
+        pending: Number(stats.pending_games) || 0,
         totalWagered: BigInt(stats.total_wagered || 0),
         totalWon: BigInt(stats.total_won || 0),
         totalLost: BigInt(stats.total_lost || 0),
         totalFees: BigInt(0), // Fee tracking not in RPC, can add if needed
-        gamesByTier,
-        winsByTier,
+        gamesByTier: gamesByTier.map(Number),
+        winsByTier: winsByTier.map(Number),
       };
     },
     enabled: !!address,

@@ -2,7 +2,6 @@
 
 import { useCallback, useMemo, useEffect, useRef } from 'react';
 import { useAccount } from 'wagmi';
-import { useQueryClient } from '@tanstack/react-query';
 import { useGameStore } from '@/store/gameStore';
 import { useUserActiveGames } from '@/hooks/useGames';
 import { Game } from '@/types/game';
@@ -16,8 +15,9 @@ export const AUTO_CANCEL_MS = 5 * 60 * 1000;
 // Warning threshold - show warning when less than this time remaining
 export const WARNING_THRESHOLD_MS = 60 * 1000; // 1 minute
 
-// Poll interval when games are past auto-cancel threshold (check if DB updated)
-const EXPIRED_POLL_INTERVAL_MS = 5000; // 5 seconds
+// NOTE: Polling removed - useRealtimeSync handles game status changes including cancellations
+// When Chainlink Automation cancels a game, the realtime subscription detects the status
+// change and automatically updates the UI via query invalidation.
 
 /**
  * Calculate time remaining for any game based on created_at
@@ -68,16 +68,14 @@ export function isGameExpired(game: Game): boolean {
  *
  * Creators can cancel their games immediately - no waiting required.
  *
- * When games pass the auto-cancel threshold, this hook polls for DB updates
- * to ensure the UI reflects the on-chain state.
+ * Game status updates (including Chainlink cancellations) are handled by
+ * useRealtimeSync which subscribes to postgres_changes on the games table.
  */
 export function useGameTimeout() {
   const { address } = useAccount();
   const { queueModal } = useGameStore();
   // Use DB-backed active games instead of Zustand
   const { data: dbActiveGames = [] } = useUserActiveGames(address);
-  const queryClient = useQueryClient();
-  const pollingRef = useRef<NodeJS.Timeout | null>(null);
   // Track which games have already shown expired modal to avoid duplicates
   const expiredModalShownRef = useRef<Set<string>>(new Set());
 
@@ -132,14 +130,6 @@ export function useGameTimeout() {
     return getTimeRemaining(gameId) <= 0;
   }, [getTimeRemaining]);
 
-  // Check if any games are past the auto-cancel threshold
-  const hasExpiredGames = useMemo(() => {
-    return pendingTimeouts.some(t => {
-      const now = new Date();
-      return now >= t.autoCancelAt;
-    });
-  }, [pendingTimeouts]);
-
   // Auto-trigger expired modal when games expire
   useEffect(() => {
     userPendingGames.forEach((game) => {
@@ -165,48 +155,14 @@ export function useGameTimeout() {
     });
   }, [userPendingGames]);
 
-  // Poll for DB updates when games are past auto-cancel threshold
-  // This ensures UI updates even if realtime subscription misses the event
-  useEffect(() => {
-    if (!hasExpiredGames) {
-      // No expired games, stop polling
-      if (pollingRef.current) {
-        clearInterval(pollingRef.current);
-        pollingRef.current = null;
-      }
-      return;
-    }
-
-    // Start polling for DB updates
-    devLog.log('⏰ [useGameTimeout] Games past auto-cancel threshold, polling for updates...');
-
-    const poll = () => {
-      queryClient.invalidateQueries({ queryKey: ['games', 'pending'] });
-      queryClient.invalidateQueries({ queryKey: ['games', 'active'] });
-      if (address) {
-        queryClient.invalidateQueries({ queryKey: ['games', 'player', address] });
-      }
-    };
-
-    // Poll immediately
-    poll();
-
-    // Then poll every 5 seconds
-    pollingRef.current = setInterval(poll, EXPIRED_POLL_INTERVAL_MS);
-
-    return () => {
-      if (pollingRef.current) {
-        clearInterval(pollingRef.current);
-        pollingRef.current = null;
-      }
-    };
-  }, [hasExpiredGames, queryClient, address]);
+  // NOTE: Polling removed - useRealtimeSync handles game cancellation via postgres_changes
+  // When Chainlink Automation cancels games, the realtime subscription detects the UPDATE
+  // and automatically invalidates queries, updating the UI.
 
   return {
     pendingTimeouts,
     getTimeRemaining,
     formatTimeRemaining,
     isAutoCancelEligible,
-    hasExpiredGames,
   };
 }
