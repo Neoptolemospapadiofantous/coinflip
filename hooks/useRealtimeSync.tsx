@@ -60,7 +60,6 @@ export function useRealtimeSync() {
   const actionsRef = useRef({ updateActiveGame, addActiveGame, removeActiveGame });
   const fallbackIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const fallbackRetryCountRef = useRef(0);
-  const initialPollTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   // Map game ID -> timeout for auto-removal (prevents duplicate timeouts)
   const autoRemoveTimeoutsRef = useRef<Map<string, NodeJS.Timeout>>(new Map());
   const mountedRef = useRef(true);
@@ -321,8 +320,9 @@ export function useRealtimeSync() {
         }
       });
 
-    // Initial fallback poll to ensure data is fresh
-    initialPollTimeoutRef.current = setTimeout(fallbackPoll, 1000);
+    // NOTE: Initial poll removed - WebSocket connection handles data freshness
+    // The fallback polling system kicks in automatically if WebSocket fails
+    // This eliminates 1 redundant query on every page load
 
     // Capture ref values for cleanup
     const autoRemoveTimeouts = autoRemoveTimeoutsRef.current;
@@ -335,10 +335,6 @@ export function useRealtimeSync() {
       if (fallbackIntervalRef.current) {
         clearTimeout(fallbackIntervalRef.current);
         fallbackIntervalRef.current = null;
-      }
-      if (initialPollTimeoutRef.current) {
-        clearTimeout(initialPollTimeoutRef.current);
-        initialPollTimeoutRef.current = null;
       }
       // Clear all auto-remove timeouts (Map values are the timeout IDs)
       for (const timeout of autoRemoveTimeouts.values()) {

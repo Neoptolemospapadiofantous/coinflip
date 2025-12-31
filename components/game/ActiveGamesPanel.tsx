@@ -110,6 +110,15 @@ const ActiveGameCard = memo(function ActiveGameCard({ game, onViewGame, userAddr
   const isWinner = game.winner_address?.toLowerCase() === userAddress?.toLowerCase();
   const userChoice = isCreator ? game.creator_choice : game.joiner_choice;
 
+  // Local ticker for countdown timer - only for pending games
+  // This prevents re-rendering the entire panel every second
+  const [, setTick] = useState(0);
+  useEffect(() => {
+    if (game.status !== 'pending') return;
+    const interval = setInterval(() => setTick(t => t + 1), 1000);
+    return () => clearInterval(interval);
+  }, [game.status]);
+
   // Time-based states for pending games
   const warning = game.status === 'pending' && isGameWarning(game);
   const expired = game.status === 'pending' && isGameExpired(game);
@@ -219,7 +228,8 @@ export function ActiveGamesPanel() {
   const { pendingTransactions } = usePendingTransactions();
   const { queueModal } = useGameStore();
 
-  const [, setTick] = useState(0);
+  // NOTE: Global ticker removed - each ActiveGameCard now manages its own timer
+  // This prevents re-rendering all cards every second when only pending games need timers
   const [isCollapsed, setIsCollapsed] = useState(() => {
     return safeStorage.getItem(PANEL_COLLAPSED_KEY) === 'true';
   });
@@ -229,14 +239,6 @@ export function ActiveGamesPanel() {
   const pendingCreateTxs = useMemo(() => {
     return pendingTransactions.filter(tx => tx.tx_type === 'create');
   }, [pendingTransactions]);
-
-  // Force re-render every second to update countdown timers
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setTick(t => t + 1);
-    }, 1000);
-    return () => clearInterval(interval);
-  }, []);
 
   // Persist collapse state
   const toggleCollapsed = () => {

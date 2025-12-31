@@ -6,6 +6,17 @@ import { useState, useRef, useEffect, useCallback } from 'react';
 import { isUserError } from '@/lib/errors';
 import { devLog } from '@/lib/utils';
 import { CANCEL_COOLDOWN_MS, GAS_LIMITS } from '@/lib/constants';
+import { RateLimiter } from '@/lib/security';
+
+// =============================================================
+// CLIENT-SIDE RATE LIMITING
+// =============================================================
+
+// Rate limiter: 3 game creations per minute per wallet
+const createGameLimiter = new RateLimiter(3, 60000);
+
+// Rate limiter: 5 game joins per minute per wallet
+const joinGameLimiter = new RateLimiter(5, 60000);
 
 
 // =============================================================
@@ -122,6 +133,14 @@ export function useCreateGame() {
       return;
     }
 
+    // Client-side rate limiting (3 games per minute)
+    const walletAddress = walletClient.account?.address || 'unknown';
+    if (!createGameLimiter.isAllowed(walletAddress)) {
+      setWriteError(new Error('Too many game creations. Please wait a moment.'));
+      devLog.warn('⚠️ Rate limit hit for createGame');
+      return;
+    }
+
     // Validate inputs before sending transaction
     const tierValidation = validateTier(tier);
     if (!tierValidation.valid) {
@@ -205,6 +224,14 @@ export function useJoinGame() {
   const joinGame = async (gameId: string, amount: string) => {
     if (!walletClient) {
       setWriteError(new Error('Wallet not connected'));
+      return;
+    }
+
+    // Client-side rate limiting (5 joins per minute)
+    const walletAddress = walletClient.account?.address || 'unknown';
+    if (!joinGameLimiter.isAllowed(walletAddress)) {
+      setWriteError(new Error('Too many game joins. Please wait a moment.'));
+      devLog.warn('⚠️ Rate limit hit for joinGame');
       return;
     }
 

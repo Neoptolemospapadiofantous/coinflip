@@ -12,11 +12,18 @@ import { devLog } from '@/lib/utils';
  *
  * Provides instant UI feedback when transactions are sent,
  * before blockchain confirmation and database sync.
+ *
+ * NOTE: CREATE operations only update React Query cache (not Zustand).
+ * ActiveGamesPanel uses DB-backed pending_transactions for created games.
+ *
+ * JOIN/CANCEL operations still update Zustand's activeGames because
+ * the modal queue system needs games tracked there to show modals.
  */
 export function useOptimisticUpdates() {
   const queryClient = useQueryClient();
   const { address } = useAccount();
-  const { addActiveGame, updateActiveGame, removeActiveGame } = useGameStore();
+  // NOTE: Only addActiveGame and removeActiveGame are used (for join/cancel modal support)
+  const { addActiveGame, removeActiveGame } = useGameStore();
 
   /**
    * Optimistically add a new game to the pending list

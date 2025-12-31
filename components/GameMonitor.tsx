@@ -1,11 +1,18 @@
 'use client';
 
+import dynamic from 'next/dynamic';
 import { useActiveGameMonitor } from '@/hooks/useActiveGameMonitor';
 import { useWalletChangeDetection } from '@/hooks/useWalletChangeDetection';
 import { useGameTimeout } from '@/hooks/useGameTimeout';
-import { GameSessionModal } from './game/GameSessionModal';
 import { useAccount } from 'wagmi';
 import { useGameStore } from '@/store/gameStore';
+
+// Lazy load GameSessionModal - only loaded when modal is shown
+// This reduces initial bundle size by ~50KB (modal is 1000+ lines)
+const GameSessionModal = dynamic(
+  () => import('./game/GameSessionModal').then(mod => ({ default: mod.GameSessionModal })),
+  { ssr: false }
+);
 
 /**
  * Global game monitor component
