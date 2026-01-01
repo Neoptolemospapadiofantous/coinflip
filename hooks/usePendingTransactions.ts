@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useRef } from 'react';
+import { useCallback, useEffect, useRef, useMemo } from 'react';
 import { useAccount } from 'wagmi';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
@@ -45,8 +45,18 @@ export function usePendingTransactions() {
   const queryClient = useQueryClient();
   const pendingOpsRef = useRef<Set<string>>(new Set());
 
-  // Query key for pending transactions
-  const queryKey = ['pending-transactions', address?.toLowerCase()];
+  // Query key for pending transactions - memoize to prevent unnecessary re-renders
+  const normalizedAddress = address?.toLowerCase() || '';
+  const queryKey = useMemo(
+    () => ['pending-transactions', normalizedAddress] as const,
+    [normalizedAddress]
+  );
+
+  // Refs for stable references in realtime callback
+  const queryClientRef = useRef(queryClient);
+  const queryKeyRef = useRef(queryKey);
+  queryClientRef.current = queryClient;
+  queryKeyRef.current = queryKey;
 
   // Fetch active pending transactions
   const { data: pendingTransactions, isLoading, refetch } = useQuery({
@@ -76,18 +86,19 @@ export function usePendingTransactions() {
   });
 
   // Realtime subscription for instant updates
+  // Uses refs to avoid re-subscribing when queryClient/queryKey change
   useEffect(() => {
-    if (!address) return;
+    if (!normalizedAddress) return;
 
     const channel = supabase
-      .channel(`pending_tx_${address.toLowerCase()}`)
+      .channel(`pending_tx_${normalizedAddress}`)
       .on(
         'postgres_changes',
         {
           event: '*',
           schema: 'public',
           table: 'pending_transactions',
-          filter: `user_address=eq.${address.toLowerCase()}`,
+          filter: `user_address=eq.${normalizedAddress}`,
         },
         (payload) => {
           devLog.log('[PendingTx] Realtime update:', payload.eventType);
@@ -95,7 +106,7 @@ export function usePendingTransactions() {
           if (payload.eventType === 'INSERT') {
             const newTx = payload.new as PendingTransaction;
             if (['pending', 'submitted'].includes(newTx.status)) {
-              queryClient.setQueryData<PendingTransaction[]>(queryKey, (old) => {
+              queryClientRef.current.setQueryData<PendingTransaction[]>(queryKeyRef.current, (old) => {
                 // Avoid duplicates
                 if (old?.some(tx => tx.id === newTx.id)) return old;
                 return [...(old || []), newTx];
@@ -103,7 +114,7 @@ export function usePendingTransactions() {
             }
           } else if (payload.eventType === 'UPDATE') {
             const updatedTx = payload.new as PendingTransaction;
-            queryClient.setQueryData<PendingTransaction[]>(queryKey, (old) => {
+            queryClientRef.current.setQueryData<PendingTransaction[]>(queryKeyRef.current, (old) => {
               // If status is no longer pending/submitted, remove from list
               if (!['pending', 'submitted'].includes(updatedTx.status)) {
                 return (old || []).filter(tx => tx.id !== updatedTx.id);
@@ -115,7 +126,7 @@ export function usePendingTransactions() {
             });
           } else if (payload.eventType === 'DELETE') {
             const deletedTx = payload.old as PendingTransaction;
-            queryClient.setQueryData<PendingTransaction[]>(queryKey, (old) => {
+            queryClientRef.current.setQueryData<PendingTransaction[]>(queryKeyRef.current, (old) => {
               return (old || []).filter(tx => tx.id !== deletedTx.id);
             });
           }
@@ -126,7 +137,7 @@ export function usePendingTransactions() {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [address, queryClient, queryKey]);
+  }, [normalizedAddress]); // Only re-subscribe when address changes
 
   // Create a new pending transaction
   const createMutation = useMutation({
@@ -295,25 +306,40 @@ export function usePendingTransactions() {
     return hasPendingTransaction('join', gameId);
   }, [hasPendingTransaction]);
 
-  // Cleanup expired transactions on mount and periodically
+  // Cleanup expired transactions on mount and periodically with retry logic
   useEffect(() => {
     if (!address) return;
 
-    const cleanupExpired = async () => {
-      const { error } = await supabase.rpc('cleanup_expired_pending_transactions');
-      if (error) {
-        devLog.warn('[PendingTx] Cleanup error:', error.message);
+    const MAX_RETRIES = 3;
+
+    const cleanupExpired = async (retryCount = 0): Promise<void> => {
+      try {
+        const { error } = await supabase.rpc('cleanup_expired_pending_transactions');
+        if (error) {
+          throw error;
+        }
+        if (retryCount > 0) {
+          devLog.log('[PendingTx] Cleanup succeeded after retry');
+        }
+      } catch (err) {
+        devLog.warn('[PendingTx] Cleanup error:', err);
+
+        // Retry with exponential backoff
+        if (retryCount < MAX_RETRIES) {
+          const delayMs = Math.pow(2, retryCount) * 1000; // 1s, 2s, 4s
+          await new Promise(resolve => setTimeout(resolve, delayMs));
+          return cleanupExpired(retryCount + 1);
+        }
+        devLog.error('[PendingTx] Cleanup failed after', MAX_RETRIES, 'retries');
       }
     };
 
     // Run cleanup once on mount
-    cleanupExpired().catch(() => {
-      // Error already logged in cleanupExpired
-    });
+    cleanupExpired();
 
     // Run cleanup periodically to catch any stale transactions
     const cleanupInterval = setInterval(() => {
-      cleanupExpired().catch(() => {});
+      cleanupExpired();
     }, PENDING_TX_CLEANUP_INTERVAL_MS);
 
     return () => {

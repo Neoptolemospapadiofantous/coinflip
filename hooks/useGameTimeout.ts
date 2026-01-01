@@ -88,28 +88,34 @@ export function useGameTimeout() {
     );
   }, [dbActiveGames, address]);
 
-  // Calculate pending timeouts from user pending games (for display only)
-  const pendingTimeouts = useMemo(() => {
-    return userPendingGames.map((game) => {
+  // Create a Map for O(1) timeout lookups (instead of O(n) array.find)
+  const pendingTimeoutsMap = useMemo(() => {
+    const map = new Map<string, { createdAt: Date; autoCancelAt: Date }>();
+    userPendingGames.forEach((game) => {
       const createdAt = new Date(game.created_at);
       const autoCancelAt = new Date(createdAt.getTime() + AUTO_CANCEL_MS);
-      return {
-        gameId: game.id,
-        createdAt,
-        autoCancelAt,
-      };
+      map.set(game.id, { createdAt, autoCancelAt });
     });
+    return map;
   }, [userPendingGames]);
 
+  // Array version for iteration (derived from Map)
+  const pendingTimeouts = useMemo(() => {
+    return Array.from(pendingTimeoutsMap.entries()).map(([gameId, times]) => ({
+      gameId,
+      ...times,
+    }));
+  }, [pendingTimeoutsMap]);
+
   // Calculate time remaining until Chainlink auto-cancel (for user's games)
+  // Uses Map for O(1) lookup instead of O(n) array.find
   const getTimeRemaining = useCallback((gameId: string): number => {
-    const timeout = pendingTimeouts.find((t) => t.gameId === gameId);
+    const timeout = pendingTimeoutsMap.get(gameId);
     if (!timeout) return 0;
 
-    const now = new Date();
-    const remaining = timeout.autoCancelAt.getTime() - now.getTime();
+    const remaining = timeout.autoCancelAt.getTime() - Date.now();
     return Math.max(0, remaining);
-  }, [pendingTimeouts]);
+  }, [pendingTimeoutsMap]);
 
   // Format time remaining as string (for user's games)
   const formatTimeRemaining = useCallback((gameId: string): string => {

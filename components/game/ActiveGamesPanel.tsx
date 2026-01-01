@@ -196,22 +196,40 @@ export function ActiveGamesPanel() {
     return safeStorage.getItem(PANEL_COLLAPSED_KEY) === 'true';
   });
 
-  // Filter pending transactions to only show 'create' type (game creation confirmations)
-  // Join/cancel transactions don't need to show in the panel as separate items
-  const pendingCreateTxs = useMemo(() => {
-    return pendingTransactions.filter(tx => tx.tx_type === 'create');
-  }, [pendingTransactions]);
+  // Consolidate all derived state in a single memoization to prevent
+  // intermediate re-renders when one source changes but not the other
+  const { pendingCreateTxs, visibleGames, totalCount } = useMemo(() => {
+    // Filter pending transactions to only show 'create' type
+    const createTxs = pendingTransactions.filter(tx => tx.tx_type === 'create');
+
+    // Filter to only show pending/matched games (resolved ones auto-close)
+    // Also deduplicate by ID as a safeguard against race conditions
+    const seen = new Set<string>();
+    const visible = dbActiveGames
+      .filter((g) => g.status === 'pending' || g.status === 'matched')
+      .filter((g) => {
+        if (seen.has(g.id)) return false;
+        seen.add(g.id);
+        return true;
+      });
+
+    return {
+      pendingCreateTxs: createTxs,
+      visibleGames: visible,
+      totalCount: createTxs.length + visible.length,
+    };
+  }, [pendingTransactions, dbActiveGames]);
+
+  const isLoading = isLoadingGames || isLoadingTx;
 
   // Persist collapse state
-  const toggleCollapsed = () => {
+  const toggleCollapsed = useCallback(() => {
     setIsCollapsed(prev => {
       const newValue = !prev;
       safeStorage.setItem(PANEL_COLLAPSED_KEY, String(newValue));
       return newValue;
     });
-  };
-
-  // Real-time updates handled by useRealtimeSync invalidating the query
+  }, []);
 
   // Memoized handler to prevent ActiveGameCard memo invalidation
   const handleViewGame = useCallback((game: Game) => {
@@ -219,23 +237,6 @@ export function ActiveGamesPanel() {
       queueModal(game, game.status === 'matched' ? 'matched' : 'resolved');
     }
   }, [queueModal]);
-
-  // Filter to only show pending/matched games (resolved ones auto-close)
-  // Also deduplicate by ID as a safeguard against race conditions
-  const visibleGames = useMemo(() => {
-    const seen = new Set<string>();
-    return dbActiveGames
-      .filter((g) => g.status === 'pending' || g.status === 'matched')
-      .filter((g) => {
-        if (seen.has(g.id)) return false;
-        seen.add(g.id);
-        return true;
-      });
-  }, [dbActiveGames]);
-
-  // Total count includes both pending transactions and visible games
-  const totalCount = pendingCreateTxs.length + visibleGames.length;
-  const isLoading = isLoadingGames || isLoadingTx;
 
   // Debug logging
   useEffect(() => {
