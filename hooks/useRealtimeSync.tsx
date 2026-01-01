@@ -99,8 +99,9 @@ export function useRealtimeSync() {
       queryKeys.stats.game,
     ];
     if (addressRef.current) {
+      const lowerAddress = addressRef.current.toLowerCase();
       keys.push(queryKeys.games.player(addressRef.current));
-      keys.push(queryKeys.games.userActive(addressRef.current));
+      keys.push(queryKeys.games.userActive(lowerAddress));
     }
     // Invalidate all at once (React Query batches within same tick)
     keys.forEach(queryKey => {
@@ -153,12 +154,19 @@ export function useRealtimeSync() {
               batchInvalidate([queryKeys.games.pending, queryKeys.games.active, queryKeys.stats.game]);
             }
 
-            // If this is the user's game, add to active games for modal tracking
-            // NOTE: We no longer remove optimistic games from Zustand - we don't add them there anymore
-            // ActiveGamesPanel uses DB-backed pending_transactions instead
+            // If this is the user's game, add directly to userActive cache for instant UI
             const userAddress = addressRef.current?.toLowerCase();
             if (userAddress && game.creator_address?.toLowerCase() === userAddress) {
+              devLog.log('🎯 [RealtimeSync] Adding game to userActive cache:', game.id);
               actionsRef.current.updateActiveGame(game);
+              // Add to userActive cache directly (not invalidate) to prevent race with pending tx removal
+              queryClientRef.current.setQueryData(queryKeys.games.userActive(userAddress), (old: Game[] | undefined) => {
+                devLog.log('🎯 [RealtimeSync] userActive cache update - old:', old?.length, 'adding game:', game.id);
+                if (!old) return [game];
+                // Avoid duplicates
+                if (old.some(g => g.id === game.id)) return old;
+                return [game, ...old];
+              });
             }
           } catch (error) {
             devLog.error('🆕 [RealtimeSync] Error processing INSERT:', error);

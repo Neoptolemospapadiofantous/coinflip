@@ -22,7 +22,9 @@ import { useTiers } from '@/hooks/useTiers';
 import { useJoinGame } from '@/hooks/useContract';
 import { usePendingGames, useGameStats } from '@/hooks/useGames';
 import { formatCurrency, formatGameId, devLog } from '@/lib/utils';
-import { Clock, Users, Loader2, TrendingUp, XCircle, AlertCircle, Wifi, WifiOff, Wallet } from 'lucide-react';
+import { Clock, Users, Loader2, TrendingUp, XCircle, AlertCircle, Wifi, WifiOff, Wallet, ChevronLeft, ChevronRight } from 'lucide-react';
+
+const GAMES_PER_PAGE = 10;
 import Link from 'next/link';
 import { StatusBadge } from '@/components/game/StatusBadge';
 import { useCancelGame } from '@/hooks/useContract';
@@ -128,6 +130,7 @@ export default function QueuePage() {
   const [joinedGameId, setJoinedGameId] = useState<string | null>(null);
   const [cancelingGameId, setCancelingGameId] = useState<string | null>(null);
   const [now, setNow] = useState(Date.now()); // For live time updates
+  const [currentPage, setCurrentPage] = useState(0);
   const { addActiveGame, updateActiveGame, queueModal } = useGameStore();
 
   // DB-backed pending transactions (persists across refreshes/devices)
@@ -276,6 +279,21 @@ export default function QueuePage() {
   const otherPendingGames = pendingGames?.filter(
     (game) => game.creator_address.toLowerCase() !== address?.toLowerCase() && !isGameCancelling(game.id) && !isGameJoining(game.id)
   );
+
+  // Pagination for available games
+  const totalGames = otherPendingGames?.length || 0;
+  const totalPages = Math.ceil(totalGames / GAMES_PER_PAGE);
+  const paginatedGames = otherPendingGames?.slice(
+    currentPage * GAMES_PER_PAGE,
+    (currentPage + 1) * GAMES_PER_PAGE
+  );
+
+  // Reset page when games list changes significantly
+  useEffect(() => {
+    if (currentPage >= totalPages && totalPages > 0) {
+      setCurrentPage(totalPages - 1);
+    }
+  }, [totalPages, currentPage]);
 
   // Auto-clear pending create transaction when user's game appears
   // This provides instant feedback instead of waiting for DB poll
@@ -539,7 +557,7 @@ export default function QueuePage() {
                                 Game {formatGameId(game.id)}
                               </Text>
                               <Text size="1" color="gray">
-                                {isCancellingThis ? 'Waiting for blockchain confirmation...' : 'Waiting for opponent...'}
+                                {isCancellingThis ? 'Cancelling...' : 'Waiting for opponent...'}
                               </Text>
                             </Flex>
                             <Badge color="yellow" size="2" className="glow-gold">
@@ -595,8 +613,11 @@ export default function QueuePage() {
             <Card className="card-simple" size="4">
               <Flex direction="column" gap="4" p="6">
                 <Flex align="center" justify="between">
-                  <Flex align="center" gap="3">
+                  <Flex align="center" gap="2">
                     <Heading size="5">Available Games</Heading>
+                    {totalGames > 0 && (
+                      <Badge size="1" color="purple" variant="soft">{totalGames}</Badge>
+                    )}
                     <Badge size="1" color={isLive ? 'green' : isConnecting ? 'yellow' : 'red'} variant="soft">
                       <Flex align="center" gap="1">
                         {isLive ? <Wifi className="w-3 h-3" /> : isConnecting ? <Loader2 className="w-3 h-3 animate-spin" /> : <WifiOff className="w-3 h-3" />}
@@ -662,7 +683,7 @@ export default function QueuePage() {
                     </Table.Header>
 
                     <Table.Body>
-                      {otherPendingGames.map((game, index) => {
+                      {paginatedGames?.map((game, index) => {
                         const tier = tiers?.find((t) => t.id === game.tier);
                         const expired = isGameExpired(game);
                         const warning = isGameWarning(game);
@@ -739,6 +760,36 @@ export default function QueuePage() {
                       })}
                     </Table.Body>
                   </Table.Root>
+                )}
+
+                {/* Pagination controls */}
+                {totalPages > 1 && (
+                  <Flex align="center" justify="between" pt="2">
+                    <Text size="1" color="gray">
+                      Showing {currentPage * GAMES_PER_PAGE + 1}-{Math.min((currentPage + 1) * GAMES_PER_PAGE, totalGames)} of {totalGames}
+                    </Text>
+                    <Flex align="center" gap="2">
+                      <Button
+                        size="1"
+                        variant="soft"
+                        disabled={currentPage === 0}
+                        onClick={() => setCurrentPage(p => p - 1)}
+                      >
+                        <ChevronLeft className="w-4 h-4" />
+                      </Button>
+                      <Text size="1" color="gray">
+                        {currentPage + 1} / {totalPages}
+                      </Text>
+                      <Button
+                        size="1"
+                        variant="soft"
+                        disabled={currentPage >= totalPages - 1}
+                        onClick={() => setCurrentPage(p => p + 1)}
+                      >
+                        <ChevronRight className="w-4 h-4" />
+                      </Button>
+                    </Flex>
+                  </Flex>
                 )}
               </Flex>
             </Card>
@@ -856,7 +907,7 @@ export default function QueuePage() {
               <Flex direction="column" gap="3" align="center" py="4">
                 <Loader2 className="w-12 h-12 text-cyan-400 animate-spin" />
                 <Text size="2" weight="bold" className="text-cyan-400">
-                  Waiting for blockchain confirmation...
+                  Confirming...
                 </Text>
                 <Text size="1" color="gray" className="font-mono">
                   TX: {txHash.slice(0, 10)}...{txHash.slice(-8)}

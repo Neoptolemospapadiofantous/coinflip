@@ -71,7 +71,8 @@ export function usePendingTransactions() {
     enabled: !!address,
     staleTime: PENDING_TX_STALE_TIME_MS,
     gcTime: 60 * 1000, // 1 minute
-    // No polling - use realtime subscription instead
+    // Fallback polling in case realtime fails (DB trigger updates status)
+    refetchInterval: 5000,
   });
 
   // Realtime subscription for instant updates

@@ -160,8 +160,9 @@ export function usePlayerGames(address: string | undefined, limit: number = 50) 
 // Fetch user's active games (pending/matched) from database
 // This is the source of truth for the Active Games panel
 export function useUserActiveGames(address: string | undefined) {
+  const normalizedAddress = address?.toLowerCase() || '';
   return useQuery({
-    queryKey: queryKeys.games.userActive(address || ''),
+    queryKey: queryKeys.games.userActive(normalizedAddress),
     queryFn: async (): Promise<Game[]> => {
       if (!address) return [];
 
