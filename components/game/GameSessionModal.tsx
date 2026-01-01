@@ -13,7 +13,7 @@ import { invalidateGameQueries, removeGameFromPendingCache } from '@/lib/queryUt
 import { Loader2, Users, Trophy, Zap, AlertTriangle, Clock, XCircle, Layers } from 'lucide-react';
 import { useGameStore } from '@/store/gameStore';
 import { validateGameState } from '@/hooks/useGameSync';
-import { useGame } from '@/hooks/useGames';
+import { useGame, useGameStats } from '@/hooks/useGames';
 import { useCancelGame } from '@/hooks/useContract';
 import { showToast } from '@/lib/toast';
 import { playSound } from '@/lib/sounds';
@@ -65,6 +65,18 @@ export function GameSessionModal({ game, open, onClose, userAddress, modalType }
 
   // Fetch fresh game data for auto-refetch on validation errors
   const { data: freshGame, refetch: refetchGame } = useGame(game?.id ?? null);
+
+  // Fetch game stats to get actual average VRF resolution time
+  const { data: gameStats } = useGameStats();
+  // Calculate typical VRF time from actual game data (default to 25s if no data)
+  // avg_game_duration_seconds includes wait time + VRF, so VRF portion is ~60-80% of it
+  const typicalVrfSeconds = useMemo(() => {
+    if (gameStats?.avg_game_duration_seconds) {
+      // Use 80% of average game duration as VRF expectation (conservative estimate)
+      return Math.round(gameStats.avg_game_duration_seconds * 0.8);
+    }
+    return 25; // Default if no data
+  }, [gameStats?.avg_game_duration_seconds]);
 
   // Refs for tracking
   const vrfTimerRef = useRef<NodeJS.Timeout | null>(null);
@@ -501,18 +513,20 @@ export function GameSessionModal({ game, open, onClose, userAddress, modalType }
 
                     {/* Progress bar */}
                     <Progress
-                      value={Math.min(vrfElapsedSeconds, 30)}
-                      max={30}
+                      value={Math.min(vrfElapsedSeconds, typicalVrfSeconds)}
+                      max={typicalVrfSeconds}
                       size="2"
-                      color={vrfElapsedSeconds > 45 ? 'amber' : 'cyan'}
+                      color={vrfElapsedSeconds > typicalVrfSeconds * 1.5 ? 'amber' : 'cyan'}
                     />
                     <Flex justify="between" align="center">
                       <Flex align="center" gap="1" className="text-cyan-400">
                         <Clock className="w-3 h-3" />
                         <Text size="1" weight="bold">{formatTime(vrfElapsedSeconds)}</Text>
                       </Flex>
-                      <Text size="1" color={vrfElapsedSeconds > 30 ? 'amber' : 'gray'}>
-                        {vrfElapsedSeconds <= 30 ? 'Typical: 15-30s' : `+${vrfElapsedSeconds - 30}s over typical`}
+                      <Text size="1" color={vrfElapsedSeconds > typicalVrfSeconds ? 'amber' : 'gray'}>
+                        {vrfElapsedSeconds <= typicalVrfSeconds
+                          ? `Typical: ~${typicalVrfSeconds}s`
+                          : `+${vrfElapsedSeconds - typicalVrfSeconds}s over typical`}
                       </Text>
                     </Flex>
                   </Flex>
@@ -600,7 +614,7 @@ export function GameSessionModal({ game, open, onClose, userAddress, modalType }
 
               {!vrfTimedOut && (
                 <Text size="1" color="gray" align="center" style={{ maxWidth: '400px' }}>
-                  Typically completes within 30 seconds. The result is cryptographically secure and cannot be manipulated.
+                  Typically completes within ~{typicalVrfSeconds} seconds. The result is cryptographically secure and cannot be manipulated.
                 </Text>
               )}
             </Flex>
@@ -975,7 +989,7 @@ export function GameSessionModal({ game, open, onClose, userAddress, modalType }
                       {cancelStatus === 'cancelling' ? (
                         <>
                           <Loader2 className="w-4 h-4 animate-spin mr-2" />
-                          Waiting for confirmation...
+                          Confirming...
                         </>
                       ) : cancelStatus === 'error' ? (
                         'Try Again'

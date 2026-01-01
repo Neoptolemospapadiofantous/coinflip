@@ -649,7 +649,7 @@ export default function PlayPage() {
                               <Text size="2" weight="bold" className={isSuccess ? (isSearching ? 'text-yellow-400' : 'text-green-400') : 'text-gray-400'}>
                                 Broadcasting to Blockchain
                               </Text>
-                              {isSuccess && isSearching && <Text size="1" color="gray">Waiting for blockchain confirmation...</Text>}
+                              {isSuccess && isSearching && <Text size="1" color="gray">Confirming...</Text>}
                               {isSuccess && !isSearching && <Text size="1" className="text-green-400">Confirmed</Text>}
                             </Flex>
                           </Flex>

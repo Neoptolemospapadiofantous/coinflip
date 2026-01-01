@@ -5,6 +5,7 @@ import { Container, Flex, Heading, Text, Button, Card, Callout } from '@radix-ui
 import { devLog } from '@/lib/utils';
 import { AlertTriangle, RefreshCw, Home } from 'lucide-react';
 import Link from 'next/link';
+import * as Sentry from '@sentry/nextjs';
 
 interface ErrorBoundaryProps {
   children: React.ReactNode;
@@ -45,8 +46,14 @@ export class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoun
       errorInfo,
     });
 
-    // TODO: Send to error reporting service (e.g., Sentry)
-    // logErrorToService(error, errorInfo);
+    // Send to Sentry for error tracking
+    Sentry.captureException(error, {
+      contexts: {
+        react: {
+          componentStack: errorInfo.componentStack,
+        },
+      },
+    });
   }
 
   handleReset = () => {

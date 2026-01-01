@@ -45,10 +45,21 @@ const securityHeaders = [
 ];
 
 /**
+ * Generate a cryptographically secure nonce for CSP
+ * Uses Web Crypto API available in Edge runtime
+ */
+function generateNonce(): string {
+  const array = new Uint8Array(16);
+  crypto.getRandomValues(array);
+  return Buffer.from(array).toString('base64');
+}
+
+/**
  * Content Security Policy
  * Restricts resource loading to prevent XSS and injection attacks
+ * Uses nonces for inline scripts in production for enhanced security
  */
-function getCSP() {
+function getCSP(nonce: string) {
   const isDev = process.env.NODE_ENV === 'development';
 
   // In development, we need to allow hot-reload and dev tools
@@ -69,13 +80,12 @@ function getCSP() {
     `.replace(/\s{2,}/g, ' ').trim();
   }
 
-  // Production: Stricter CSP
-  // Note: Next.js generates inline scripts that require 'unsafe-inline' or nonces
-  // For proper CSP without 'unsafe-inline', configure next.config.js with nonce-based CSP
-  // See: https://nextjs.org/docs/app/building-your-application/configuring/content-security-policy
+  // Production: Stricter CSP with nonce-based script loading
+  // The nonce is passed to Next.js via x-nonce header for script injection
+  // Note: 'strict-dynamic' allows scripts loaded by trusted scripts
   return `
     default-src 'self';
-    script-src 'self' 'unsafe-inline' 'unsafe-eval';
+    script-src 'self' 'nonce-${nonce}' 'strict-dynamic';
     style-src 'self' 'unsafe-inline' https://fonts.googleapis.com;
     font-src 'self' https://fonts.gstatic.com;
     img-src 'self' data: https: blob:;
@@ -168,17 +178,28 @@ function isValidOrigin(request: NextRequest): boolean {
  * Middleware entry point
  */
 export function middleware(request: NextRequest) {
-  const response = NextResponse.next();
+  // Generate nonce for this request (used in CSP)
+  const nonce = generateNonce();
+
+  const response = NextResponse.next({
+    request: {
+      headers: new Headers(request.headers),
+    },
+  });
 
   // 1. Apply security headers
   securityHeaders.forEach(({ key, value }) => {
     response.headers.set(key, value);
   });
 
-  // 2. Apply Content Security Policy
-  response.headers.set('Content-Security-Policy', getCSP());
+  // 2. Apply Content Security Policy with nonce
+  response.headers.set('Content-Security-Policy', getCSP(nonce));
 
-  // 3. Rate limiting (only for API routes and mutations)
+  // 3. Pass nonce to the app via header (for Script components)
+  // Next.js can read this in server components via headers()
+  response.headers.set('x-nonce', nonce);
+
+  // 4. Rate limiting (only for API routes and mutations)
   if (request.nextUrl.pathname.startsWith('/api')) {
     const ip = getClientIp(request);
 
@@ -199,7 +220,7 @@ export function middleware(request: NextRequest) {
     }
   }
 
-  // 4. Validate origin for state-changing requests
+  // 5. Validate origin for state-changing requests
   if (['POST', 'PUT', 'DELETE', 'PATCH'].includes(request.method)) {
     if (!isValidOrigin(request)) {
       return new NextResponse(
@@ -217,7 +238,7 @@ export function middleware(request: NextRequest) {
     }
   }
 
-  // 5. Add security response headers
+  // 6. Add security response headers
   response.headers.set('X-DNS-Prefetch-Control', 'off');
   response.headers.set('X-Download-Options', 'noopen');
   response.headers.set('X-Permitted-Cross-Domain-Policies', 'none');
