@@ -17,11 +17,19 @@ import { Layout } from '@/components/layout/Layout';
 import Link from 'next/link';
 import { useGameStats } from '@/hooks/useGames';
 import { useTiers } from '@/hooks/useTiers';
+import { usePendingByTier } from '@/hooks/useRealtimeStats';
 import { GlobalStatsGrid } from '@/components/stats/StatsCards';
 
 export default function Home() {
   const { data: gameStats } = useGameStats();
   const { data: tiers = [] } = useTiers();
+  const { data: pendingByTier } = usePendingByTier();
+
+  // Helper to get pending count for a tier
+  const getPendingCount = (tierId: number) => {
+    const tierData = pendingByTier?.find((t) => t.tier_id === tierId);
+    return tierData?.pending_count || 0;
+  };
   return (
     <Layout>
       <Section size="3" style={{ flex: 1 }}>
@@ -107,7 +115,7 @@ export default function Home() {
                       <TierButton
                         key={tier.id}
                         amount={`$${tier.amountUsd}`}
-                        players={tier.playersInQueue}
+                        players={getPendingCount(tier.id)}
                         active={index === 1}
                       />
                     ))}

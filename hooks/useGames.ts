@@ -50,6 +50,7 @@ function normalizeGames(data: unknown[] | null): Game[] {
  */
 
 // Fetch all games (limited to 100 most recent for performance)
+// TODO: Use games_public view after migration 029 is applied
 export function useGames() {
   return useQuery({
     queryKey: queryKeys.games.all,
@@ -79,7 +80,7 @@ export function usePendingGames() {
     queryKey: queryKeys.games.pending,
     queryFn: async (): Promise<Game[]> => {
       const { data, error } = await supabase
-        .from('active_games')
+        .from('games')
         .select(PENDING_GAME_COLUMNS)
         .eq('status', 'pending')
         .order('created_at', { ascending: false });
@@ -103,8 +104,9 @@ export function useActiveGames() {
     queryKey: queryKeys.games.active,
     queryFn: async (): Promise<Game[]> => {
       const { data, error} = await supabase
-        .from('active_games')
+        .from('games')
         .select(GAME_LIST_COLUMNS)
+        .in('status', ['pending', 'matched'])
         .order('created_at', { ascending: false });
 
       if (error) {
@@ -121,6 +123,7 @@ export function useActiveGames() {
 }
 
 // Fetch games by player address
+// TODO: Use games_public view after migration 029 is applied
 // Real-time updates handled by central sync (useRealtimeSync)
 export function usePlayerGames(address: string | undefined, limit: number = 50) {
   return useQuery({
@@ -159,6 +162,7 @@ export function usePlayerGames(address: string | undefined, limit: number = 50) 
 
 // Fetch user's active games (pending/matched) from database
 // This is the source of truth for the Active Games panel
+// TODO: Use games_public view after migration 029 is applied
 export function useUserActiveGames(address: string | undefined) {
   const normalizedAddress = address?.toLowerCase() || '';
   return useQuery({
@@ -285,6 +289,7 @@ export function usePlayerStats(address: string | undefined) {
 }
 
 // Fetch single game by ID
+// TODO: Use games_public view after migration 029 is applied
 export function useGame(gameId: string | null) {
   return useQuery({
     queryKey: queryKeys.games.single(gameId || ''),

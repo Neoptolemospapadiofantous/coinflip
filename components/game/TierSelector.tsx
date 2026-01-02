@@ -5,9 +5,10 @@ import { useTiers } from '@/hooks/useTiers';
 import { useGameStore } from '@/store/gameStore';
 import { formatCurrency, devLog } from '@/lib/utils';
 import { PLATFORM_FEE_PERCENT, WINNER_PAYOUT_PERCENT } from '@/lib/constants';
-import { Button, Flex, Text, Grid, Badge, Card, Heading, Skeleton } from '@radix-ui/themes';
-import { Users, Lock } from 'lucide-react';
+import { Button, Flex, Text, Grid, Badge, Card, Heading, Skeleton, Tooltip } from '@radix-ui/themes';
+import { Users, Lock, Clock } from 'lucide-react';
 import { NetworkIndicator } from '@/components/ui/NetworkIndicator';
+import { usePendingByTier, useTierMatchTimes, getEstimatedMatchTime } from '@/hooks/useRealtimeStats';
 
 export function TierSelector() {
   const { data: tiers, isLoading } = useTiers();
@@ -23,6 +24,16 @@ export function TierSelector() {
       staleTime: 10000, // Consider data stale after 10s
     },
   });
+
+  // Realtime pending counts and match times
+  const { data: pendingByTier } = usePendingByTier();
+  const { data: matchTimes } = useTierMatchTimes();
+
+  // Helper to get pending count for a tier
+  const getPendingCount = (tierId: number) => {
+    const tierData = pendingByTier?.find((t) => t.tier_id === tierId);
+    return tierData?.pending_count || 0;
+  };
 
   if (isLoading || (isConnected && isBalanceLoading && !balance)) {
     return <TierSelectorSkeleton />;
@@ -85,14 +96,33 @@ export function TierSelector() {
                   Win ${tier.winAmountUsd}
                 </Text>
 
-                {/* Players in Queue */}
-                {tier.playersInQueue > 0 && (
-                  <Badge color="green" variant="soft" size="1">
-                    <Users className="w-3 h-3" />
-                    <span className="hidden sm:inline">{tier.playersInQueue} waiting</span>
-                    <span className="sm:hidden">{tier.playersInQueue}</span>
-                  </Badge>
-                )}
+                {/* Realtime Pending Count */}
+                {(() => {
+                  const pendingCount = getPendingCount(tier.id);
+                  const matchEta = getEstimatedMatchTime(matchTimes || null, tier.id);
+
+                  if (pendingCount > 0) {
+                    return (
+                      <Tooltip content={`${pendingCount} game${pendingCount > 1 ? 's' : ''} waiting for opponent`}>
+                        <Badge color="green" variant="soft" size="1">
+                          <Users className="w-3 h-3" />
+                          <span className="hidden sm:inline">{pendingCount} waiting</span>
+                          <span className="sm:hidden">{pendingCount}</span>
+                        </Badge>
+                      </Tooltip>
+                    );
+                  } else if (matchEta.estimate !== 'N/A') {
+                    return (
+                      <Tooltip content={`Avg match time: ${matchEta.estimate} (${matchEta.confidence} confidence)`}>
+                        <Badge color="gray" variant="soft" size="1">
+                          <Clock className="w-3 h-3" />
+                          <span className="hidden sm:inline">{matchEta.estimate}</span>
+                        </Badge>
+                      </Tooltip>
+                    );
+                  }
+                  return null;
+                })()}
 
                 {/* Insufficient Balance Indicator */}
                 {!canAfford && (

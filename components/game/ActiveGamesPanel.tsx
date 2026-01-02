@@ -5,15 +5,14 @@ import { Card, Flex, Heading, Text, Badge, ScrollArea, IconButton } from '@radix
 import { useGameStore, MAX_CONCURRENT_GAMES } from '@/store/gameStore';
 import { useUserActiveGames } from '@/hooks/useGames';
 import { usePendingTransactions, PendingTransaction } from '@/hooks/usePendingTransactions';
+import { useUserPreferences } from '@/hooks/useUserPreferences';
 import { Game } from '@/types/game';
 import { Users, Loader2, Trophy, ChevronRight, Wifi, WifiOff, Clock, ChevronDown, ChevronUp, RefreshCw } from 'lucide-react';
-import { formatCurrency, formatGameId, safeStorage, devLog } from '@/lib/utils';
+import { formatCurrency, formatGameId, devLog } from '@/lib/utils';
 import { useAccount } from 'wagmi';
 import { useConnectionStatus } from '@/hooks/useRealtimeSync';
 import { formatGameTimeRemaining, isGameWarning, isGameExpired } from '@/hooks/useGameTimeout';
 import { useSharedTimer } from '@/hooks/useSharedTimer';
-
-const PANEL_COLLAPSED_KEY = 'coinflip_active_games_collapsed';
 
 // Connection status indicator component
 function ConnectionStatusIndicator() {
@@ -184,17 +183,16 @@ export function ActiveGamesPanel() {
   const { data: dbActiveGames = [], isLoading: isLoadingGames } = useUserActiveGames(address);
   // DB-backed pending transactions (Confirming... state)
   const { pendingTransactions, isLoading: isLoadingTx } = usePendingTransactions();
+  // User preferences for panel state (synced across devices)
+  const { activeGamesCollapsed, setActiveGamesCollapsed } = useUserPreferences();
   const { queueModal } = useGameStore();
 
   // Track if we've ever had games (to prevent flash on page switch)
   const [hadGames, setHadGames] = useState(false);
   const hideTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
-  // NOTE: Global ticker removed - each ActiveGameCard now manages its own timer
-  // This prevents re-rendering all cards every second when only pending games need timers
-  const [isCollapsed, setIsCollapsed] = useState(() => {
-    return safeStorage.getItem(PANEL_COLLAPSED_KEY) === 'true';
-  });
+  // Use DB-backed preference for collapsed state
+  const isCollapsed = activeGamesCollapsed;
 
   // Consolidate all derived state in a single memoization to prevent
   // intermediate re-renders when one source changes but not the other
@@ -222,14 +220,10 @@ export function ActiveGamesPanel() {
 
   const isLoading = isLoadingGames || isLoadingTx;
 
-  // Persist collapse state
+  // Toggle collapse state (persisted to DB for cross-device sync)
   const toggleCollapsed = useCallback(() => {
-    setIsCollapsed(prev => {
-      const newValue = !prev;
-      safeStorage.setItem(PANEL_COLLAPSED_KEY, String(newValue));
-      return newValue;
-    });
-  }, []);
+    setActiveGamesCollapsed(!isCollapsed);
+  }, [isCollapsed, setActiveGamesCollapsed]);
 
   // Memoized handler to prevent ActiveGameCard memo invalidation
   const handleViewGame = useCallback((game: Game) => {

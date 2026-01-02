@@ -5,8 +5,8 @@
 
 ## 📊 Documentation Overview
 
-**Total Documents:** 10 comprehensive specifications  
-**Total Size:** ~270KB of production-ready documentation  
+**Total Documents:** 11 comprehensive specifications
+**Total Size:** ~290KB of production-ready documentation
 **Coverage:** 100% implementation coverage from concept to production
 
 ---
@@ -163,7 +163,7 @@
 
 ---
 
-## 🎓 Specialized Deep-Dive Documents (2)
+## 🎓 Specialized Deep-Dive Documents (3)
 
 ### 7. VRF Randomness Implementation
 **File:** `06_VRF_randomness_implementation.md` (27KB)
@@ -253,9 +253,55 @@
 
 ---
 
+### 9. Database Integrity & State Machine Architecture
+**File:** `08_database_integrity_architecture.md` (25KB)
+
+**Purpose:** Data integrity, state machine enforcement, and security improvements
+
+**What's Inside:**
+- Game state machine flowcharts (Mermaid diagrams)
+- Database entity relationships (ERD)
+- Current architecture gaps analysis
+- Proposed improvements (Phase 1-3)
+- State machine enforcement triggers
+- Field constraint validation by status
+- Ethereum address format validation
+- Payout validation logic
+- Audit logging structure
+- RLS policy redesign
+
+**When to Read:**
+- Implementing database integrity improvements
+- Understanding state transitions
+- Debugging invalid game states
+- Planning security hardening
+
+**Best For:**
+- Backend developers
+- Database architects
+- Security engineers
+- DevOps (migrations)
+
+**Key Sections:**
+- Section 1: Game State Machine (with Mermaid diagrams)
+- Section 2: Database Entity Relationships (ERD)
+- Section 3: Realtime Data Flow
+- Section 4: Current Architecture Gaps
+- Section 5: Proposed Improvements
+- Section 6: Implementation Phases
+
+**Critical Topics:**
+- Valid state transitions (pending→matched→resolved)
+- Field constraints by game status
+- Address format validation
+- Payout calculation verification
+- Audit trail for state changes
+
+---
+
 ## 📖 Reference Documents (2)
 
-### 9. Quick Reference Guide
+### 10. Quick Reference Guide
 **File:** `QUICK_REFERENCE.md` (9KB)
 
 **Purpose:** Fast navigation and lookup
@@ -275,7 +321,7 @@
 
 ---
 
-### 10. Original Master Specification
+### 11. Original Master Specification
 **File:** `coinflip_tech_spec.md` (49KB)
 
 **Purpose:** Original consolidated specification
@@ -407,6 +453,9 @@
 | **VRF subscription** | Subscription setup | `06_VRF_randomness_implementation.md` | Section 4 |
 | **Mobile design** | Responsive patterns | `07_UX_design_user_flows.md` | Section 9 |
 | **CI/CD pipeline** | GitHub Actions | `05_deployment_operations.md` | Section 6 |
+| **State machine** | Valid transitions | `08_database_integrity_architecture.md` | Section 1 |
+| **Data integrity** | Field constraints | `08_database_integrity_architecture.md` | Section 5 |
+| **Audit logging** | State change tracking | `08_database_integrity_architecture.md` | Section 6 |
 
 ---
 

@@ -10,6 +10,8 @@ export interface UserPreferences {
   user_address: string;
   skip_animation: boolean;
   sound_enabled: boolean;
+  active_games_collapsed: boolean;
+  activity_feed_collapsed: boolean;
   last_game_tier: number | null;
   last_game_choice: boolean | null;
   last_game_was_win: boolean | null;
@@ -30,6 +32,8 @@ export interface LastGameSettings {
 const DEFAULT_PREFERENCES: Omit<UserPreferences, 'user_address' | 'created_at' | 'updated_at'> = {
   skip_animation: false,
   sound_enabled: true,
+  active_games_collapsed: false,
+  activity_feed_collapsed: false,
   last_game_tier: null,
   last_game_choice: null,
   last_game_was_win: null,
@@ -147,6 +151,14 @@ export function useUserPreferences() {
     updatePreference('default_choice', choice);
   }, [updatePreference]);
 
+  const setActiveGamesCollapsed = useCallback((collapsed: boolean) => {
+    updatePreference('active_games_collapsed', collapsed);
+  }, [updatePreference]);
+
+  const setActivityFeedCollapsed = useCallback((collapsed: boolean) => {
+    updatePreference('activity_feed_collapsed', collapsed);
+  }, [updatePreference]);
+
   // Save last game settings for quick re-bet
   const saveLastGameSettings = useCallback((settings: LastGameSettings) => {
     if (!address) return;
@@ -195,6 +207,8 @@ export function useUserPreferences() {
     // Individual preference values (with defaults)
     skipAnimation: preferences?.skip_animation ?? false,
     soundEnabled: preferences?.sound_enabled ?? true,
+    activeGamesCollapsed: preferences?.active_games_collapsed ?? false,
+    activityFeedCollapsed: preferences?.activity_feed_collapsed ?? false,
     defaultTier: preferences?.default_tier ?? null,
     defaultChoice: preferences?.default_choice ?? null,
     lastGameSettings,
@@ -203,6 +217,8 @@ export function useUserPreferences() {
     updatePreference,
     setSkipAnimation,
     setSoundEnabled,
+    setActiveGamesCollapsed,
+    setActivityFeedCollapsed,
     setDefaultTier,
     setDefaultChoice,
     saveLastGameSettings,

@@ -1,14 +1,14 @@
 'use client';
 
 import { ConnectButton } from '@rainbow-me/rainbowkit';
-import { Coins, Menu, X, Wifi, WifiOff, Loader2 } from 'lucide-react';
-import { Flex, Heading, Badge, Box, Container, Button, Tooltip } from '@radix-ui/themes';
+import { Coins, Menu, X } from 'lucide-react';
+import { Flex, Heading, Badge, Box, Container, Button } from '@radix-ui/themes';
 import Link from 'next/link';
 import { SoundToggle } from '@/components/ui/SoundToggle';
 import { ThemeSwitcher } from '@/components/ui/ThemeSwitcher';
+import { SyncStatus } from '@/components/ui/SyncStatus';
 import { useState } from 'react';
 import { usePathname } from 'next/navigation';
-import { useConnectionStatus } from '@/hooks/useRealtimeSync';
 
 // Static navigation items - defined outside component to avoid recreation on each render
 const NAV_ITEMS = [
@@ -21,7 +21,6 @@ const NAV_ITEMS = [
 export function Header() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const pathname = usePathname();
-  const { isConnected, isConnecting, isDisconnected } = useConnectionStatus();
 
   const isActive = (path: string) => pathname === path;
 
@@ -72,29 +71,8 @@ export function Header() {
 
           {/* Right side actions */}
           <Flex align="center" gap="3">
-            {/* Connection Status Indicator */}
-            <Tooltip content={
-              isConnected ? 'Real-time updates active' :
-              isConnecting ? 'Connecting to server...' :
-              'Disconnected - using fallback polling'
-            }>
-              <Flex
-                align="center"
-                gap="1"
-                className={`px-2 py-1 rounded-full text-xs ${
-                  isConnected ? 'bg-green-500/10 text-green-400' :
-                  isConnecting ? 'bg-yellow-500/10 text-yellow-400' :
-                  'bg-red-500/10 text-red-400'
-                }`}
-              >
-                {isConnected && <Wifi className="w-3 h-3" />}
-                {isConnecting && <Loader2 className="w-3 h-3 animate-spin" />}
-                {isDisconnected && <WifiOff className="w-3 h-3" />}
-                <span className="hidden sm:inline">
-                  {isConnected ? 'Live' : isConnecting ? 'Connecting' : 'Offline'}
-                </span>
-              </Flex>
-            </Tooltip>
+            {/* Sync Status Indicator (Realtime + Blockchain) */}
+            <SyncStatus />
 
             <ThemeSwitcher />
             <SoundToggle />

@@ -114,6 +114,7 @@ export function useCreatedGameTracking({
   }, [cleanup]);
 
   // Function to fetch game from DB
+  // TODO: Use games_public view after migration 029 is applied
   const fetchGameFromDB = useCallback(async (searchTxHash: string): Promise<Game | null> => {
     try {
       const { data, error } = await supabase
