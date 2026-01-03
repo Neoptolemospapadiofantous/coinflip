@@ -1,6 +1,6 @@
 'use client';
 
-import { Layout } from '@/components/layout/Layout';
+import { AppLayout } from '@/components/layout/AppLayout';
 import {
   Container,
   Section,
@@ -122,8 +122,9 @@ function RankBadge({ rank }: { rank: number }) {
 }
 
 export default function LeaderboardPage() {
+  // This page requires authentication (registered user)
   return (
-    <Layout>
+    <AppLayout title="Leaderboard" description="Top players ranked by performance" requireAuth>
       <Section size="3">
         <Container size="4">
           <Flex direction="column" gap="6">
@@ -358,6 +359,6 @@ export default function LeaderboardPage() {
           </Flex>
         </Container>
       </Section>
-    </Layout>
+    </AppLayout>
   );
 }

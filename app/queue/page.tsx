@@ -17,7 +17,7 @@ import {
   Box,
   Skeleton,
 } from '@radix-ui/themes';
-import { Layout } from '@/components/layout/Layout';
+import { AppLayout } from '@/components/layout/AppLayout';
 import { useTiers } from '@/hooks/useTiers';
 import { useJoinGame } from '@/hooks/useContract';
 import { usePendingGames, useGameStats } from '@/hooks/useGames';
@@ -381,7 +381,7 @@ export default function QueuePage() {
 
   if (!isConnected) {
     return (
-      <Layout>
+      <AppLayout title="Game Queue" description="Connect your wallet to view and join games">
         <Section size="3">
           <Container size="2">
             <Flex direction="column" align="center" gap="6" py="9">
@@ -397,12 +397,12 @@ export default function QueuePage() {
             </Flex>
           </Container>
         </Section>
-      </Layout>
+      </AppLayout>
     );
   }
 
   return (
-    <Layout>
+    <AppLayout title="Game Queue" description="View and join available games">
       <Section size="3">
         <Container size="3">
           <Flex direction="column" gap="6" py="6">
@@ -974,6 +974,6 @@ export default function QueuePage() {
           </Flex>
         </Dialog.Content>
       </Dialog.Root>
-    </Layout>
+    </AppLayout>
   );
 }

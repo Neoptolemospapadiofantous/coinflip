@@ -15,7 +15,7 @@ import {
   Callout,
   Badge,
 } from '@radix-ui/themes';
-import { Layout } from '@/components/layout/Layout';
+import { AppLayout } from '@/components/layout/AppLayout';
 import { TierSelector } from '@/components/game/TierSelector';
 import { CoinChoice } from '@/components/game/CoinChoice';
 import { useGameStore, MAX_CONCURRENT_GAMES, useSelectedTier, useCoinChoice } from '@/store/gameStore';
@@ -425,7 +425,7 @@ export default function PlayPage() {
 
   if (!isConnected) {
     return (
-      <Layout>
+      <AppLayout title="Play" description="Connect your wallet to start playing">
         <Section size="3">
           <Container size="2">
             <Flex direction="column" align="center" gap="6" py="9">
@@ -441,12 +441,12 @@ export default function PlayPage() {
             </Flex>
           </Container>
         </Section>
-      </Layout>
+      </AppLayout>
     );
   }
 
   return (
-    <Layout>
+    <AppLayout title="Play" description="Create a new game and start playing">
       <Section size="3">
         <Container size="3">
           <Flex direction="column" gap="6" py="6">
@@ -886,7 +886,7 @@ export default function PlayPage() {
           </Flex>
         </Container>
       </Section>
-    </Layout>
+    </AppLayout>
   );
 }
 

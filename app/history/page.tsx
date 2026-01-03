@@ -1,6 +1,6 @@
 'use client';
 
-import { Layout } from '@/components/layout/Layout';
+import { AppLayout } from '@/components/layout/AppLayout';
 import { Container, Section, Heading, Card, Flex, Text, Grid, Badge, Table, Button, Skeleton, Select } from '@radix-ui/themes';
 import { useAccount } from 'wagmi';
 import { usePlayerGames, usePlayerStats } from '@/hooks/useGames';
@@ -115,9 +115,13 @@ export default function HistoryPage() {
     return games.filter(g => g.status === statusFilter);
   }, [games, statusFilter, address]);
 
+  // This page requires authentication (registered user)
+  // AppLayout with requireAuth will redirect to login if not authenticated
+
+  // Show connect wallet message if authenticated but no wallet connected
   if (!address) {
     return (
-      <Layout>
+      <AppLayout title="Game History" description="Connect your wallet to view history" requireAuth>
         <Section size="3">
           <Container size="2">
             <Card className="card-simple text-center p-8">
@@ -128,12 +132,12 @@ export default function HistoryPage() {
             </Card>
           </Container>
         </Section>
-      </Layout>
+      </AppLayout>
     );
   }
 
   return (
-    <Layout>
+    <AppLayout title="Game History" description="View your game history and statistics" requireAuth>
       <Section size="3">
         <Container size="4">
           <Flex direction="column" gap="6">
@@ -584,6 +588,6 @@ export default function HistoryPage() {
           </Flex>
         </Container>
       </Section>
-    </Layout>
+    </AppLayout>
   );
 }
