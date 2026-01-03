@@ -46,10 +46,10 @@ export function GameSessionModal({ game, open, onClose, userAddress, modalType }
   const [showConfetti, setShowConfetti] = useState(false);
   const [expiredElapsedSeconds, setExpiredElapsedSeconds] = useState(0);
   const [currentRetryCount, setCurrentRetryCount] = useState(0);
-  const { resetGame, updateActiveGame, removeActiveGame, modalQueue } = useGameStore();
+  const { resetGame, updateActiveGame, removeActiveGame, modalQueue, skipAllModals } = useGameStore();
 
   // User preferences from database (skip animation, last game settings)
-  const { skipAnimation: alwaysSkipAnimation, setSkipAnimation, saveLastGameSettings } = useUserPreferences();
+  const { skipAnimation: alwaysSkipAnimation, setSkipAnimation, saveLastGameSettings, isLoading: preferencesLoading } = useUserPreferences();
 
   // Use refs to prevent duplicate sounds/toasts (more reliable than state)
   const hasPlayedMatchSoundRef = useRef(false);
@@ -61,7 +61,7 @@ export function GameSessionModal({ game, open, onClose, userAddress, modalType }
   const { cancelGame, isLoading: isCancelling, isSuccess: cancelSuccess, error: cancelError, reset: resetCancel } = useCancelGame();
 
   // Notification state for tracking sounds in database
-  const { shouldPlaySound, markSoundPlayed } = useNotificationState();
+  const { shouldPlaySound, markSoundPlayed, markMultipleModalsShown } = useNotificationState();
 
   // Fetch fresh game data for auto-refetch on validation errors
   const { data: freshGame, refetch: refetchGame } = useGame(game?.id ?? null);
@@ -172,7 +172,8 @@ export function GameSessionModal({ game, open, onClose, userAddress, modalType }
     }
 
     // If game is resolved AND state is valid, start animation (only once)
-    if (game.status === 'resolved' && validation.valid && statusChanged) {
+    // Wait for preferences to load before deciding on animation
+    if (game.status === 'resolved' && validation.valid && statusChanged && !preferencesLoading) {
       // Stop VRF timer
       vrfStartTimeRef.current = null;
       if (vrfTimerRef.current) {
@@ -186,6 +187,8 @@ export function GameSessionModal({ game, open, onClose, userAddress, modalType }
         setSkipped(true);
         setShowResult(true);
         setIsFlipping(false);
+        // Trigger result effects when auto-skipping
+        playResultEffects();
       } else {
         // Start flip animation
         setIsFlipping(true);
@@ -193,7 +196,7 @@ export function GameSessionModal({ game, open, onClose, userAddress, modalType }
       setVrfTimedOut(false);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- Intentionally using specific game fields to prevent re-renders
-  }, [game?.id, game?.status, game?.matched_at, validation.valid, alwaysSkipAnimation]);
+  }, [game?.id, game?.status, game?.matched_at, validation.valid, alwaysSkipAnimation, preferencesLoading]);
 
   // Auto-refetch on validation errors (incomplete VRF data)
   useEffect(() => {
@@ -393,6 +396,31 @@ export function GameSessionModal({ game, open, onClose, userAddress, modalType }
     onClose();
   };
 
+  // Skip all modals: mark all as shown in database, then clear local state
+  const handleSkipAll = useCallback(async () => {
+    // Collect all games to mark as shown (current + queued)
+    const gamesToMark: Array<{ gameId: string; type: 'matched' | 'resolved' | 'expired' }> = [];
+
+    // Add current modal game
+    if (game && modalType) {
+      gamesToMark.push({ gameId: game.id, type: modalType });
+    }
+
+    // Add all queued games
+    for (const entry of modalQueue) {
+      gamesToMark.push({ gameId: entry.game.id, type: entry.type });
+    }
+
+    // Mark all as shown in database first
+    if (gamesToMark.length > 0) {
+      await markMultipleModalsShown(gamesToMark);
+    }
+
+    // Then clear local state
+    skipAllModals();
+    onClose();
+  }, [game, modalType, modalQueue, markMultipleModalsShown, skipAllModals, onClose]);
+
   // Quick re-bet: same tier and choice, navigate to play page
   // Settings are already saved to DB in playResultEffects via saveLastGameSettings
   const handleQuickRebet = () => {
@@ -415,7 +443,7 @@ export function GameSessionModal({ game, open, onClose, userAddress, modalType }
       {/* Confetti on win */}
       <Confetti show={showConfetti} duration={5000} onComplete={() => setShowConfetti(false)} />
 
-      <Dialog.Root open={open} onOpenChange={handleClose}>
+      <Dialog.Root open={open} onOpenChange={(isOpen) => { /* Prevent auto-close on outside click/Escape - only close via explicit buttons */ }}>
       <Dialog.Content
         maxWidth="600px"
         className="backdrop-blur-xl bg-slate-900/95 border-2 border-cyan-500/30 max-h-[90vh] overflow-y-auto fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-50 w-[calc(100vw-2rem)] sm:w-auto"
@@ -436,15 +464,26 @@ export function GameSessionModal({ game, open, onClose, userAddress, modalType }
               <CopyableGameId gameId={game.id} size={{ initial: '1', sm: '2' }} />
               {/* Queue indicator - shows when more games are waiting */}
               {modalQueue.length > 0 && (
-                <Flex
-                  align="center"
-                  gap="1"
-                  className="px-2 py-1 rounded-full bg-purple-500/20 border border-purple-500/40"
-                >
-                  <Layers className="w-3 h-3 text-purple-400" />
-                  <Text size="1" className="text-purple-400" weight="medium">
-                    +{modalQueue.length} more
-                  </Text>
+                <Flex align="center" gap="2">
+                  <Flex
+                    align="center"
+                    gap="1"
+                    className="px-2 py-1 rounded-full bg-purple-500/20 border border-purple-500/40"
+                  >
+                    <Layers className="w-3 h-3 text-purple-400" />
+                    <Text size="1" className="text-purple-400" weight="medium">
+                      +{modalQueue.length} more
+                    </Text>
+                  </Flex>
+                  <Button
+                    size="1"
+                    variant="soft"
+                    color="red"
+                    onClick={handleSkipAll}
+                    className="cursor-pointer"
+                  >
+                    Skip All
+                  </Button>
                 </Flex>
               )}
             </Flex>

@@ -300,11 +300,62 @@ export function useNotificationState() {
     }
   }, [address]);
 
+  /**
+   * Mark multiple modals as shown in the database (for skip all)
+   */
+  const markMultipleModalsShown = useCallback(async (
+    gameIds: Array<{ gameId: string; type: NotificationType }>
+  ): Promise<void> => {
+    if (!address || gameIds.length === 0) return;
+
+    devLog.log(`🔔 [Notification] Marking ${gameIds.length} modals as shown`);
+
+    try {
+      // Batch upsert all notification states
+      const upserts = gameIds.map(({ gameId, type }) => ({
+        user_address: address.toLowerCase(),
+        game_id: gameId,
+        [`${type}_modal_shown`]: true,
+      }));
+
+      const { error } = await supabase
+        .from('user_game_notifications')
+        .upsert(upserts, {
+          onConflict: 'user_address,game_id',
+        });
+
+      if (error) {
+        devLog.warn(`🔔 [Notification] Error marking multiple modals shown:`, error.message);
+      } else {
+        devLog.log(`🔔 [Notification] Marked ${gameIds.length} modals as shown`);
+
+        // Update cache for all
+        for (const { gameId, type } of gameIds) {
+          const cacheKey = getCacheKey(address, gameId);
+          const cached = notificationCache.get(cacheKey) || {
+            matched_modal_shown: false,
+            resolved_modal_shown: false,
+            expired_modal_shown: false,
+            matched_sound_played: false,
+            resolved_sound_played: false,
+          };
+          cached[`${type}_modal_shown` as keyof NotificationState] = true;
+          notificationCache.set(cacheKey, cached);
+          touchCacheKey(cacheKey);
+        }
+        evictOldCacheEntries();
+      }
+    } catch (err) {
+      devLog.warn(`🔔 [Notification] Error:`, err);
+    }
+  }, [address]);
+
   return {
     shouldShowModal,
     shouldPlaySound,
     markModalShown,
     markSoundPlayed,
     prefetchNotifications,
+    markMultipleModalsShown,
   };
 }

@@ -56,6 +56,7 @@ interface GameState {
   queueModal: (game: Game, type: 'matched' | 'resolved' | 'expired') => void;
   showNextModal: () => void;
   closeCurrentModal: () => void;
+  skipAllModals: () => void;
 
   // Legacy compatibility
   activeGameId: string | null;
@@ -252,6 +253,38 @@ export const useGameStore = create<GameState>((set, get) => ({
 
     // Show next modal if any
     get().showNextModal();
+  },
+
+  skipAllModals: () => {
+    const state = get();
+    devLog.log(`🎯 [GameStore] skipAllModals called - clearing ${state.modalQueue.length} queued + current`);
+
+    // Remove all resolved/cancelled games from active games
+    if (state.currentModalGame) {
+      const game = state.currentModalGame;
+      if (game.status === 'resolved' || game.status === 'cancelled') {
+        get().removeActiveGame(game.id);
+      }
+    }
+
+    // Remove all queued resolved/cancelled games from active games
+    state.modalQueue.forEach((entry) => {
+      if (entry.game.status === 'resolved' || entry.game.status === 'cancelled') {
+        get().removeActiveGame(entry.game.id);
+      }
+    });
+
+    // Clear everything
+    set({
+      modalQueue: [],
+      currentModalGame: null,
+      currentModalType: null,
+      showGameModal: false,
+      // Legacy
+      activeGame: null,
+      activeGameId: null,
+      showMatchModal: false,
+    });
   },
 
   // Legacy compatibility actions
