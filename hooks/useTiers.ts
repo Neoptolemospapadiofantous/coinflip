@@ -5,6 +5,8 @@ import { Tier } from '@/types/tier';
 import { TESTNET_TIERS, PRODUCTION_TIERS } from '@/lib/mockData';
 import { isTestnet } from '@/lib/networkUtils';
 import { devLog } from '@/lib/utils';
+import { useIsLoggedIn } from '@/lib/data';
+import { getBlockchainDataSource } from '@/lib/data/blockchain';
 
 // Set to true to use mock data (before Supabase is set up)
 // Set to false once you've populated the tiers table in Supabase
@@ -13,6 +15,7 @@ const USE_MOCK_DATA = false;
 
 export function useTiers() {
   const chainId = useChainId();
+  const isLoggedIn = useIsLoggedIn();
 
   // Auto-select appropriate tiers based on network
   const getMockTiers = (): Tier[] => {
@@ -20,7 +23,7 @@ export function useTiers() {
   };
 
   return useQuery({
-    queryKey: ['tiers', chainId], // Include chainId in query key
+    queryKey: ['tiers', chainId, isLoggedIn ? 'supabase' : 'blockchain'],
     queryFn: async (): Promise<Tier[]> => {
       const mockTiers = getMockTiers();
 
@@ -36,13 +39,35 @@ export function useTiers() {
         return mockTiers;
       }
 
+      // Wallet-only users: fetch from blockchain
+      if (!isLoggedIn) {
+        devLog.log('[useTiers] Using blockchain data source');
+        try {
+          const blockchainSource = getBlockchainDataSource();
+          const tiers = await blockchainSource.getTiers();
+          // Convert to Tier type
+          return tiers.map(t => ({
+            id: t.id,
+            amount: t.amount,
+            amountUsd: t.amountUsd,
+            winAmount: t.winAmount,
+            winAmountUsd: t.winAmountUsd,
+            playersInQueue: 0, // Not available from blockchain
+            enabled: t.enabled,
+          }));
+        } catch (err) {
+          devLog.warn('Error fetching tiers from blockchain, falling back to mock:', err);
+          return mockTiers;
+        }
+      }
+
       // Use mock data if Supabase isn't set up yet
       if (USE_MOCK_DATA) {
         devLog.log('Using PRODUCTION tier data (Supabase not configured)');
         return mockTiers;
       }
 
-      // Only fetch from Supabase on mainnet
+      // Registered users: fetch from Supabase
       try {
         const { data, error } = await supabase
           .from('tiers')
@@ -72,8 +97,8 @@ export function useTiers() {
         return mockTiers;
       }
     },
-    staleTime: 5 * 60 * 1000, // 5 minutes
-    refetchInterval: isTestnet(chainId) ? false : (USE_MOCK_DATA ? false : 30 * 1000), // Don't refetch on testnet or mock mode
+    staleTime: isLoggedIn ? 5 * 60 * 1000 : 60000, // 5 min for logged in, 1 min for blockchain
+    refetchInterval: isTestnet(chainId) ? false : (isLoggedIn ? (USE_MOCK_DATA ? false : 30 * 1000) : 60000),
     refetchOnWindowFocus: !isTestnet(chainId) && !USE_MOCK_DATA,
   });
 }

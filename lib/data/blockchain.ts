@@ -26,15 +26,25 @@ import {
   GameStats,
 } from './types';
 import { COINFLIP_ABI } from '@/lib/contracts/abi';
-import { getContractAddress } from '@/lib/contracts/addresses';
+import { getCoinFlipAddress } from '@/lib/contracts/addresses';
 import { devLog } from '@/lib/utils';
 
 // ============================================
 // CONFIGURATION
 // ============================================
 
-const RPC_URL = process.env.NEXT_PUBLIC_RPC_URL || 'https://eth-sepolia.public.blastapi.io';
-const CONTRACT_ADDRESS = getContractAddress('coinflip');
+// Use the same RPC proxy as wagmi to avoid CORS issues
+// Falls back to public RPC if running server-side
+const getRpcUrl = () => {
+  if (typeof window !== 'undefined') {
+    // Browser: use proxy endpoint
+    return '/api/rpc';
+  }
+  // Server-side: use direct RPC
+  return process.env.NEXT_PUBLIC_RPC_URL || 'https://rpc.sepolia.org';
+};
+
+const CONTRACT_ADDRESS = getCoinFlipAddress(11155111); // Sepolia
 const POLLING_INTERVAL = 12000; // 12 seconds (1 block)
 const MAX_BLOCK_RANGE = 10000; // Max blocks to scan per query
 
@@ -48,10 +58,19 @@ function getClient(): PublicClient {
   if (!publicClient) {
     publicClient = createPublicClient({
       chain: sepolia,
-      transport: http(RPC_URL),
+      transport: http(getRpcUrl(), {
+        timeout: 30000, // 30s timeout
+        retryCount: 3,
+        retryDelay: 1000,
+      }),
     });
   }
   return publicClient;
+}
+
+// Reset client (useful if RPC fails and needs reconnection)
+export function resetBlockchainClient(): void {
+  publicClient = null;
 }
 
 // ============================================
@@ -78,19 +97,26 @@ const GameCancelledEvent = parseAbiItem(
 // CONTRACT READS
 // ============================================
 
+// Game struct from contract (matches ABI getGame output)
 interface ContractGame {
-  creator: `0x${string}`;
-  creatorChoice: boolean;
-  joiner: `0x${string}`;
-  joinerChoice: boolean;
-  amount: bigint;
+  playerA: `0x${string}`;
+  playerB: `0x${string}`;
   tier: number;
-  status: number; // 0=pending, 1=matched, 2=resolved, 3=cancelled
-  winner: `0x${string}`;
-  randomNumber: bigint;
+  choiceA: boolean;
+  state: number; // 0=Open, 1=Locked, 2=Resolved, 3=Cancelled
   createdBlock: bigint;
-  matchedBlock: bigint;
-  resolvedBlock: bigint;
+  lockedBlock: bigint;
+  vrfRequestId: bigint;
+  coinResult: boolean;
+  winner: `0x${string}`;
+}
+
+// Tier struct from contract
+interface ContractTier {
+  amount: bigint;
+  enabled: boolean;
+  totalGames: bigint;
+  totalVolume: bigint;
 }
 
 async function getGameFromContract(gameId: bigint): Promise<ContractGame | null> {
@@ -98,111 +124,96 @@ async function getGameFromContract(gameId: bigint): Promise<ContractGame | null>
 
   try {
     const result = await client.readContract({
-      address: CONTRACT_ADDRESS as `0x${string}`,
+      address: CONTRACT_ADDRESS,
       abi: COINFLIP_ABI,
-      functionName: 'games',
+      functionName: 'getGame',
       args: [gameId],
-    }) as unknown[];
+    }) as ContractGame;
 
-    // Parse the tuple response
-    return {
-      creator: result[0] as `0x${string}`,
-      creatorChoice: result[1] as boolean,
-      joiner: result[2] as `0x${string}`,
-      joinerChoice: result[3] as boolean,
-      amount: result[4] as bigint,
-      tier: Number(result[5]),
-      status: Number(result[6]),
-      winner: result[7] as `0x${string}`,
-      randomNumber: result[8] as bigint,
-      createdBlock: result[9] as bigint,
-      matchedBlock: result[10] as bigint,
-      resolvedBlock: result[11] as bigint,
-    };
+    return result;
   } catch (error) {
     devLog.error('[BlockchainDS] Error reading game:', error);
     return null;
   }
 }
 
-async function getGameCount(): Promise<bigint> {
+async function getTierFromContract(tierId: number): Promise<ContractTier | null> {
   const client = getClient();
 
   try {
-    const count = await client.readContract({
-      address: CONTRACT_ADDRESS as `0x${string}`,
+    const result = await client.readContract({
+      address: CONTRACT_ADDRESS,
       abi: COINFLIP_ABI,
-      functionName: 'gameCount',
-    });
-    return count as bigint;
+      functionName: 'getTier',
+      args: [tierId],
+    }) as ContractTier;
+
+    return result;
   } catch (error) {
-    devLog.error('[BlockchainDS] Error getting game count:', error);
-    return 0n;
+    devLog.error('[BlockchainDS] Error reading tier:', error);
+    return null;
   }
 }
 
-async function getTierAmounts(): Promise<bigint[]> {
-  const client = getClient();
-  const amounts: bigint[] = [];
+async function getTierAmounts(): Promise<{ amount: bigint; enabled: boolean }[]> {
+  const tiers: { amount: bigint; enabled: boolean }[] = [];
 
-  try {
-    // Read tier amounts (typically 5 tiers: 0-4)
-    for (let i = 0; i < 5; i++) {
-      const amount = await client.readContract({
-        address: CONTRACT_ADDRESS as `0x${string}`,
-        abi: COINFLIP_ABI,
-        functionName: 'tierAmounts',
-        args: [BigInt(i)],
-      });
-      amounts.push(amount as bigint);
+  // Read tier amounts (typically 5 tiers: 0-4)
+  for (let i = 0; i < 5; i++) {
+    const tier = await getTierFromContract(i);
+    if (tier) {
+      tiers.push({ amount: tier.amount, enabled: tier.enabled });
     }
-  } catch (error) {
-    devLog.error('[BlockchainDS] Error reading tier amounts:', error);
   }
 
-  return amounts;
+  return tiers;
 }
 
 // ============================================
 // CONVERSION HELPERS
 // ============================================
 
+// Contract states: 0=Open, 1=Locked, 2=Resolved, 3=Cancelled
 const STATUS_MAP: Record<number, Game['status']> = {
-  0: 'pending',
-  1: 'matched',
-  2: 'resolved',
-  3: 'cancelled',
+  0: 'pending',   // Open = waiting for player B
+  1: 'matched',   // Locked = both players in, waiting for VRF
+  2: 'resolved',  // Resolved = game complete
+  3: 'cancelled', // Cancelled
 };
 
 const ZERO_ADDRESS = '0x0000000000000000000000000000000000000000';
 
-function contractGameToGame(
+async function contractGameToGame(
   gameId: bigint,
   contractGame: ContractGame,
   txHash: string = '',
   createdAt: string = new Date().toISOString()
-): Game {
+): Promise<Game> {
   const isZeroAddress = (addr: string) => addr === ZERO_ADDRESS;
+
+  // Get tier info to get the amount
+  const tier = await getTierFromContract(contractGame.tier);
+  const amount = tier?.amount.toString() || '0';
 
   return {
     id: gameId.toString(),
     tx_hash: txHash,
     tier: contractGame.tier,
-    amount: contractGame.amount.toString(),
-    creator_address: contractGame.creator.toLowerCase(),
-    creator_choice: contractGame.creatorChoice,
-    joiner_address: isZeroAddress(contractGame.joiner) ? null : contractGame.joiner.toLowerCase(),
-    joiner_choice: isZeroAddress(contractGame.joiner) ? null : contractGame.joinerChoice,
-    status: STATUS_MAP[contractGame.status] || 'pending',
+    amount,
+    creator_address: contractGame.playerA.toLowerCase(),
+    creator_choice: contractGame.choiceA,
+    joiner_address: isZeroAddress(contractGame.playerB) ? null : contractGame.playerB.toLowerCase(),
+    joiner_choice: isZeroAddress(contractGame.playerB) ? null : !contractGame.choiceA, // Joiner always opposite
+    status: STATUS_MAP[contractGame.state] || 'pending',
     winner_address: isZeroAddress(contractGame.winner) ? null : contractGame.winner.toLowerCase(),
-    coin_result: contractGame.status === 2 ? (contractGame.randomNumber % 2n === 1n) : null,
+    coin_result: contractGame.state === 2 ? contractGame.coinResult : null,
     payout: null, // Would need event parsing
     fee: null,
     block_number: contractGame.createdBlock.toString(),
     matched_tx_hash: null,
-    matched_block_number: contractGame.matchedBlock > 0n ? contractGame.matchedBlock.toString() : null,
+    matched_block_number: contractGame.lockedBlock > 0n ? contractGame.lockedBlock.toString() : null,
     resolved_tx_hash: null,
-    resolved_block_number: contractGame.resolvedBlock > 0n ? contractGame.resolvedBlock.toString() : null,
+    resolved_block_number: null, // Not available in struct
     cancelled_tx_hash: null,
     cancelled_block_number: null,
     created_at: createdAt,
@@ -225,29 +236,68 @@ export class BlockchainDataSource implements GameDataSource {
 
   private pollingIntervals: Map<string, NodeJS.Timeout> = new Map();
   private cachedGames: Map<string, Game> = new Map();
-  private lastBlockChecked: bigint = 0n;
+  private knownGameIds: Set<string> = new Set();
+  private lastBlockScanned: bigint = 0n;
 
   // ============================================
   // GAME QUERIES
   // ============================================
 
   async getGames(limit = 100): Promise<Game[]> {
-    const gameCount = await getGameCount();
-    const games: Game[] = [];
+    // Use cached games - scan for new ones via events
+    await this.scanForNewGames();
 
-    // Read latest games (most recent first)
-    const start = gameCount > BigInt(limit) ? gameCount - BigInt(limit) : 1n;
+    const games = Array.from(this.cachedGames.values());
+    // Sort by block number descending (most recent first)
+    games.sort((a, b) => Number(BigInt(b.block_number) - BigInt(a.block_number)));
 
-    for (let i = gameCount; i >= start && i > 0n; i--) {
-      const contractGame = await getGameFromContract(i);
-      if (contractGame) {
-        const game = contractGameToGame(i, contractGame);
-        games.push(game);
-        this.cachedGames.set(game.id, game);
+    return games.slice(0, limit);
+  }
+
+  private async scanForNewGames(): Promise<void> {
+    const client = getClient();
+
+    try {
+      const currentBlock = await client.getBlockNumber();
+      const fromBlock = this.lastBlockScanned > 0n
+        ? this.lastBlockScanned + 1n
+        : currentBlock - BigInt(MAX_BLOCK_RANGE);
+
+      // Skip if we've already scanned up to or past current block
+      if (fromBlock > currentBlock) {
+        devLog.log('[BlockchainDS] No new blocks to scan');
+        return;
       }
-    }
 
-    return games;
+      // Get GameCreated events
+      const logs = await client.getLogs({
+        address: CONTRACT_ADDRESS,
+        event: GameCreatedEvent,
+        fromBlock: fromBlock > 0n ? fromBlock : 0n,
+        toBlock: currentBlock,
+      });
+
+      for (const log of logs) {
+        const gameId = log.args.gameId;
+        if (gameId && !this.knownGameIds.has(gameId.toString())) {
+          this.knownGameIds.add(gameId.toString());
+          const contractGame = await getGameFromContract(gameId);
+          if (contractGame) {
+            const game = await contractGameToGame(
+              gameId,
+              contractGame,
+              log.transactionHash || '',
+              new Date().toISOString()
+            );
+            this.cachedGames.set(game.id, game);
+          }
+        }
+      }
+
+      this.lastBlockScanned = currentBlock;
+    } catch (error) {
+      devLog.error('[BlockchainDS] Error scanning for new games:', error);
+    }
   }
 
   async getPendingGames(): Promise<Game[]> {
@@ -267,7 +317,7 @@ export class BlockchainDataSource implements GameDataSource {
       // Refresh from chain
       const contractGame = await getGameFromContract(BigInt(id));
       if (contractGame) {
-        const game = contractGameToGame(BigInt(id), contractGame, cached.tx_hash, cached.created_at);
+        const game = await contractGameToGame(BigInt(id), contractGame, cached.tx_hash, cached.created_at);
         this.cachedGames.set(id, game);
         return game;
       }
@@ -275,7 +325,7 @@ export class BlockchainDataSource implements GameDataSource {
 
     const contractGame = await getGameFromContract(BigInt(id));
     if (contractGame) {
-      const game = contractGameToGame(BigInt(id), contractGame);
+      const game = await contractGameToGame(BigInt(id), contractGame);
       this.cachedGames.set(id, game);
       return game;
     }
@@ -363,21 +413,21 @@ export class BlockchainDataSource implements GameDataSource {
   // ============================================
 
   async getTiers(): Promise<Tier[]> {
-    const amounts = await getTierAmounts();
+    const tiers = await getTierAmounts();
     const ethPrice = 3000; // TODO: Fetch real price
 
-    return amounts.map((amount, index) => {
-      const amountEth = Number(amount) / 1e18;
+    return tiers.map((tier, index) => {
+      const amountEth = Number(tier.amount) / 1e18;
       const amountUsd = Math.round(amountEth * ethPrice);
       const winAmountUsd = Math.round(amountUsd * 1.9); // 95% of pot
 
       return {
         id: index,
-        amount: amount.toString(),
+        amount: tier.amount.toString(),
         amountUsd,
-        winAmount: (amount * 19n / 10n).toString(),
+        winAmount: (tier.amount * 19n / 10n).toString(),
         winAmountUsd,
-        enabled: true,
+        enabled: tier.enabled,
       };
     });
   }

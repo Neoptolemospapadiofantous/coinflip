@@ -2,11 +2,12 @@
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { WagmiProvider } from 'wagmi';
-import { RainbowKitProvider } from '@rainbow-me/rainbowkit';
+import { RainbowKitProvider, darkTheme } from '@rainbow-me/rainbowkit';
 import { config } from '@/lib/wagmi';
 import { useState, useEffect } from 'react';
 import { GameMonitor } from './GameMonitor';
 import { RealtimeSyncProvider } from '@/hooks/useRealtimeSync';
+import { DataProvider } from '@/lib/data';
 import { devLog } from '@/lib/utils';
 import { showToast } from '@/lib/toast';
 import { WebVitals } from './WebVitals';
@@ -68,14 +69,25 @@ export function Providers({ children }: { children: React.ReactNode }) {
   return (
     <WagmiProvider config={config}>
       <QueryClientProvider client={queryClient}>
-        <RainbowKitProvider>
-          <GlobalErrorHandler>
-            <RealtimeSyncProvider>
-              {children}
-              <GameMonitor />
-              <WebVitals />
-            </RealtimeSyncProvider>
-          </GlobalErrorHandler>
+        <RainbowKitProvider
+          theme={darkTheme({
+            accentColor: '#22d3ee', // cyan-400
+            accentColorForeground: '#0f172a', // slate-900
+            borderRadius: 'medium',
+            fontStack: 'system',
+            overlayBlur: 'small',
+          })}
+          modalSize="compact"
+        >
+          <DataProvider>
+            <GlobalErrorHandler>
+              <RealtimeSyncProvider>
+                {children}
+                <GameMonitor />
+                <WebVitals />
+              </RealtimeSyncProvider>
+            </GlobalErrorHandler>
+          </DataProvider>
         </RainbowKitProvider>
       </QueryClientProvider>
     </WagmiProvider>

@@ -13,6 +13,8 @@ import {
   ALL_GAMES_STALE_TIME_MS,
   SINGLE_GAME_STALE_TIME_MS,
 } from '@/lib/constants';
+import { useIsLoggedIn } from '@/lib/data';
+import { getBlockchainDataSource } from '@/lib/data/blockchain';
 
 // Columns needed for game list displays (lobby, active games panel, history)
 // Optimized to fetch only what's needed instead of SELECT *
@@ -75,10 +77,28 @@ export function useGames() {
 }
 
 // Fetch pending games (waiting for second player)
+// Uses blockchain for wallet-only users, Supabase for registered users
 export function usePendingGames() {
+  const isLoggedIn = useIsLoggedIn();
+
   return useQuery({
-    queryKey: queryKeys.games.pending,
+    queryKey: [...queryKeys.games.pending, isLoggedIn ? 'supabase' : 'blockchain'],
     queryFn: async (): Promise<Game[]> => {
+      // Wallet-only users: fetch from blockchain
+      if (!isLoggedIn) {
+        devLog.log('[usePendingGames] Using blockchain data source');
+        try {
+          const blockchainSource = getBlockchainDataSource();
+          return await blockchainSource.getPendingGames();
+        } catch (err) {
+          devLog.error('[usePendingGames] Blockchain fetch failed:', err);
+          // Return empty array on failure - user can retry
+          return [];
+        }
+      }
+
+      // Registered users: fetch from Supabase (faster, indexed)
+      devLog.log('[usePendingGames] Using Supabase data source');
       const { data, error } = await supabase
         .from('games')
         .select(PENDING_GAME_COLUMNS)
@@ -92,17 +112,33 @@ export function usePendingGames() {
 
       return normalizeGames(data);
     },
-    staleTime: PENDING_GAMES_STALE_TIME_MS,
-    refetchInterval: false, // Disabled - central sync handles updates
-    retry: 2,
+    staleTime: isLoggedIn ? PENDING_GAMES_STALE_TIME_MS : 30000, // Blockchain: 30s cache
+    refetchInterval: isLoggedIn ? false : 15000, // Blockchain: poll every 15s
+    retry: isLoggedIn ? 2 : 1, // Less retries for blockchain (slower)
   });
 }
 
 // Fetch active games (pending + matched)
+// Uses blockchain for wallet-only users, Supabase for registered users
 export function useActiveGames() {
+  const isLoggedIn = useIsLoggedIn();
+
   return useQuery({
-    queryKey: queryKeys.games.active,
+    queryKey: [...queryKeys.games.active, isLoggedIn ? 'supabase' : 'blockchain'],
     queryFn: async (): Promise<Game[]> => {
+      // Wallet-only users: fetch from blockchain
+      if (!isLoggedIn) {
+        devLog.log('[useActiveGames] Using blockchain data source');
+        try {
+          const blockchainSource = getBlockchainDataSource();
+          return await blockchainSource.getActiveGames();
+        } catch (err) {
+          devLog.error('[useActiveGames] Blockchain fetch failed:', err);
+          return [];
+        }
+      }
+
+      // Registered users: fetch from Supabase
       const { data, error} = await supabase
         .from('games')
         .select(GAME_LIST_COLUMNS)
@@ -116,18 +152,19 @@ export function useActiveGames() {
 
       return normalizeGames(data);
     },
-    staleTime: ACTIVE_GAMES_STALE_TIME_MS,
-    refetchInterval: false, // Disabled - central sync handles updates
+    staleTime: isLoggedIn ? ACTIVE_GAMES_STALE_TIME_MS : 30000,
+    refetchInterval: isLoggedIn ? false : 15000,
     retry: 2,
   });
 }
 
 // Fetch games by player address
-// TODO: Use games_public view after migration 029 is applied
-// Real-time updates handled by central sync (useRealtimeSync)
+// Uses blockchain for wallet-only users, Supabase for registered users
 export function usePlayerGames(address: string | undefined, limit: number = 50) {
+  const isLoggedIn = useIsLoggedIn();
+
   return useQuery({
-    queryKey: [...queryKeys.games.player(address || ''), limit],
+    queryKey: [...queryKeys.games.player(address || ''), limit, isLoggedIn ? 'supabase' : 'blockchain'],
     queryFn: async (): Promise<Game[]> => {
       if (!address) return [];
 
@@ -137,6 +174,19 @@ export function usePlayerGames(address: string | undefined, limit: number = 50) 
         return [];
       }
 
+      // Wallet-only users: fetch from blockchain
+      if (!isLoggedIn) {
+        devLog.log('[usePlayerGames] Using blockchain data source');
+        try {
+          const blockchainSource = getBlockchainDataSource();
+          return await blockchainSource.getPlayerGames(address, limit);
+        } catch (err) {
+          devLog.error('[usePlayerGames] Blockchain fetch failed:', err);
+          return [];
+        }
+      }
+
+      // Registered users: fetch from Supabase
       const lowerAddress = address.toLowerCase();
 
       const { data, error } = await supabase
@@ -154,19 +204,20 @@ export function usePlayerGames(address: string | undefined, limit: number = 50) 
       return normalizeGames(data);
     },
     enabled: !!address,
-    staleTime: PLAYER_GAMES_STALE_TIME_MS,
-    refetchInterval: false, // Disabled - central sync handles updates
+    staleTime: isLoggedIn ? PLAYER_GAMES_STALE_TIME_MS : 30000,
+    refetchInterval: isLoggedIn ? false : 15000,
     retry: 2,
   });
 }
 
-// Fetch user's active games (pending/matched) from database
-// This is the source of truth for the Active Games panel
-// TODO: Use games_public view after migration 029 is applied
+// Fetch user's active games (pending/matched)
+// Uses blockchain for wallet-only users, Supabase for registered users
 export function useUserActiveGames(address: string | undefined) {
+  const isLoggedIn = useIsLoggedIn();
   const normalizedAddress = address?.toLowerCase() || '';
+
   return useQuery({
-    queryKey: queryKeys.games.userActive(normalizedAddress),
+    queryKey: [...queryKeys.games.userActive(normalizedAddress), isLoggedIn ? 'supabase' : 'blockchain'],
     queryFn: async (): Promise<Game[]> => {
       if (!address) return [];
 
@@ -176,6 +227,19 @@ export function useUserActiveGames(address: string | undefined) {
         return [];
       }
 
+      // Wallet-only users: fetch from blockchain
+      if (!isLoggedIn) {
+        devLog.log('[useUserActiveGames] Using blockchain data source');
+        try {
+          const blockchainSource = getBlockchainDataSource();
+          return await blockchainSource.getPlayerActiveGames(address);
+        } catch (err) {
+          devLog.error('[useUserActiveGames] Blockchain fetch failed:', err);
+          return [];
+        }
+      }
+
+      // Registered users: fetch from Supabase
       const lowerAddress = address.toLowerCase();
 
       const { data, error } = await supabase
@@ -194,8 +258,8 @@ export function useUserActiveGames(address: string | undefined) {
       return normalizeGames(data);
     },
     enabled: !!address,
-    staleTime: USER_ACTIVE_GAMES_STALE_TIME_MS,
-    refetchInterval: false, // Realtime sync handles updates
+    staleTime: isLoggedIn ? USER_ACTIVE_GAMES_STALE_TIME_MS : 30000,
+    refetchInterval: isLoggedIn ? false : 15000,
     retry: 2,
   });
 }
@@ -289,13 +353,28 @@ export function usePlayerStats(address: string | undefined) {
 }
 
 // Fetch single game by ID
-// TODO: Use games_public view after migration 029 is applied
+// Uses blockchain for wallet-only users, Supabase for registered users
 export function useGame(gameId: string | null) {
+  const isLoggedIn = useIsLoggedIn();
+
   return useQuery({
-    queryKey: queryKeys.games.single(gameId || ''),
+    queryKey: [...queryKeys.games.single(gameId || ''), isLoggedIn ? 'supabase' : 'blockchain'],
     queryFn: async (): Promise<Game | null> => {
       if (!gameId) return null;
 
+      // Wallet-only users: fetch from blockchain
+      if (!isLoggedIn) {
+        devLog.log('[useGame] Using blockchain data source');
+        try {
+          const blockchainSource = getBlockchainDataSource();
+          return await blockchainSource.getGame(gameId);
+        } catch (err) {
+          devLog.error('[useGame] Blockchain fetch failed:', err);
+          return null;
+        }
+      }
+
+      // Registered users: fetch from Supabase
       const { data, error } = await supabase
         .from('games')
         .select(GAME_LIST_COLUMNS)
@@ -310,8 +389,8 @@ export function useGame(gameId: string | null) {
       return data ? parseGame(data) : null;
     },
     enabled: !!gameId,
-    staleTime: SINGLE_GAME_STALE_TIME_MS,
-    refetchInterval: false, // Disabled - useGameSync handles real-time updates
+    staleTime: isLoggedIn ? SINGLE_GAME_STALE_TIME_MS : 15000,
+    refetchInterval: isLoggedIn ? false : 10000, // Poll more frequently for single game
   });
 }
 
@@ -322,11 +401,38 @@ const GAME_STATS_COLUMNS = `
 `;
 
 // Fetch game statistics
-// Real-time updates handled by central sync (useRealtimeSync)
+// Uses blockchain for wallet-only users, Supabase for registered users
 export function useGameStats() {
+  const isLoggedIn = useIsLoggedIn();
+
   return useQuery({
-    queryKey: queryKeys.stats.game,
+    queryKey: [...queryKeys.stats.game, isLoggedIn ? 'supabase' : 'blockchain'],
     queryFn: async () => {
+      // Wallet-only users: fetch from blockchain
+      if (!isLoggedIn) {
+        devLog.log('[useGameStats] Using blockchain data source');
+        try {
+          const blockchainSource = getBlockchainDataSource();
+          const stats = await blockchainSource.getGameStats();
+          // Convert to match Supabase format
+          return {
+            total_games: stats.totalGames,
+            pending_games: stats.pendingGames,
+            matched_games: stats.matchedGames,
+            resolved_games: stats.resolvedGames,
+            cancelled_games: stats.cancelledGames,
+            total_volume_wei: stats.totalVolume,
+            total_unique_players: stats.uniquePlayers,
+            avg_game_duration_seconds: null,
+            games_by_tier: null,
+          };
+        } catch (err) {
+          devLog.error('[useGameStats] Blockchain fetch failed:', err);
+          return null;
+        }
+      }
+
+      // Registered users: fetch from Supabase
       const { data, error } = await supabase
         .from('game_statistics')
         .select(GAME_STATS_COLUMNS)
@@ -339,7 +445,7 @@ export function useGameStats() {
 
       return data;
     },
-    staleTime: GAME_STATS_STALE_TIME_MS,
-    refetchInterval: false, // Disabled - central sync handles updates
+    staleTime: isLoggedIn ? GAME_STATS_STALE_TIME_MS : 60000,
+    refetchInterval: isLoggedIn ? false : 30000,
   });
 }
