@@ -42,6 +42,10 @@ interface UIState {
   soundEnabled: boolean;
   soundVolume: number; // 0-1
 
+  // Music preferences
+  musicEnabled: boolean;
+  musicVolume: number; // 0-1
+
   // Animation preferences
   reducedMotion: boolean;
 
@@ -71,6 +75,11 @@ interface UIActions {
   toggleSound: () => void;
   setSoundVolume: (volume: number) => void;
 
+  // Music actions
+  setMusicEnabled: (enabled: boolean) => void;
+  toggleMusic: () => void;
+  setMusicVolume: (volume: number) => void;
+
   // Animation actions
   setReducedMotion: (reduced: boolean) => void;
 
@@ -98,6 +107,8 @@ const initialState: UIState = {
   isSidebarCollapsed: false,
   soundEnabled: true,
   soundVolume: 0.5,
+  musicEnabled: false,
+  musicVolume: 0.3,
   reducedMotion: false,
   toastPosition: 'top-right',
   activeModal: null,
@@ -151,6 +162,16 @@ export const useUIStore = create<UIState & UIActions>()(
       setSoundVolume: (soundVolume) =>
         set({ soundVolume: Math.max(0, Math.min(1, soundVolume)) }),
 
+      // Music actions
+      setMusicEnabled: (musicEnabled) =>
+        set({ musicEnabled }),
+
+      toggleMusic: () =>
+        set((state) => ({ musicEnabled: !state.musicEnabled })),
+
+      setMusicVolume: (musicVolume) =>
+        set({ musicVolume: Math.max(0, Math.min(1, musicVolume)) }),
+
       // Animation actions
       setReducedMotion: (reducedMotion) =>
         set({ reducedMotion }),
@@ -173,6 +194,8 @@ export const useUIStore = create<UIState & UIActions>()(
         theme: state.theme,
         soundEnabled: state.soundEnabled,
         soundVolume: state.soundVolume,
+        musicEnabled: state.musicEnabled,
+        musicVolume: state.musicVolume,
         reducedMotion: state.reducedMotion,
         toastPosition: state.toastPosition,
         isSidebarCollapsed: state.isSidebarCollapsed,
@@ -188,6 +211,8 @@ export const useAppearance = () => useUIStore((state) => state.theme.appearance)
 export const useAccentColor = () => useUIStore((state) => state.theme.accentColor);
 export const useSoundEnabled = () => useUIStore((state) => state.soundEnabled);
 export const useSoundVolume = () => useUIStore((state) => state.soundVolume);
+export const useMusicEnabled = () => useUIStore((state) => state.musicEnabled);
+export const useMusicVolume = () => useUIStore((state) => state.musicVolume);
 export const useReducedMotion = () => useUIStore((state) => state.reducedMotion);
 export const useActiveModalId = () => useUIStore((state) => state.activeModal);
 export const useActiveModalData = () => useUIStore((state) => state.modalData);
