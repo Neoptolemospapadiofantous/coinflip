@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef } from 'react';
 import { useAccount } from 'wagmi';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { supabase } from '@/lib/supabase';
+import { getAuthenticatedClient } from '@/lib/supabase';
 import { devLog } from '@/lib/utils';
 
 export interface UserPreferences {
@@ -60,7 +60,8 @@ export function useUserPreferences() {
     queryFn: async (): Promise<UserPreferences | null> => {
       if (!address) return null;
 
-      const { data, error } = await supabase
+      const client = getAuthenticatedClient(address);
+      const { data, error } = await client
         .from('user_preferences')
         .select('*')
         .eq('user_address', address.toLowerCase())
@@ -83,7 +84,8 @@ export function useUserPreferences() {
     mutationFn: async (updates: Partial<Omit<UserPreferences, 'user_address' | 'created_at' | 'updated_at'>>) => {
       if (!address) throw new Error('No address');
 
-      const { error } = await supabase
+      const client = getAuthenticatedClient(address);
+      const { error } = await client
         .from('user_preferences')
         .upsert({
           user_address: address.toLowerCase(),

@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef } from 'react';
 import { useAccount } from 'wagmi';
-import { supabase } from '@/lib/supabase';
+import { getAuthenticatedClient } from '@/lib/supabase';
 import { devLog } from '@/lib/utils';
 
 type NotificationType = 'matched' | 'resolved' | 'expired';
@@ -78,7 +78,8 @@ export function useNotificationState() {
 
     try {
       // Check database
-      const { data, error } = await supabase
+      const client = getAuthenticatedClient(address);
+      const { data, error } = await client
         .from('user_game_notifications')
         .select('*')
         .eq('user_address', address.toLowerCase())
@@ -160,7 +161,8 @@ export function useNotificationState() {
 
     try {
       // Upsert the notification state
-      const { error } = await supabase
+      const client = getAuthenticatedClient(address);
+      const { error } = await client
         .from('user_game_notifications')
         .upsert({
           user_address: address.toLowerCase(),
@@ -212,7 +214,8 @@ export function useNotificationState() {
     const field = `${type}_sound_played`;
 
     try {
-      const { error } = await supabase
+      const client = getAuthenticatedClient(address);
+      const { error } = await client
         .from('user_game_notifications')
         .upsert({
           user_address: address.toLowerCase(),
@@ -261,7 +264,8 @@ export function useNotificationState() {
     }
 
     try {
-      const { data, error } = await supabase
+      const client = getAuthenticatedClient(address);
+      const { data, error } = await client
         .from('user_game_notifications')
         .select('*')
         .eq('user_address', address.toLowerCase())
@@ -318,7 +322,8 @@ export function useNotificationState() {
         [`${type}_modal_shown`]: true,
       }));
 
-      const { error } = await supabase
+      const client = getAuthenticatedClient(address);
+      const { error } = await client
         .from('user_game_notifications')
         .upsert(upserts, {
           onConflict: 'user_address,game_id',
