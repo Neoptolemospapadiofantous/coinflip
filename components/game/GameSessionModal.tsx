@@ -110,6 +110,9 @@ export function GameSessionModal({ game, open, onClose, userAddress, modalType }
     }
   }, [game]);
 
+  // Track if we've handled the resolved animation for this game
+  const resolvedAnimationHandledRef = useRef<string | null>(null);
+
   // Handle game changes and status transitions
   useEffect(() => {
     if (!game) {
@@ -121,15 +124,14 @@ export function GameSessionModal({ game, open, onClose, userAddress, modalType }
       setVrfTimedOut(false);
       lastGameIdRef.current = null;
       lastGameStatusRef.current = null;
+      resolvedAnimationHandledRef.current = null;
       return;
     }
 
     const isNewGame = lastGameIdRef.current !== game.id;
-    const statusChanged = lastGameStatusRef.current !== game.status;
 
-    // Track game ID and status
+    // Track game ID
     lastGameIdRef.current = game.id;
-    lastGameStatusRef.current = game.status;
 
     // Reset state for new game
     if (isNewGame) {
@@ -141,10 +143,14 @@ export function GameSessionModal({ game, open, onClose, userAddress, modalType }
       setShowConfetti(false);
       hasPlayedMatchSoundRef.current = false;
       hasPlayedResultSoundRef.current = false;
+      resolvedAnimationHandledRef.current = null;
+      lastGameStatusRef.current = null;
     }
 
     // Handle status transitions
     if (game.status === 'matched') {
+      lastGameStatusRef.current = 'matched';
+
       // Use matched_at from DB as the VRF start time (persists across refreshes)
       // Fall back to Date.now() if matched_at is not yet available
       const matchedTime = game.matched_at ? new Date(game.matched_at).getTime() : Date.now();
@@ -173,27 +179,36 @@ export function GameSessionModal({ game, open, onClose, userAddress, modalType }
 
     // If game is resolved AND state is valid, start animation (only once)
     // Wait for preferences to load before deciding on animation
-    if (game.status === 'resolved' && validation.valid && statusChanged && !preferencesLoading) {
-      // Stop VRF timer
-      vrfStartTimeRef.current = null;
-      if (vrfTimerRef.current) {
-        clearInterval(vrfTimerRef.current);
-        vrfTimerRef.current = null;
-      }
+    // Use resolvedAnimationHandledRef to track whether we've handled this specific game's resolved state
+    if (game.status === 'resolved' && validation.valid && !preferencesLoading) {
+      const resolvedKey = `${game.id}-resolved`;
 
-      // Check if user prefers to skip animation (from DB-backed preferences)
-      if (alwaysSkipAnimation) {
-        // Skip directly to result
-        setSkipped(true);
-        setShowResult(true);
-        setIsFlipping(false);
-        // Trigger result effects when auto-skipping
-        playResultEffects();
-      } else {
-        // Start flip animation
-        setIsFlipping(true);
+      if (resolvedAnimationHandledRef.current !== resolvedKey) {
+        resolvedAnimationHandledRef.current = resolvedKey;
+        lastGameStatusRef.current = 'resolved';
+
+        // Stop VRF timer
+        vrfStartTimeRef.current = null;
+        if (vrfTimerRef.current) {
+          clearInterval(vrfTimerRef.current);
+          vrfTimerRef.current = null;
+        }
+
+        // Check if user prefers to skip animation (from DB-backed preferences)
+        if (alwaysSkipAnimation) {
+          // Skip directly to result
+          devLog.log('⏭️ Auto-skipping animation (user preference)');
+          setSkipped(true);
+          setShowResult(true);
+          setIsFlipping(false);
+          // Trigger result effects when auto-skipping
+          playResultEffects();
+        } else {
+          // Start flip animation
+          setIsFlipping(true);
+        }
+        setVrfTimedOut(false);
       }
-      setVrfTimedOut(false);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- Intentionally using specific game fields to prevent re-renders
   }, [game?.id, game?.status, game?.matched_at, validation.valid, alwaysSkipAnimation, preferencesLoading]);
@@ -642,7 +657,7 @@ export function GameSessionModal({ game, open, onClose, userAddress, modalType }
                     </Flex>
                   </Flex>
 
-                  <Flex justify="between" pt="2" style={{ borderTop: '1px solid rgba(255,255,255,0.1)' }}>
+                  <Flex justify="between" pt="2" className="border-t border-slate-700/50">
                     <Text size="2" weight="bold">Total Pot:</Text>
                     <Text size="2" weight="bold" className="text-green-400">
                       {formatCurrency(BigInt(game.amount) * 2n)}
