@@ -86,8 +86,8 @@ export default function Home() {
             {/* CTA Cards */}
             <Grid columns={{ initial: '1', sm: '2' }} gap="4" width="100%" className="max-w-3xl">
               {/* Decentralized Mode */}
-              <Card className="border border-cyan-500/40 hover:border-cyan-500/70 transition-colors bg-slate-900/50">
-                <Flex direction="column" gap="3" p="4">
+              <Card className="card-simple hover:border-cyan-500/50 transition-colors h-full">
+                <Flex direction="column" gap="3" p="4" className="h-full">
                   <Flex align="center" gap="2">
                     <Box className="p-2 rounded-lg bg-cyan-500/20">
                       <Wallet className="w-5 h-5 text-cyan-400" />
@@ -103,7 +103,7 @@ export default function Home() {
                     <FeatureItem text="No registration required" />
                     <FeatureItem text="Full game functionality" />
                   </Flex>
-                  <Box className="mt-3">
+                  <Box className="mt-auto pt-3">
                     {isConnected ? (
                       <Link href="/play">
                         <Button size="3" variant="solid" color="cyan" className="w-full cursor-pointer">
@@ -132,8 +132,8 @@ export default function Home() {
               </Card>
 
               {/* Centralized Mode */}
-              <Card className="border border-purple-500/40 hover:border-purple-500/70 transition-colors bg-slate-900/50">
-                <Flex direction="column" gap="3" p="4">
+              <Card className="card-simple hover:border-purple-500/50 transition-colors h-full">
+                <Flex direction="column" gap="3" p="4" className="h-full">
                   <Flex align="center" gap="2">
                     <Box className="p-2 rounded-lg bg-purple-500/20">
                       <User className="w-5 h-5 text-purple-400" />
@@ -149,7 +149,7 @@ export default function Home() {
                     <FeatureItem text="Cross-device sync" icon={<Cloud className="w-3 h-3" />} color="purple" />
                     <FeatureItem text="Activity notifications" icon={<Bell className="w-3 h-3" />} color="purple" />
                   </Flex>
-                  <Box className="mt-3">
+                  <Box className="mt-auto pt-3">
                     {isLoggedIn ? (
                       <Link href="/play">
                         <Button size="3" variant="solid" color="purple" className="w-full cursor-pointer">
@@ -218,7 +218,7 @@ export default function Home() {
 
             {/* Tiers Preview */}
             <Box className="w-full max-w-3xl">
-              <Card className="bg-slate-900/50 border border-slate-700/50">
+              <Card className="card-simple">
                 <Flex direction="column" gap="4" p="5">
                   <Flex align="center" justify="between">
                     <Heading size="4">Choose Your Bet</Heading>
@@ -227,12 +227,11 @@ export default function Home() {
                     </Badge>
                   </Flex>
                   <Grid columns={{ initial: '3', sm: '5' }} gap="3">
-                    {tiers.map((tier, index) => (
-                      <TierButton
+                    {tiers.map((tier) => (
+                      <TierDisplay
                         key={tier.id}
                         amount={`$${tier.amountUsd}`}
                         players={getPendingCount(tier.id)}
-                        active={index === 1}
                       />
                     ))}
                   </Grid>
@@ -293,7 +292,7 @@ function FeatureCard({
   description: string;
 }) {
   return (
-    <Card className="bg-slate-900/50 border border-slate-700/50 hover:border-slate-600/50 transition-colors">
+    <Card className="card-simple card-hover">
       <Flex direction="column" gap="2" p="4">
         <Box className="p-2 rounded-lg bg-slate-800/50 w-fit">
           {icon}
@@ -307,30 +306,24 @@ function FeatureCard({
   );
 }
 
-function TierButton({
+function TierDisplay({
   amount,
   players,
-  active = false,
 }: {
   amount: string;
   players: number;
-  active?: boolean;
 }) {
   return (
-    <Button
-      variant={active ? 'solid' : 'soft'}
-      size="3"
-      className={`cursor-pointer w-full h-auto py-4 ${active ? '' : 'opacity-80 hover:opacity-100'}`}
-    >
+    <Box className="bg-slate-800/50 border border-slate-700/60 rounded-lg py-4 px-3">
       <Flex direction="column" gap="1" align="center">
-        <Text size="4" weight="bold">
+        <Text size="4" weight="bold" className="text-cyan-400">
           {amount}
         </Text>
         <Text size="1" color="gray">
           {players} waiting
         </Text>
       </Flex>
-    </Button>
+    </Box>
   );
 }
 
@@ -344,7 +337,7 @@ function StepCard({
   description: string;
 }) {
   return (
-    <Card className="bg-slate-900/50 border border-slate-700/50">
+    <Card className="card-simple">
       <Flex direction="column" gap="1" p="3" align="center">
         <Flex
           align="center"
