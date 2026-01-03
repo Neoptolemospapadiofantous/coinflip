@@ -79,13 +79,13 @@ export function TierSelector() {
               key={tier.id}
               variant={isSelected ? 'solid' : 'soft'}
               size={{ initial: '3', sm: '4' }}
-              className={`cursor-pointer transition-all touch-target ${
+              className={`tier-btn cursor-pointer transition-all touch-target ${
                 !canAfford ? 'opacity-50 cursor-not-allowed' : ''
               } ${isSelected ? 'ring-2 ring-cyan-500' : ''}`}
               onClick={() => canAfford && setSelectedTier(tier.id)}
               disabled={!canAfford}
             >
-              <Flex direction="column" gap={{ initial: '1', sm: '2' }} align="center" py={{ initial: '2', sm: '3' }} className="w-full">
+              <Flex direction="column" gap={{ initial: '1', sm: '2' }} align="center" className="w-full">
                 {/* Amount */}
                 <Text size={{ initial: '5', sm: '6' }} weight="bold" className="text-white">
                   ${tier.amountUsd}
