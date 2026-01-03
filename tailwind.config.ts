@@ -6,6 +6,15 @@ const config: Config = {
     './components/**/*.{js,ts,jsx,tsx,mdx}',
   ],
   theme: {
+    // Consistent screen breakpoints
+    screens: {
+      'xs': '475px',
+      'sm': '640px',
+      'md': '768px',
+      'lg': '1024px',
+      'xl': '1280px',
+      '2xl': '1536px',
+    },
     extend: {
       colors: {
         // 5-Color System for CoinFlip
@@ -18,6 +27,44 @@ const config: Config = {
           resolved: '#22c55e',    // green-500 (Success)
           cancelled: '#ef4444',   // red-500 (Danger)
         },
+      },
+      // Consistent spacing scale
+      spacing: {
+        '4.5': '1.125rem',  // 18px
+        '13': '3.25rem',    // 52px
+        '15': '3.75rem',    // 60px
+        '18': '4.5rem',     // 72px
+        '22': '5.5rem',     // 88px
+        '26': '6.5rem',     // 104px
+        '30': '7.5rem',     // 120px
+        'safe': 'env(safe-area-inset-bottom)',
+      },
+      // Container sizes
+      maxWidth: {
+        'content': '1200px',    // Main content area
+        'narrow': '720px',      // Narrow content (forms, modals)
+        'wide': '1400px',       // Wide content (dashboards)
+        'reading': '65ch',      // Optimal reading width
+      },
+      // Responsive font sizes
+      fontSize: {
+        'display-lg': ['3.5rem', { lineHeight: '1.1', letterSpacing: '-0.02em' }],
+        'display': ['3rem', { lineHeight: '1.1', letterSpacing: '-0.02em' }],
+        'display-sm': ['2.25rem', { lineHeight: '1.2', letterSpacing: '-0.01em' }],
+        'heading-lg': ['1.875rem', { lineHeight: '1.25' }],
+        'heading': ['1.5rem', { lineHeight: '1.3' }],
+        'heading-sm': ['1.25rem', { lineHeight: '1.4' }],
+        'body-lg': ['1.125rem', { lineHeight: '1.6' }],
+        'body': ['1rem', { lineHeight: '1.6' }],
+        'body-sm': ['0.875rem', { lineHeight: '1.5' }],
+        'caption': ['0.75rem', { lineHeight: '1.4' }],
+      },
+      // Border radius tokens
+      borderRadius: {
+        'card': '0.75rem',
+        'button': '0.5rem',
+        'input': '0.5rem',
+        'modal': '1rem',
       },
       animation: {
         'spin-slow': 'spin 3s linear infinite',

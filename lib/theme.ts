@@ -89,3 +89,105 @@ export const colors = {
   danger: theme.colors.danger.main,
   accent: theme.colors.accent.main,
 } as const;
+
+// Layout tokens for consistent spacing and sizing
+export const layout = {
+  // Breakpoints (match tailwind.config.ts)
+  breakpoints: {
+    xs: 475,
+    sm: 640,
+    md: 768,
+    lg: 1024,
+    xl: 1280,
+    '2xl': 1536,
+  },
+
+  // Container max-widths
+  containers: {
+    narrow: '720px',
+    content: '1200px',
+    wide: '1400px',
+    reading: '65ch',
+  },
+
+  // Spacing scale (in rem)
+  spacing: {
+    xs: '0.25rem',    // 4px
+    sm: '0.5rem',     // 8px
+    md: '1rem',       // 16px
+    lg: '1.5rem',     // 24px
+    xl: '2rem',       // 32px
+    '2xl': '3rem',    // 48px
+    '3xl': '4rem',    // 64px
+  },
+
+  // Section vertical padding
+  sectionPadding: {
+    sm: { mobile: '1.5rem', tablet: '2rem', desktop: '2.5rem' },
+    md: { mobile: '2rem', tablet: '3rem', desktop: '4rem' },
+    lg: { mobile: '3rem', tablet: '4rem', desktop: '6rem' },
+  },
+
+  // Card padding
+  cardPadding: {
+    sm: { mobile: '0.75rem', desktop: '1rem' },
+    md: { mobile: '1rem', desktop: '1.5rem' },
+    lg: { mobile: '1.25rem', desktop: '2rem' },
+  },
+
+  // Border radius
+  radius: {
+    sm: '0.25rem',
+    md: '0.5rem',
+    lg: '0.75rem',
+    xl: '1rem',
+    full: '9999px',
+  },
+
+  // Z-index scale
+  zIndex: {
+    dropdown: 1000,
+    sticky: 1020,
+    fixed: 1030,
+    modalBackdrop: 1040,
+    modal: 1050,
+    popover: 1060,
+    tooltip: 1070,
+    toast: 1080,
+  },
+} as const;
+
+// Typography scale
+export const typography = {
+  // Font sizes with line heights
+  display: {
+    lg: { size: '3.5rem', lineHeight: '1.1', letterSpacing: '-0.02em' },
+    md: { size: '3rem', lineHeight: '1.1', letterSpacing: '-0.02em' },
+    sm: { size: '2.25rem', lineHeight: '1.2', letterSpacing: '-0.01em' },
+  },
+  heading: {
+    lg: { size: '1.875rem', lineHeight: '1.25' },
+    md: { size: '1.5rem', lineHeight: '1.3' },
+    sm: { size: '1.25rem', lineHeight: '1.4' },
+  },
+  body: {
+    lg: { size: '1.125rem', lineHeight: '1.6' },
+    md: { size: '1rem', lineHeight: '1.6' },
+    sm: { size: '0.875rem', lineHeight: '1.5' },
+  },
+  caption: { size: '0.75rem', lineHeight: '1.4' },
+} as const;
+
+// Media query helpers
+export const mediaQueries = {
+  xs: `@media (min-width: ${layout.breakpoints.xs}px)`,
+  sm: `@media (min-width: ${layout.breakpoints.sm}px)`,
+  md: `@media (min-width: ${layout.breakpoints.md}px)`,
+  lg: `@media (min-width: ${layout.breakpoints.lg}px)`,
+  xl: `@media (min-width: ${layout.breakpoints.xl}px)`,
+  '2xl': `@media (min-width: ${layout.breakpoints['2xl']}px)`,
+  // Mobile-first helpers
+  mobileOnly: `@media (max-width: ${layout.breakpoints.sm - 1}px)`,
+  tabletOnly: `@media (min-width: ${layout.breakpoints.sm}px) and (max-width: ${layout.breakpoints.lg - 1}px)`,
+  desktopOnly: `@media (min-width: ${layout.breakpoints.lg}px)`,
+} as const;
