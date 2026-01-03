@@ -25,6 +25,32 @@
   }
 }
 
+/* =============================================
+   RADIX COMPONENT OVERRIDES
+   Use this section to override Radix UI defaults
+   ============================================= */
+
+/* Button - Allow flexible height for content-heavy buttons */
+.rt-Button.btn-flex {
+  height: auto;
+  min-height: var(--button-height);
+}
+
+/* Tier selector buttons - specific padding for game tiers */
+.rt-Button.tier-btn {
+  height: auto;
+  min-height: var(--button-height);
+  padding-top: 0.75rem;
+  padding-bottom: 0.75rem;
+}
+
+@media (min-width: 640px) {
+  .rt-Button.tier-btn {
+    padding-top: 1rem;
+    padding-bottom: 1rem;
+  }
+}
+
 @layer utilities {
   .backface-hidden {
     backface-visibility: hidden;
@@ -407,6 +433,157 @@
   }
 
   /* ===================================
+     LAYOUT CONTAINERS & STRUCTURE
+     ================================== */
+
+  /* Page container - consistent max-width and padding */
+  .page-container {
+    @apply w-full max-w-content mx-auto px-4 sm:px-6 lg:px-8;
+  }
+
+  .page-container-narrow {
+    @apply w-full max-w-narrow mx-auto px-4 sm:px-6;
+  }
+
+  .page-container-wide {
+    @apply w-full max-w-wide mx-auto px-4 sm:px-6 lg:px-8;
+  }
+
+  /* Section spacing - consistent vertical rhythm */
+  .section-spacing {
+    @apply py-8 sm:py-12 lg:py-16;
+  }
+
+  .section-spacing-sm {
+    @apply py-6 sm:py-8 lg:py-10;
+  }
+
+  .section-spacing-lg {
+    @apply py-12 sm:py-16 lg:py-24;
+  }
+
+  /* Content stack - vertical spacing for content blocks */
+  .content-stack {
+    @apply flex flex-col gap-6 sm:gap-8;
+  }
+
+  .content-stack-sm {
+    @apply flex flex-col gap-4 sm:gap-6;
+  }
+
+  .content-stack-lg {
+    @apply flex flex-col gap-8 sm:gap-12;
+  }
+
+  /* Grid layouts - responsive grid patterns */
+  .grid-auto-fit {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 1rem;
+  }
+
+  .grid-auto-fill {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 1rem;
+  }
+
+  /* Card grid - optimized for cards */
+  .card-grid {
+    @apply grid gap-4 sm:gap-6;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  }
+
+  .card-grid-sm {
+    @apply grid gap-3 sm:gap-4;
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  }
+
+  /* ===================================
+     RESPONSIVE TYPOGRAPHY
+     ================================== */
+
+  /* Display headings - scale down on mobile */
+  .text-responsive-display {
+    @apply text-display-sm sm:text-display lg:text-display-lg;
+  }
+
+  .text-responsive-heading {
+    @apply text-heading-sm sm:text-heading lg:text-heading-lg;
+  }
+
+  .text-responsive-body {
+    @apply text-body-sm sm:text-body;
+  }
+
+  /* Page title - consistent styling */
+  .page-title {
+    @apply text-2xl sm:text-3xl lg:text-4xl font-bold tracking-tight;
+  }
+
+  .page-subtitle {
+    @apply text-base sm:text-lg text-slate-400 max-w-reading;
+  }
+
+  /* Section headers */
+  .section-title {
+    @apply text-xl sm:text-2xl font-semibold;
+  }
+
+  .section-subtitle {
+    @apply text-sm sm:text-base text-slate-400;
+  }
+
+  /* ===================================
+     COMPONENT SPACING PATTERNS
+     ================================== */
+
+  /* Card internal padding - consistent across all cards */
+  .card-padding {
+    @apply p-4 sm:p-5 lg:p-6;
+  }
+
+  .card-padding-sm {
+    @apply p-3 sm:p-4;
+  }
+
+  .card-padding-lg {
+    @apply p-5 sm:p-6 lg:p-8;
+  }
+
+  /* Background Gradient Orbs */
+  .bg-orb-cyan {
+    background: radial-gradient(circle, theme(colors.cyan.500 / 0.4) 0%, transparent 70%);
+  }
+
+  .bg-orb-purple {
+    background: radial-gradient(circle, theme(colors.purple.500 / 0.4) 0%, transparent 70%);
+  }
+
+  /* Header bar spacing */
+  .header-spacing {
+    @apply px-4 sm:px-6 py-3 sm:py-4;
+  }
+
+  /* Form element spacing */
+  .form-stack {
+    @apply flex flex-col gap-4;
+  }
+
+  .form-row {
+    @apply flex flex-col sm:flex-row gap-3 sm:gap-4;
+  }
+
+  /* Button groups */
+  .button-group {
+    @apply flex flex-wrap gap-2 sm:gap-3;
+  }
+
+  .button-group-stack {
+    @apply flex flex-col sm:flex-row gap-2 sm:gap-3;
+  }
+
+  /* ===================================
      MOBILE RESPONSIVENESS UTILITIES
      ================================== */
 
@@ -472,6 +649,87 @@
       width: auto;
     }
   }
+
+  /* Hide on mobile, show on desktop */
+  .desktop-only {
+    @apply hidden sm:block;
+  }
+
+  .mobile-only {
+    @apply block sm:hidden;
+  }
+
+  /* Responsive flex direction */
+  .flex-responsive {
+    @apply flex flex-col sm:flex-row;
+  }
+
+  .flex-responsive-reverse {
+    @apply flex flex-col-reverse sm:flex-row;
+  }
+
+  /* ===================================
+     LAYOUT PRIMITIVES
+     ================================== */
+
+  /* Center content horizontally and vertically */
+  .center-content {
+    @apply flex items-center justify-center;
+  }
+
+  /* Space between with wrap */
+  .space-between {
+    @apply flex items-center justify-between flex-wrap gap-4;
+  }
+
+  /* Sticky header pattern */
+  .sticky-header {
+    @apply sticky top-0 z-40 backdrop-blur-xl bg-slate-900/80 border-b border-slate-700/50;
+  }
+
+  /* Fixed bottom bar (mobile) */
+  .fixed-bottom {
+    @apply fixed bottom-0 left-0 right-0 z-40 bg-slate-900/95 backdrop-blur-xl border-t border-slate-700/50;
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+
+  /* Scrollable area with hidden scrollbar */
+  .scroll-area {
+    @apply overflow-auto;
+    scrollbar-width: thin;
+  }
+
+  .scroll-area-hidden {
+    @apply overflow-auto;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+
+  .scroll-area-hidden::-webkit-scrollbar {
+    display: none;
+  }
+
+  /* Aspect ratio containers */
+  .aspect-card {
+    aspect-ratio: 16 / 10;
+  }
+
+  .aspect-square {
+    aspect-ratio: 1 / 1;
+  }
+
+  /* ===================================
+     Z-INDEX SCALE
+     ================================== */
+
+  .z-dropdown { z-index: 1000; }
+  .z-sticky { z-index: 1020; }
+  .z-fixed { z-index: 1030; }
+  .z-modal-backdrop { z-index: 1040; }
+  .z-modal { z-index: 1050; }
+  .z-popover { z-index: 1060; }
+  .z-tooltip { z-index: 1070; }
+  .z-toast { z-index: 1080; }
 
   /* ===================================
      GAME RESULT ANIMATIONS
