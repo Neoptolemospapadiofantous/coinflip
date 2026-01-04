@@ -70,6 +70,36 @@ export const theme = {
     cancelled: '#ef4444',   // danger.main
   },
 
+  // Chart colors for consistent data visualization
+  charts: {
+    // Win Distribution pie chart
+    winDistribution: {
+      wins: '#22c55e',      // success.main - green
+      losses: '#ef4444',    // danger.main - red
+    },
+    // Game by Tier / Performance progress bars
+    tierProgress: {
+      gradient: {
+        from: '#06b6d4',    // primary.main - cyan
+        to: '#a855f7',      // accent.main - purple
+      },
+      background: '#334155', // neutral.700
+    },
+    // Line/Area charts
+    trends: {
+      primary: '#06b6d4',   // primary.main - cyan
+      secondary: '#a855f7', // accent.main - purple
+      positive: '#22c55e',  // success.main - green
+      negative: '#ef4444',  // danger.main - red
+      neutral: '#94a3b8',   // neutral.400
+    },
+    // Tooltip styling
+    tooltip: {
+      background: 'rgba(15, 23, 42, 0.95)',
+      border: 'rgba(6, 182, 212, 0.5)',
+    },
+  },
+
   // Radix UI color mapping
   radix: {
     primary: 'cyan',

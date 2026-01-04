@@ -25,6 +25,7 @@ import { formatEther } from 'viem';
 import { useMemo } from 'react';
 import { RecentGamesTable } from '@/components/shared';
 import { PieChart, Pie, Cell, ResponsiveContainer } from 'recharts';
+import { theme } from '@/lib/theme';
 
 export default function DashboardPage() {
   const { address } = useAccount();
@@ -62,10 +63,10 @@ export default function DashboardPage() {
     return streak;
   }, [recentGames, address]);
 
-  // Pie chart data for win/loss
+  // Pie chart data for win/loss - using theme colors
   const pieData = useMemo(() => [
-    { name: 'Wins', value: playerStats?.wins ?? 0, color: '#22c55e' },
-    { name: 'Losses', value: playerStats?.losses ?? 0, color: '#ef4444' },
+    { name: 'Wins', value: playerStats?.wins ?? 0, color: theme.charts.winDistribution.wins },
+    { name: 'Losses', value: playerStats?.losses ?? 0, color: theme.charts.winDistribution.losses },
   ].filter(d => d.value > 0), [playerStats?.wins, playerStats?.losses]);
 
   const stats = [

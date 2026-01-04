@@ -36,6 +36,7 @@ import {
   Legend,
 } from 'recharts';
 import { getDateRangeStart, type DateRangeFilter } from '@/components/shared';
+import { theme } from '@/lib/theme';
 
 export default function StatsPage() {
   const { address } = useAccount();
@@ -334,20 +335,20 @@ export default function StatsPage() {
               {winRateTrend.length > 0 ? (
                 <ResponsiveContainer width="100%" height={250}>
                   <LineChart data={winRateTrend}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
-                    <XAxis dataKey="game" stroke="#94a3b8" />
-                    <YAxis stroke="#94a3b8" domain={[0, 100]} tickFormatter={(v) => `${v}%`} />
+                    <CartesianGrid strokeDasharray="3 3" stroke={theme.colors.neutral[700]} />
+                    <XAxis dataKey="game" stroke={theme.colors.neutral[400]} />
+                    <YAxis stroke={theme.colors.neutral[400]} domain={[0, 100]} tickFormatter={(v) => `${v}%`} />
                     <Tooltip
                       contentStyle={{
-                        background: 'rgba(15, 23, 42, 0.95)',
-                        border: '1px solid rgba(6, 182, 212, 0.5)',
+                        background: theme.charts.tooltip.background,
+                        border: `1px solid ${theme.charts.tooltip.border}`,
                         borderRadius: '8px',
                       }}
                       formatter={(value) => [`${(value as number).toFixed(1)}%`, 'Win Rate']}
                     />
                     <Legend />
-                    <Line type="monotone" dataKey="winRate" stroke="#22c55e" strokeWidth={2} name="Your Win Rate" dot={false} />
-                    <Line type="monotone" dataKey="avgWinRate" stroke="#94a3b8" strokeWidth={1} strokeDasharray="5 5" name="Platform Avg" dot={false} />
+                    <Line type="monotone" dataKey="winRate" stroke={theme.charts.trends.positive} strokeWidth={2} name="Your Win Rate" dot={false} />
+                    <Line type="monotone" dataKey="avgWinRate" stroke={theme.charts.trends.neutral} strokeWidth={1} strokeDasharray="5 5" name="Platform Avg" dot={false} />
                   </LineChart>
                 </ResponsiveContainer>
               ) : (
@@ -370,17 +371,17 @@ export default function StatsPage() {
                   <AreaChart data={profitTimeline}>
                     <defs>
                       <linearGradient id="profitGradient" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor={profitTimeline[profitTimeline.length - 1]?.profit >= 0 ? '#22c55e' : '#ef4444'} stopOpacity={0.8} />
-                        <stop offset="95%" stopColor={profitTimeline[profitTimeline.length - 1]?.profit >= 0 ? '#22c55e' : '#ef4444'} stopOpacity={0} />
+                        <stop offset="5%" stopColor={profitTimeline[profitTimeline.length - 1]?.profit >= 0 ? theme.charts.trends.positive : theme.charts.trends.negative} stopOpacity={0.8} />
+                        <stop offset="95%" stopColor={profitTimeline[profitTimeline.length - 1]?.profit >= 0 ? theme.charts.trends.positive : theme.charts.trends.negative} stopOpacity={0} />
                       </linearGradient>
                     </defs>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
-                    <XAxis dataKey="game" stroke="#94a3b8" />
-                    <YAxis stroke="#94a3b8" tickFormatter={(v) => `${v >= 0 ? '+' : ''}${v.toFixed(3)}`} />
+                    <CartesianGrid strokeDasharray="3 3" stroke={theme.colors.neutral[700]} />
+                    <XAxis dataKey="game" stroke={theme.colors.neutral[400]} />
+                    <YAxis stroke={theme.colors.neutral[400]} tickFormatter={(v) => `${v >= 0 ? '+' : ''}${v.toFixed(3)}`} />
                     <Tooltip
                       contentStyle={{
-                        background: 'rgba(15, 23, 42, 0.95)',
-                        border: '1px solid rgba(6, 182, 212, 0.5)',
+                        background: theme.charts.tooltip.background,
+                        border: `1px solid ${theme.charts.tooltip.border}`,
                         borderRadius: '8px',
                       }}
                       formatter={(value) => {
@@ -388,7 +389,7 @@ export default function StatsPage() {
                         return [`${v >= 0 ? '+' : ''}${v.toFixed(6)} ETH`, 'Cumulative P/L'];
                       }}
                     />
-                    <Area type="monotone" dataKey="profit" stroke={profitTimeline[profitTimeline.length - 1]?.profit >= 0 ? '#22c55e' : '#ef4444'} fill="url(#profitGradient)" strokeWidth={2} />
+                    <Area type="monotone" dataKey="profit" stroke={profitTimeline[profitTimeline.length - 1]?.profit >= 0 ? theme.charts.trends.positive : theme.charts.trends.negative} fill="url(#profitGradient)" strokeWidth={2} />
                   </AreaChart>
                 </ResponsiveContainer>
               ) : (
@@ -572,10 +573,16 @@ export default function StatsPage() {
                       </Text>
                       <Box className="w-24">
                         <Flex align="center" gap="2">
-                          <Box className="flex-1 h-2 bg-slate-700 rounded-full overflow-hidden">
+                          <Box
+                            className="flex-1 h-2 rounded-full overflow-hidden"
+                            style={{ backgroundColor: theme.charts.tierProgress.background }}
+                          >
                             <Box
-                              className="h-full bg-gradient-to-r from-cyan-500 to-green-500 transition-all"
-                              style={{ width: `${tier.winRate}%` }}
+                              className="h-full transition-all"
+                              style={{
+                                width: `${tier.winRate}%`,
+                                background: `linear-gradient(to right, ${theme.charts.tierProgress.gradient.from}, ${theme.charts.tierProgress.gradient.to})`,
+                              }}
                             />
                           </Box>
                           <Text size="1" color="gray" className="w-10 text-right">
