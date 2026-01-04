@@ -6,6 +6,7 @@
  */
 
 import type { RealtimeChannel } from '@supabase/supabase-js';
+import { devLog } from '@/lib/utils';
 
 // ============================================
 // CHANNEL NAMES
@@ -92,7 +93,7 @@ const activeChannels = new Map<string, RealtimeChannel>();
  */
 export function registerChannel(name: string, channel: RealtimeChannel): void {
   if (activeChannels.has(name)) {
-    console.warn(`[Realtime] Channel "${name}" already registered, replacing...`);
+    devLog.warn(`[Realtime] Channel "${name}" already registered, replacing...`);
   }
   activeChannels.set(name, channel);
 }
@@ -175,14 +176,3 @@ export function getQueryKeysToInvalidate(
   return EVENT_TO_QUERY_KEYS[key] || [];
 }
 
-// ============================================
-// DEBUGGING
-// ============================================
-
-/**
- * Log current realtime state for debugging
- */
-export function logRealtimeState(): void {
-  console.log('[Realtime] Active channels:', getActiveChannels());
-  console.log('[Realtime] Channel count:', getActiveChannelCount());
-}
