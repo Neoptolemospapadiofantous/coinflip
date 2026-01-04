@@ -29,6 +29,7 @@ import Link from 'next/link';
 import { FilterControls, ExportButton, getDateRangeStart } from '@/components/shared';
 import type { DateRangeFilter, StatusFilter, SortOption } from '@/components/shared';
 import { RecentGamesTable } from '@/components/shared/RecentGamesTable';
+import { theme } from '@/lib/theme';
 
 const ITEMS_PER_PAGE = 25;
 
@@ -85,9 +86,9 @@ export default function HistoryPage() {
   }, [stats.gamesByTier, stats.winsByTier, tiers]);
 
   const winLossData = useMemo(() => [
-    { name: 'Wins', value: stats.wins, color: '#22c55e' },
-    { name: 'Losses', value: stats.losses, color: '#ef4444' },
-    { name: 'Pending', value: stats.pending, color: '#facc15' },
+    { name: 'Wins', value: stats.wins, color: theme.charts.winDistribution.wins },
+    { name: 'Losses', value: stats.losses, color: theme.charts.winDistribution.losses },
+    { name: 'Pending', value: stats.pending, color: theme.colors.warning.main },
   ].filter(item => item.value > 0), [stats.wins, stats.losses, stats.pending]);
 
   // Filter games
@@ -310,7 +311,7 @@ export default function HistoryPage() {
                         data={winLossData}
                         cx="50%"
                         cy="50%"
-                        labelLine={true}
+                        labelLine={{ stroke: theme.colors.neutral[400] }}
                         label={({ name, percent }) => `${name} ${((percent ?? 0) * 100).toFixed(0)}%`}
                         outerRadius={90}
                         fill="#8884d8"
@@ -324,13 +325,16 @@ export default function HistoryPage() {
                       </Pie>
                       <Tooltip
                         contentStyle={{
-                          background: 'rgba(15, 23, 42, 0.95)',
-                          border: '1px solid rgba(6, 182, 212, 0.5)',
+                          background: theme.charts.tooltip.background,
+                          border: `1px solid ${theme.charts.tooltip.border}`,
                           borderRadius: '8px',
-                          color: '#e2e8f0',
+                          color: theme.colors.neutral[200],
                         }}
                       />
-                      <Legend />
+                      <Legend
+                        wrapperStyle={{ color: theme.colors.neutral[200] }}
+                        formatter={(value) => <span style={{ color: theme.colors.neutral[200] }}>{value}</span>}
+                      />
                     </PieChart>
                   </ResponsiveContainer>
                 )}
@@ -348,19 +352,25 @@ export default function HistoryPage() {
                 ) : (
                   <ResponsiveContainer width="100%" height={300}>
                     <BarChart data={gamesByTier} margin={{ top: 10, right: 20, left: 10, bottom: 10 }}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
-                      <XAxis dataKey="tier" stroke="#94a3b8" tick={{ fill: '#94a3b8' }} />
-                      <YAxis stroke="#94a3b8" tick={{ fill: '#94a3b8' }} />
+                      <CartesianGrid strokeDasharray="3 3" stroke={theme.colors.neutral[700]} />
+                      <XAxis dataKey="tier" stroke={theme.colors.neutral[400]} tick={{ fill: theme.colors.neutral[400] }} />
+                      <YAxis stroke={theme.colors.neutral[400]} tick={{ fill: theme.colors.neutral[400] }} />
                       <Tooltip
                         contentStyle={{
-                          background: 'rgba(15, 23, 42, 0.95)',
-                          border: '1px solid rgba(6, 182, 212, 0.5)',
+                          background: theme.charts.tooltip.background,
+                          border: `1px solid ${theme.charts.tooltip.border}`,
                           borderRadius: '8px',
+                          color: theme.colors.neutral[200],
                         }}
+                        labelStyle={{ color: theme.colors.neutral[200] }}
+                        itemStyle={{ color: theme.colors.neutral[200] }}
                       />
-                      <Legend />
-                      <Bar dataKey="games" fill="#8b5cf6" name="Total Games" radius={[4, 4, 0, 0]} />
-                      <Bar dataKey="wins" fill="#22c55e" name="Wins" radius={[4, 4, 0, 0]} />
+                      <Legend
+                        wrapperStyle={{ color: theme.colors.neutral[200] }}
+                        formatter={(value) => <span style={{ color: theme.colors.neutral[200] }}>{value}</span>}
+                      />
+                      <Bar dataKey="games" fill={theme.colors.accent.main} name="Total Games" radius={[4, 4, 0, 0]} />
+                      <Bar dataKey="wins" fill={theme.charts.winDistribution.wins} name="Wins" radius={[4, 4, 0, 0]} />
                     </BarChart>
                   </ResponsiveContainer>
                 )}
@@ -386,26 +396,28 @@ export default function HistoryPage() {
                   <AreaChart data={recentGames} margin={{ top: 20, right: 30, left: 30, bottom: 30 }}>
                     <defs>
                       <linearGradient id="colorProfitGreen" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor="#22c55e" stopOpacity={0.8} />
-                        <stop offset="95%" stopColor="#22c55e" stopOpacity={0} />
+                        <stop offset="5%" stopColor={theme.charts.trends.positive} stopOpacity={0.8} />
+                        <stop offset="95%" stopColor={theme.charts.trends.positive} stopOpacity={0} />
                       </linearGradient>
                       <linearGradient id="colorProfitRed" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor="#ef4444" stopOpacity={0.8} />
-                        <stop offset="95%" stopColor="#ef4444" stopOpacity={0} />
+                        <stop offset="5%" stopColor={theme.charts.trends.negative} stopOpacity={0.8} />
+                        <stop offset="95%" stopColor={theme.charts.trends.negative} stopOpacity={0} />
                       </linearGradient>
                     </defs>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
-                    <XAxis dataKey="game" stroke="#94a3b8" tick={{ dy: 15 }} />
-                    <YAxis stroke="#94a3b8" width={85} tick={{ dx: -15 }} tickFormatter={(value) => `${value >= 0 ? '+' : ''}${value.toFixed(4)}`} />
+                    <CartesianGrid strokeDasharray="3 3" stroke={theme.colors.neutral[700]} />
+                    <XAxis dataKey="game" stroke={theme.colors.neutral[400]} tick={{ dy: 15, fill: theme.colors.neutral[400] }} />
+                    <YAxis stroke={theme.colors.neutral[400]} width={85} tick={{ dx: -15, fill: theme.colors.neutral[400] }} tickFormatter={(value) => `${value >= 0 ? '+' : ''}${value.toFixed(4)}`} />
                     <Tooltip
                       contentStyle={{
-                        background: 'rgba(15, 23, 42, 0.95)',
-                        border: '1px solid rgba(6, 182, 212, 0.5)',
+                        background: theme.charts.tooltip.background,
+                        border: `1px solid ${theme.charts.tooltip.border}`,
                         borderRadius: '8px',
+                        color: theme.colors.neutral[200],
                       }}
+                      labelStyle={{ color: theme.colors.neutral[200] }}
                       formatter={(value) => {
                         const val = typeof value === 'number' ? value : 0;
-                        const color = val >= 0 ? '#22c55e' : '#ef4444';
+                        const color = val >= 0 ? theme.charts.trends.positive : theme.charts.trends.negative;
                         return [
                           <span style={{ color }}>{`${val >= 0 ? '+' : ''}${val.toFixed(6)} ETH`}</span>,
                           'Cumulative P/L'
@@ -415,7 +427,7 @@ export default function HistoryPage() {
                     <Area
                       type="monotone"
                       dataKey="profit"
-                      stroke={recentGames[recentGames.length - 1]?.profit >= 0 ? '#22c55e' : '#ef4444'}
+                      stroke={recentGames[recentGames.length - 1]?.profit >= 0 ? theme.charts.trends.positive : theme.charts.trends.negative}
                       strokeWidth={2}
                       fill={recentGames[recentGames.length - 1]?.profit >= 0 ? 'url(#colorProfitGreen)' : 'url(#colorProfitRed)'}
                     />
