@@ -80,17 +80,17 @@ function getCSP(nonce: string) {
     `.replace(/\s{2,}/g, ' ').trim();
   }
 
-  // Production: Stricter CSP with nonce-based script loading
-  // The nonce is passed to Next.js via x-nonce header for script injection
-  // Note: 'strict-dynamic' allows scripts loaded by trusted scripts
+  // Production: CSP that works with Next.js inline scripts
+  // Note: 'unsafe-inline' is needed because Next.js generates inline scripts for hydration
+  // that don't automatically receive the nonce without additional complex setup
   return `
     default-src 'self';
-    script-src 'self' 'nonce-${nonce}' 'strict-dynamic';
+    script-src 'self' 'unsafe-inline' 'unsafe-eval';
     style-src 'self' 'unsafe-inline' https://fonts.googleapis.com;
     font-src 'self' https://fonts.gstatic.com;
     img-src 'self' data: https: blob:;
-    connect-src 'self' https://*.supabase.co wss://*.supabase.co https://*.alchemy.com https://*.infura.io https://*.walletconnect.com https://*.walletconnect.org https://*.web3modal.org wss://*.walletconnect.com wss://*.walletconnect.org;
-    frame-src 'self';
+    connect-src 'self' https://*.supabase.co wss://*.supabase.co https://*.alchemy.com https://*.infura.io https://*.walletconnect.com https://*.walletconnect.org https://*.web3modal.org wss://*.walletconnect.com wss://*.walletconnect.org wss://*.relay.walletconnect.com wss://*.relay.walletconnect.org https://rpc.walletconnect.com https://rpc.walletconnect.org https://pulse.walletconnect.com https://pulse.walletconnect.org;
+    frame-src 'self' https://*.walletconnect.com https://*.walletconnect.org;
     object-src 'none';
     base-uri 'self';
     form-action 'self';
