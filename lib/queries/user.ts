@@ -2,10 +2,24 @@
  * User Query Functions
  *
  * Centralized user-related queries (preferences, pending transactions, notifications).
+ * All address parameters are sanitized to prevent SQL injection.
  */
 
 import { supabase, getAuthenticatedClient } from '@/lib/supabase';
 import type { UpdateUserPreferencesInput, CreatePendingTxInput, UpdatePendingTxInput } from '@/types/database';
+
+/**
+ * Validate and sanitize Ethereum address for use in queries
+ * Prevents SQL injection by ensuring only valid hex characters
+ */
+function sanitizeAddress(address: string): string {
+  const lower = address.toLowerCase();
+  // Strict validation: must be 0x followed by exactly 40 hex characters
+  if (!/^0x[a-f0-9]{40}$/.test(lower)) {
+    throw new Error('Invalid Ethereum address format');
+  }
+  return lower;
+}
 
 // ============================================
 // USER PREFERENCES
@@ -15,11 +29,12 @@ import type { UpdateUserPreferencesInput, CreatePendingTxInput, UpdatePendingTxI
  * Fetch user preferences
  */
 export function queryUserPreferences(address: string) {
+  const safeAddress = sanitizeAddress(address);
   const client = getAuthenticatedClient(address);
   return client
     .from('user_preferences')
     .select('*')
-    .eq('user_address', address.toLowerCase())
+    .eq('user_address', safeAddress)
     .single();
 }
 
@@ -27,12 +42,13 @@ export function queryUserPreferences(address: string) {
  * Upsert user preferences
  */
 export function upsertUserPreferences(address: string, updates: UpdateUserPreferencesInput) {
+  const safeAddress = sanitizeAddress(address);
   const client = getAuthenticatedClient(address);
   return client
     .from('user_preferences')
     .upsert(
       {
-        user_address: address.toLowerCase(),
+        user_address: safeAddress,
         ...updates,
       },
       { onConflict: 'user_address' }
@@ -47,24 +63,30 @@ export function upsertUserPreferences(address: string, updates: UpdateUserPrefer
 
 /**
  * Fetch active pending transactions for a user
+ * Uses authenticated client for RLS policy compliance
  */
 export function queryPendingTransactions(address: string) {
-  return supabase
+  const safeAddress = sanitizeAddress(address);
+  const client = getAuthenticatedClient(address);
+  return client
     .from('pending_transactions')
     .select('*')
-    .eq('user_address', address.toLowerCase())
+    .eq('user_address', safeAddress)
     .in('status', ['pending', 'submitted'])
     .order('created_at', { ascending: false });
 }
 
 /**
  * Create a new pending transaction
+ * Uses authenticated client for RLS policy compliance
  */
-export function createPendingTransaction(input: CreatePendingTxInput) {
-  return supabase
+export function createPendingTransaction(address: string, input: Omit<CreatePendingTxInput, 'user_address'>) {
+  const safeAddress = sanitizeAddress(address);
+  const client = getAuthenticatedClient(address);
+  return client
     .from('pending_transactions')
     .insert({
-      user_address: input.user_address.toLowerCase(),
+      user_address: safeAddress,
       tx_type: input.tx_type,
       tx_hash: input.tx_hash || null,
       game_id: input.game_id || null,
@@ -79,9 +101,11 @@ export function createPendingTransaction(input: CreatePendingTxInput) {
 
 /**
  * Update a pending transaction
+ * Uses authenticated client for RLS policy compliance
  */
-export function updatePendingTransaction(id: number, updates: UpdatePendingTxInput) {
-  return supabase
+export function updatePendingTransaction(address: string, id: number, updates: UpdatePendingTxInput) {
+  const client = getAuthenticatedClient(address);
+  return client
     .from('pending_transactions')
     .update(updates)
     .eq('id', id);
@@ -89,9 +113,11 @@ export function updatePendingTransaction(id: number, updates: UpdatePendingTxInp
 
 /**
  * Delete a pending transaction
+ * Uses authenticated client for RLS policy compliance
  */
-export function deletePendingTransaction(id: number) {
-  return supabase
+export function deletePendingTransaction(address: string, id: number) {
+  const client = getAuthenticatedClient(address);
+  return client
     .from('pending_transactions')
     .delete()
     .eq('id', id);
@@ -99,9 +125,11 @@ export function deletePendingTransaction(id: number) {
 
 /**
  * Cleanup expired pending transactions via RPC
+ * Uses authenticated client for RLS policy compliance
  */
-export function cleanupExpiredPendingTransactions() {
-  return supabase.rpc('cleanup_expired_pending_transactions');
+export function cleanupExpiredPendingTransactions(address: string) {
+  const client = getAuthenticatedClient(address);
+  return client.rpc('cleanup_expired_pending_transactions');
 }
 
 // ============================================
@@ -112,11 +140,12 @@ export function cleanupExpiredPendingTransactions() {
  * Fetch notification state for a user's game
  */
 export function queryUserGameNotification(address: string, gameId: string) {
+  const safeAddress = sanitizeAddress(address);
   const client = getAuthenticatedClient(address);
   return client
     .from('user_game_notifications')
     .select('*')
-    .eq('user_address', address.toLowerCase())
+    .eq('user_address', safeAddress)
     .eq('game_id', gameId)
     .maybeSingle();
 }
@@ -135,12 +164,13 @@ export function upsertUserGameNotification(
     resolved_sound_played: boolean;
   }>
 ) {
+  const safeAddress = sanitizeAddress(address);
   const client = getAuthenticatedClient(address);
   return client
     .from('user_game_notifications')
     .upsert(
       {
-        user_address: address.toLowerCase(),
+        user_address: safeAddress,
         game_id: gameId,
         ...updates,
       },
@@ -158,9 +188,10 @@ export function batchUpsertNotifications(
     type: 'matched' | 'resolved' | 'expired';
   }>
 ) {
+  const safeAddress = sanitizeAddress(address);
   const client = getAuthenticatedClient(address);
   const upserts = updates.map(({ gameId, type }) => ({
-    user_address: address.toLowerCase(),
+    user_address: safeAddress,
     game_id: gameId,
     [`${type}_modal_shown`]: true,
   }));
@@ -174,11 +205,12 @@ export function batchUpsertNotifications(
  * Prefetch notification states for multiple games
  */
 export function queryUserGameNotifications(address: string, gameIds: string[]) {
+  const safeAddress = sanitizeAddress(address);
   const client = getAuthenticatedClient(address);
   return client
     .from('user_game_notifications')
     .select('*')
-    .eq('user_address', address.toLowerCase())
+    .eq('user_address', safeAddress)
     .in('game_id', gameIds);
 }
 
