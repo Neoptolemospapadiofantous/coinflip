@@ -31,6 +31,46 @@ import type { DateRangeFilter, StatusFilter, SortOption } from '@/components/sha
 import { RecentGamesTable } from '@/components/shared/RecentGamesTable';
 import { theme } from '@/lib/theme';
 
+// Custom tooltip component for dark theme
+const CustomTooltip = ({ active, payload, label }: { active?: boolean; payload?: Array<{ name: string; value: number; color: string }>; label?: string }) => {
+  if (!active || !payload) return null;
+  return (
+    <div style={{
+      background: theme.charts.tooltip.background,
+      border: `1px solid ${theme.charts.tooltip.border}`,
+      borderRadius: '8px',
+      padding: '10px 14px',
+    }}>
+      {label && <p style={{ color: theme.colors.neutral[200], marginBottom: '6px', fontWeight: 500 }}>{label}</p>}
+      {payload.map((entry, index) => (
+        <p key={index} style={{ color: theme.colors.neutral[200], margin: '2px 0' }}>
+          <span style={{ color: entry.color }}>{entry.name}</span>: {entry.value}
+        </p>
+      ))}
+    </div>
+  );
+};
+
+// Custom tooltip for profit chart
+const ProfitTooltip = ({ active, payload, label }: { active?: boolean; payload?: Array<{ value: number }>; label?: string }) => {
+  if (!active || !payload || !payload[0]) return null;
+  const value = payload[0].value;
+  const color = value >= 0 ? theme.charts.trends.positive : theme.charts.trends.negative;
+  return (
+    <div style={{
+      background: theme.charts.tooltip.background,
+      border: `1px solid ${theme.charts.tooltip.border}`,
+      borderRadius: '8px',
+      padding: '10px 14px',
+    }}>
+      {label && <p style={{ color: theme.colors.neutral[200], marginBottom: '6px', fontWeight: 500 }}>{label}</p>}
+      <p style={{ color: theme.colors.neutral[200], margin: '2px 0' }}>
+        Cumulative P/L: <span style={{ color }}>{value >= 0 ? '+' : ''}{value.toFixed(6)} ETH</span>
+      </p>
+    </div>
+  );
+};
+
 const ITEMS_PER_PAGE = 25;
 
 export default function HistoryPage() {
@@ -312,17 +352,17 @@ export default function HistoryPage() {
                         cx="50%"
                         cy="50%"
                         labelLine={{ stroke: theme.colors.neutral[400] }}
-                        label={({ cx, cy, midAngle, outerRadius, name, percent }) => {
+                        label={({ cx, cy, midAngle = 0, outerRadius, name, percent }) => {
                           const RADIAN = Math.PI / 180;
-                          const radius = outerRadius + 25;
-                          const x = cx + radius * Math.cos(-midAngle * RADIAN);
-                          const y = cy + radius * Math.sin(-midAngle * RADIAN);
+                          const radius = (outerRadius ?? 90) + 25;
+                          const x = (cx ?? 0) + radius * Math.cos(-midAngle * RADIAN);
+                          const y = (cy ?? 0) + radius * Math.sin(-midAngle * RADIAN);
                           return (
                             <text
                               x={x}
                               y={y}
                               fill={theme.colors.neutral[200]}
-                              textAnchor={x > cx ? 'start' : 'end'}
+                              textAnchor={x > (cx ?? 0) ? 'start' : 'end'}
                               dominantBaseline="central"
                               fontSize={12}
                             >
@@ -340,14 +380,7 @@ export default function HistoryPage() {
                           <Cell key={`cell-${index}`} fill={entry.color} />
                         ))}
                       </Pie>
-                      <Tooltip
-                        contentStyle={{
-                          background: theme.charts.tooltip.background,
-                          border: `1px solid ${theme.charts.tooltip.border}`,
-                          borderRadius: '8px',
-                          color: theme.colors.neutral[200],
-                        }}
-                      />
+                      <Tooltip content={<CustomTooltip />} />
                       <Legend
                         formatter={(value) => <span style={{ color: theme.colors.neutral[200] }}>{value}</span>}
                       />
@@ -371,18 +404,8 @@ export default function HistoryPage() {
                       <CartesianGrid strokeDasharray="3 3" stroke={theme.colors.neutral[700]} />
                       <XAxis dataKey="tier" stroke={theme.colors.neutral[400]} tick={{ fill: theme.colors.neutral[400] }} />
                       <YAxis stroke={theme.colors.neutral[400]} tick={{ fill: theme.colors.neutral[400] }} />
-                      <Tooltip
-                        contentStyle={{
-                          background: theme.charts.tooltip.background,
-                          border: `1px solid ${theme.charts.tooltip.border}`,
-                          borderRadius: '8px',
-                          color: theme.colors.neutral[200],
-                        }}
-                        labelStyle={{ color: theme.colors.neutral[200] }}
-                        itemStyle={{ color: theme.colors.neutral[200] }}
-                      />
+                      <Tooltip content={<CustomTooltip />} />
                       <Legend
-                        wrapperStyle={{ color: theme.colors.neutral[200] }}
                         formatter={(value) => <span style={{ color: theme.colors.neutral[200] }}>{value}</span>}
                       />
                       <Bar dataKey="games" fill={theme.colors.accent.main} name="Total Games" radius={[4, 4, 0, 0]} />
@@ -423,23 +446,7 @@ export default function HistoryPage() {
                     <CartesianGrid strokeDasharray="3 3" stroke={theme.colors.neutral[700]} />
                     <XAxis dataKey="game" stroke={theme.colors.neutral[400]} tick={{ dy: 15, fill: theme.colors.neutral[400] }} />
                     <YAxis stroke={theme.colors.neutral[400]} width={85} tick={{ dx: -15, fill: theme.colors.neutral[400] }} tickFormatter={(value) => `${value >= 0 ? '+' : ''}${value.toFixed(4)}`} />
-                    <Tooltip
-                      contentStyle={{
-                        background: theme.charts.tooltip.background,
-                        border: `1px solid ${theme.charts.tooltip.border}`,
-                        borderRadius: '8px',
-                        color: theme.colors.neutral[200],
-                      }}
-                      labelStyle={{ color: theme.colors.neutral[200] }}
-                      formatter={(value) => {
-                        const val = typeof value === 'number' ? value : 0;
-                        const color = val >= 0 ? theme.charts.trends.positive : theme.charts.trends.negative;
-                        return [
-                          <span style={{ color }}>{`${val >= 0 ? '+' : ''}${val.toFixed(6)} ETH`}</span>,
-                          'Cumulative P/L'
-                        ];
-                      }}
-                    />
+                    <Tooltip content={<ProfitTooltip />} />
                     <Area
                       type="monotone"
                       dataKey="profit"
