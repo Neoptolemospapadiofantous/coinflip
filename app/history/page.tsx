@@ -312,7 +312,24 @@ export default function HistoryPage() {
                         cx="50%"
                         cy="50%"
                         labelLine={{ stroke: theme.colors.neutral[400] }}
-                        label={({ name, percent }) => `${name} ${((percent ?? 0) * 100).toFixed(0)}%`}
+                        label={({ cx, cy, midAngle, outerRadius, name, percent }) => {
+                          const RADIAN = Math.PI / 180;
+                          const radius = outerRadius + 25;
+                          const x = cx + radius * Math.cos(-midAngle * RADIAN);
+                          const y = cy + radius * Math.sin(-midAngle * RADIAN);
+                          return (
+                            <text
+                              x={x}
+                              y={y}
+                              fill={theme.colors.neutral[200]}
+                              textAnchor={x > cx ? 'start' : 'end'}
+                              dominantBaseline="central"
+                              fontSize={12}
+                            >
+                              {`${name} ${((percent ?? 0) * 100).toFixed(0)}%`}
+                            </text>
+                          );
+                        }}
                         outerRadius={90}
                         fill="#8884d8"
                         dataKey="value"
@@ -332,7 +349,6 @@ export default function HistoryPage() {
                         }}
                       />
                       <Legend
-                        wrapperStyle={{ color: theme.colors.neutral[200] }}
                         formatter={(value) => <span style={{ color: theme.colors.neutral[200] }}>{value}</span>}
                       />
                     </PieChart>
