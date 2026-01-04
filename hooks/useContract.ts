@@ -182,7 +182,12 @@ export function useCreateGame() {
         setWasRejected(true);
       } else {
         devLog.error('❌ Transaction failed:', err);
-        setWriteError(err as Error);
+        // Handle empty error objects from contract reverts
+        if (typeof err === 'object' && err !== null && Object.keys(err).length === 0) {
+          setWriteError(new Error('Transaction failed - please check your wallet and try again'));
+        } else {
+          setWriteError(err as Error);
+        }
       }
     } finally {
       setIsWriting(false);
@@ -275,7 +280,12 @@ export function useJoinGame() {
         devLog.log('ℹ️ Transaction cancelled by user');
       } else {
         devLog.error('❌ Transaction failed:', err);
-        setWriteError(err as Error);
+        // Handle empty error objects from contract reverts
+        if (typeof err === 'object' && err !== null && Object.keys(err).length === 0) {
+          setWriteError(new Error('Transaction failed - the game may no longer be available'));
+        } else {
+          setWriteError(err as Error);
+        }
       }
     } finally {
       setIsWriting(false);
@@ -390,7 +400,12 @@ export function useCancelGame() {
         setWasRejected(true);
       } else {
         devLog.error('❌ Transaction failed:', err);
-        setWriteError(err as Error);
+        // Handle empty error objects from contract reverts
+        if (typeof err === 'object' && err !== null && Object.keys(err).length === 0) {
+          setWriteError(new Error('Transaction failed - game may have already been cancelled or matched'));
+        } else {
+          setWriteError(err as Error);
+        }
       }
     } finally {
       setIsWriting(false);
@@ -468,7 +483,12 @@ export function useClaimVrfTimeout() {
         devLog.log('ℹ️ Transaction cancelled by user');
       } else {
         devLog.error('❌ Transaction failed:', err);
-        setWriteError(err as Error);
+        // Handle empty error objects from contract reverts
+        if (typeof err === 'object' && err !== null && Object.keys(err).length === 0) {
+          setWriteError(new Error('Transaction failed - VRF timeout may not be claimable yet'));
+        } else {
+          setWriteError(err as Error);
+        }
       }
     } finally {
       setIsWriting(false);

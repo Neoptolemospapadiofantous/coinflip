@@ -239,33 +239,53 @@ export function usePendingTransactions() {
     }
   }, [createMutation]);
 
-  // Update tx hash when transaction is submitted
+  // Update tx hash when transaction is submitted (fire-and-forget, errors are logged)
   const setTxHash = useCallback(async (id: number, txHash: string) => {
-    await updateMutation.mutateAsync({
-      id,
-      updates: { tx_hash: txHash, status: 'submitted' },
-    });
+    try {
+      await updateMutation.mutateAsync({
+        id,
+        updates: { tx_hash: txHash, status: 'submitted' },
+      });
+    } catch (err) {
+      // Error already logged by mutation's onError - don't propagate
+      devLog.warn('[PendingTx] setTxHash failed for id:', id);
+    }
   }, [updateMutation]);
 
-  // Mark transaction as confirmed
+  // Mark transaction as confirmed (fire-and-forget, errors are logged)
   const markConfirmed = useCallback(async (id: number) => {
-    await updateMutation.mutateAsync({
-      id,
-      updates: { status: 'confirmed' },
-    });
+    try {
+      await updateMutation.mutateAsync({
+        id,
+        updates: { status: 'confirmed' },
+      });
+    } catch (err) {
+      // Error already logged by mutation's onError - don't propagate
+      devLog.warn('[PendingTx] markConfirmed failed for id:', id);
+    }
   }, [updateMutation]);
 
-  // Mark transaction as failed
+  // Mark transaction as failed (fire-and-forget, errors are logged)
   const markFailed = useCallback(async (id: number, errorMessage?: string) => {
-    await updateMutation.mutateAsync({
-      id,
-      updates: { status: 'failed', error_message: errorMessage || null },
-    });
+    try {
+      await updateMutation.mutateAsync({
+        id,
+        updates: { status: 'failed', error_message: errorMessage || null },
+      });
+    } catch (err) {
+      // Error already logged by mutation's onError - don't propagate
+      devLog.warn('[PendingTx] markFailed failed for id:', id);
+    }
   }, [updateMutation]);
 
-  // Remove a pending transaction
+  // Remove a pending transaction (fire-and-forget, errors are logged)
   const removePendingTransaction = useCallback(async (id: number) => {
-    await deleteMutation.mutateAsync(id);
+    try {
+      await deleteMutation.mutateAsync(id);
+    } catch (err) {
+      // Error already logged by mutation's onError - don't propagate
+      devLog.warn('[PendingTx] removePendingTransaction failed for id:', id);
+    }
   }, [deleteMutation]);
 
   // Helper to find pending create transaction
