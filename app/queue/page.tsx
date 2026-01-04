@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { useAccount } from 'wagmi';
 import { ConnectButton } from '@rainbow-me/rainbowkit';
 import {
@@ -16,13 +16,15 @@ import {
   Dialog,
   Box,
   Skeleton,
+  Select,
+  Tooltip,
 } from '@radix-ui/themes';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { useTiers } from '@/hooks/useTiers';
 import { useJoinGame } from '@/hooks/useContract';
 import { usePendingGames, useGameStats } from '@/hooks/useGames';
 import { formatCurrency, formatGameId, devLog } from '@/lib/utils';
-import { Clock, Users, Loader2, TrendingUp, XCircle, AlertCircle, Wifi, WifiOff, Wallet, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Clock, Users, Loader2, TrendingUp, XCircle, AlertCircle, Wifi, WifiOff, Wallet, ChevronLeft, ChevronRight, Filter, DollarSign, SortAsc, SortDesc } from 'lucide-react';
 
 const GAMES_PER_PAGE = 10;
 import Link from 'next/link';
@@ -131,6 +133,9 @@ export default function QueuePage() {
   const [cancelingGameId, setCancelingGameId] = useState<string | null>(null);
   const [now, setNow] = useState(Date.now()); // For live time updates
   const [currentPage, setCurrentPage] = useState(0);
+  const [tierFilter, setTierFilter] = useState<string>('all');
+  const [sortBy, setSortBy] = useState<'time' | 'amount'>('time');
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
   const { addActiveGame, updateActiveGame, queueModal } = useGameStore();
 
   // DB-backed pending transactions (persists across refreshes/devices)
@@ -276,9 +281,34 @@ export default function QueuePage() {
   const myPendingGames = pendingGames?.filter(
     (game) => game.creator_address.toLowerCase() === address?.toLowerCase()
   );
-  const otherPendingGames = pendingGames?.filter(
-    (game) => game.creator_address.toLowerCase() !== address?.toLowerCase() && !isGameCancelling(game.id) && !isGameJoining(game.id)
-  );
+
+  // Filter and sort other pending games
+  const filteredAndSortedGames = useMemo(() => {
+    let result = pendingGames?.filter(
+      (game) => game.creator_address.toLowerCase() !== address?.toLowerCase() && !isGameCancelling(game.id) && !isGameJoining(game.id)
+    ) || [];
+
+    // Apply tier filter
+    if (tierFilter !== 'all') {
+      const tierId = parseInt(tierFilter);
+      result = result.filter(game => game.tier === tierId);
+    }
+
+    // Apply sorting
+    result.sort((a, b) => {
+      let comparison = 0;
+      if (sortBy === 'time') {
+        comparison = new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+      } else {
+        comparison = Number(b.amount) - Number(a.amount);
+      }
+      return sortDir === 'asc' ? -comparison : comparison;
+    });
+
+    return result;
+  }, [pendingGames, address, tierFilter, sortBy, sortDir, isGameCancelling, isGameJoining]);
+
+  const otherPendingGames = filteredAndSortedGames;
 
   // Pagination for available games
   const totalGames = otherPendingGames?.length || 0;
@@ -612,7 +642,7 @@ export default function QueuePage() {
             {/* Pending Games */}
             <Card className="card-simple" size="4">
               <Flex direction="column" gap="4" p="6">
-                <Flex align="center" justify="between">
+                <Flex align="center" justify="between" wrap="wrap" gap="3">
                   <Flex align="center" gap="2">
                     <Heading size="5">Available Games</Heading>
                     {totalGames > 0 && (
@@ -625,11 +655,49 @@ export default function QueuePage() {
                       </Flex>
                     </Badge>
                   </Flex>
-                  <Link href="/play">
-                    <Button variant="soft" size="2">
-                      Create New Game
-                    </Button>
-                  </Link>
+
+                  {/* Filters */}
+                  <Flex align="center" gap="3" wrap="wrap">
+                    <Flex align="center" gap="2">
+                      <Filter className="w-4 h-4 text-gray-400" />
+                      <Select.Root value={tierFilter} onValueChange={setTierFilter}>
+                        <Select.Trigger placeholder="All Tiers" />
+                        <Select.Content>
+                          <Select.Item value="all">All Tiers</Select.Item>
+                          {tiers?.map((tier) => (
+                            <Select.Item key={tier.id} value={tier.id.toString()}>
+                              ${tier.amountUsd}
+                            </Select.Item>
+                          ))}
+                        </Select.Content>
+                      </Select.Root>
+                    </Flex>
+
+                    <Select.Root value={`${sortBy}-${sortDir}`} onValueChange={(v) => {
+                      const [by, dir] = v.split('-') as ['time' | 'amount', 'asc' | 'desc'];
+                      setSortBy(by);
+                      setSortDir(dir);
+                    }}>
+                      <Select.Trigger>
+                        <Flex align="center" gap="1">
+                          {sortDir === 'desc' ? <SortDesc className="w-3 h-3" /> : <SortAsc className="w-3 h-3" />}
+                          {sortBy === 'time' ? 'Newest' : 'Highest'}
+                        </Flex>
+                      </Select.Trigger>
+                      <Select.Content>
+                        <Select.Item value="time-desc">Newest First</Select.Item>
+                        <Select.Item value="time-asc">Oldest First</Select.Item>
+                        <Select.Item value="amount-desc">Highest Amount</Select.Item>
+                        <Select.Item value="amount-low">Lowest Amount</Select.Item>
+                      </Select.Content>
+                    </Select.Root>
+
+                    <Link href="/play">
+                      <Button variant="soft" size="2" className="cursor-pointer">
+                        Create New Game
+                      </Button>
+                    </Link>
+                  </Flex>
                 </Flex>
 
                 {isLoadingGames ? (
@@ -639,7 +707,8 @@ export default function QueuePage() {
                         <Table.ColumnHeaderCell>Game ID</Table.ColumnHeaderCell>
                         <Table.ColumnHeaderCell>Status</Table.ColumnHeaderCell>
                         <Table.ColumnHeaderCell>Tier</Table.ColumnHeaderCell>
-                        <Table.ColumnHeaderCell>Amount</Table.ColumnHeaderCell>
+                        <Table.ColumnHeaderCell>Bet</Table.ColumnHeaderCell>
+                        <Table.ColumnHeaderCell>Pot</Table.ColumnHeaderCell>
                         <Table.ColumnHeaderCell>Creator</Table.ColumnHeaderCell>
                         <Table.ColumnHeaderCell>Time</Table.ColumnHeaderCell>
                         <Table.ColumnHeaderCell>Action</Table.ColumnHeaderCell>
@@ -651,6 +720,7 @@ export default function QueuePage() {
                           <Table.Cell><Skeleton className="h-4 w-12" /></Table.Cell>
                           <Table.Cell><Skeleton className="h-5 w-16 rounded-full" /></Table.Cell>
                           <Table.Cell><Skeleton className="h-4 w-14" /></Table.Cell>
+                          <Table.Cell><Skeleton className="h-4 w-16" /></Table.Cell>
                           <Table.Cell><Skeleton className="h-4 w-16" /></Table.Cell>
                           <Table.Cell><Skeleton className="h-4 w-24" /></Table.Cell>
                           <Table.Cell><Skeleton className="h-4 w-12" /></Table.Cell>
@@ -675,7 +745,8 @@ export default function QueuePage() {
                         <Table.ColumnHeaderCell>Game ID</Table.ColumnHeaderCell>
                         <Table.ColumnHeaderCell>Status</Table.ColumnHeaderCell>
                         <Table.ColumnHeaderCell>Tier</Table.ColumnHeaderCell>
-                        <Table.ColumnHeaderCell>Amount</Table.ColumnHeaderCell>
+                        <Table.ColumnHeaderCell>Bet</Table.ColumnHeaderCell>
+                        <Table.ColumnHeaderCell>Pot</Table.ColumnHeaderCell>
                         <Table.ColumnHeaderCell>Creator</Table.ColumnHeaderCell>
                         <Table.ColumnHeaderCell>Time Left</Table.ColumnHeaderCell>
                         <Table.ColumnHeaderCell>Action</Table.ColumnHeaderCell>
@@ -713,6 +784,16 @@ export default function QueuePage() {
                             </Table.Cell>
                             <Table.Cell>
                               <Text weight="medium">{formatCurrency(game.amount)}</Text>
+                            </Table.Cell>
+                            <Table.Cell>
+                              <Tooltip content="Total pot size (winner takes 95%)">
+                                <Flex align="center" gap="1">
+                                  <DollarSign className="w-3 h-3 text-green-400" />
+                                  <Text weight="bold" className="text-green-400">
+                                    {formatCurrency(BigInt(game.amount) * 2n)}
+                                  </Text>
+                                </Flex>
+                              </Tooltip>
                             </Table.Cell>
                             <Table.Cell>
                               <Text size="2" className="font-mono text-gray-400">
