@@ -11,6 +11,7 @@ import { DataProvider } from '@/lib/data';
 import { devLog } from '@/lib/utils';
 import { showToast } from '@/lib/toast';
 import { WebVitals } from './WebVitals';
+import { theme } from '@/lib/theme';
 
 import '@rainbow-me/rainbowkit/styles.css';
 
@@ -86,8 +87,8 @@ export function Providers({ children }: { children: React.ReactNode }) {
       <QueryClientProvider client={queryClient}>
         <RainbowKitProvider
           theme={darkTheme({
-            accentColor: '#22d3ee', // cyan-400
-            accentColorForeground: '#0f172a', // slate-900
+            accentColor: theme.colors.primary.light,
+            accentColorForeground: theme.colors.neutral[900],
             borderRadius: 'medium',
             fontStack: 'system',
             overlayBlur: 'small',

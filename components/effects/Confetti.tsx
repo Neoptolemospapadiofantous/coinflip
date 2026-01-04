@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import ReactConfetti from 'react-confetti';
 import { useWindowSize } from '@/hooks/useWindowSize';
+import { theme } from '@/lib/theme';
 
 interface ConfettiProps {
   show: boolean;
@@ -35,7 +36,13 @@ export function Confetti({ show, duration = 5000, onComplete }: ConfettiProps) {
       recycle={false}
       numberOfPieces={500}
       gravity={0.3}
-      colors={['#06b6d4', '#facc15', '#22c55e', '#ef4444', '#a855f7']}
+      colors={[
+        theme.colors.primary.main,
+        theme.colors.warning.main,
+        theme.colors.success.main,
+        theme.colors.danger.main,
+        theme.colors.accent.main,
+      ]}
     />
   );
 }

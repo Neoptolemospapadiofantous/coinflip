@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { theme } from '@/lib/theme';
 
 interface CoinFlip2DProps {
   isFlipping: boolean;
@@ -42,11 +43,11 @@ export function CoinFlip2D({ isFlipping, result, onFlipComplete }: CoinFlip2DPro
         }`}
         style={{
           background: showHeads
-            ? 'linear-gradient(135deg, #facc15 0%, #eab308 100%)'
-            : 'linear-gradient(135deg, #06b6d4 0%, #0891b2 100%)',
+            ? `linear-gradient(135deg, ${theme.colors.warning.main} 0%, ${theme.colors.warning.dark} 100%)`
+            : `linear-gradient(135deg, ${theme.colors.primary.main} 0%, ${theme.colors.primary.dark} 100%)`,
           boxShadow: showHeads
-            ? '0 0 40px rgba(250, 204, 21, 0.5)'
-            : '0 0 40px rgba(6, 182, 212, 0.5)',
+            ? `0 0 40px rgba(${theme.colors.warning.rgb}, 0.5)`
+            : `0 0 40px rgba(${theme.colors.primary.rgb}, 0.5)`,
         }}
       >
         {showHeads ? '👑' : '🪙'}

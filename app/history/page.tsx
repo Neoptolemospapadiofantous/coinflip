@@ -371,7 +371,7 @@ export default function HistoryPage() {
                           );
                         }}
                         outerRadius={90}
-                        fill="#8884d8"
+                        fill={theme.colors.accent.main}
                         dataKey="value"
                         stroke="rgba(15, 23, 42, 0.5)"
                         strokeWidth={2}
