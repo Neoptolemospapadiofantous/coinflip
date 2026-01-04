@@ -20,10 +20,8 @@ let _config: Config | null = null;
 function getConfig(): Config {
   if (_config) return _config;
 
-  const projectId = process.env.NEXT_PUBLIC_WALLET_CONNECT_PROJECT_ID;
-  if (!projectId) {
-    throw new Error('Missing NEXT_PUBLIC_WALLET_CONNECT_PROJECT_ID environment variable');
-  }
+  // Use placeholder during build/SSG - WalletConnect only needed at runtime
+  const projectId = process.env.NEXT_PUBLIC_WALLET_CONNECT_PROJECT_ID || 'placeholder-for-build';
 
   _config = getDefaultConfig({
     appName: 'CoinFlip',
