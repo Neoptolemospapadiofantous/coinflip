@@ -14,24 +14,40 @@ import { createClient, SupabaseClient } from '@supabase/supabase-js';
  * For centralized database types, see: @/types/database
  */
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
+const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
 
-if (!supabaseUrl || !supabaseAnonKey) {
-  throw new Error('Missing Supabase environment variables');
+// Lazy-initialized client to prevent build-time errors
+let _supabaseClient: SupabaseClient | null = null;
+
+function getSupabaseClient(): SupabaseClient {
+  if (_supabaseClient) return _supabaseClient;
+
+  if (!supabaseUrl || !supabaseAnonKey) {
+    throw new Error('Missing Supabase environment variables');
+  }
+
+  _supabaseClient = createClient(supabaseUrl, supabaseAnonKey, {
+    auth: {
+      persistSession: true,
+      autoRefreshToken: true,
+      detectSessionInUrl: true,
+    },
+    realtime: {
+      params: {
+        eventsPerSecond: 100,
+      },
+    },
+  });
+
+  return _supabaseClient;
 }
 
 // Base Supabase client (used for public queries and auth)
-export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
-  auth: {
-    persistSession: true, // Persist auth session across page refreshes
-    autoRefreshToken: true,
-    detectSessionInUrl: true,
-  },
-  realtime: {
-    params: {
-      eventsPerSecond: 100, // Increased for 1000+ concurrent users
-    },
+// Lazy getter to prevent build-time initialization errors
+export const supabase = new Proxy({} as SupabaseClient, {
+  get(_, prop) {
+    return getSupabaseClient()[prop as keyof SupabaseClient];
   },
 });
 
@@ -46,6 +62,10 @@ const authClientCache = new Map<string, SupabaseClient>();
  * @returns Supabase client with wallet auth headers
  */
 export function getAuthenticatedClient(walletAddress: string): SupabaseClient {
+  if (!supabaseUrl || !supabaseAnonKey) {
+    throw new Error('Missing Supabase environment variables');
+  }
+
   const normalizedAddress = walletAddress.toLowerCase();
 
   // Return cached client if exists
