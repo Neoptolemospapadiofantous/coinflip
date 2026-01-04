@@ -142,7 +142,7 @@ export function usePendingTransactions() {
   // Create a new pending transaction
   const createMutation = useMutation({
     mutationFn: async (input: CreatePendingTxInput): Promise<PendingTransaction> => {
-      if (!address) throw new Error('No address');
+      if (!address) throw new Error('Wallet not connected');
 
       // Convert game_id to number if it's a string
       const gameId = input.game_id
@@ -163,7 +163,14 @@ export function usePendingTransactions() {
         .select()
         .single();
 
-      if (error) throw error;
+      if (error) {
+        // Convert Supabase error to a proper Error with message
+        const errorMessage = error.message || error.code || 'Database operation failed';
+        throw new Error(errorMessage);
+      }
+      if (!data) {
+        throw new Error('No data returned from database');
+      }
       return data;
     },
     onSuccess: (newTx) => {
@@ -225,8 +232,8 @@ export function usePendingTransactions() {
     },
   });
 
-  // Add a pending transaction
-  const addPendingTransaction = useCallback(async (input: CreatePendingTxInput) => {
+  // Add a pending transaction (fire-and-forget, errors are logged but not thrown)
+  const addPendingTransaction = useCallback(async (input: CreatePendingTxInput): Promise<PendingTransaction | null> => {
     const opKey = `add-${input.tx_type}-${input.game_id || 'create'}`;
     if (pendingOpsRef.current.has(opKey)) return null;
     pendingOpsRef.current.add(opKey);
@@ -234,6 +241,11 @@ export function usePendingTransactions() {
     try {
       const result = await createMutation.mutateAsync(input);
       return result;
+    } catch (err) {
+      // Log but don't throw - the blockchain transaction can still proceed
+      // The pending transaction is just for UI tracking
+      devLog.warn('[PendingTx] Failed to create pending tx record:', err);
+      return null;
     } finally {
       pendingOpsRef.current.delete(opKey);
     }

@@ -24,6 +24,9 @@ import '@rainbow-me/rainbowkit/styles.css';
 function GlobalErrorHandler({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     const handleUnhandledRejection = (event: PromiseRejectionEvent) => {
+      // Prevent the default browser error display (stops Runtime Error modal)
+      event.preventDefault();
+
       // Handle empty error objects (common with contract reverts)
       const reason = event.reason;
       let errorMessage: string;
