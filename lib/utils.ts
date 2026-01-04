@@ -85,34 +85,12 @@ export function formatCurrency(wei: bigint | string, decimals = 18): string {
   return num.toFixed(4).replace(/\.?0+$/, '') + ' ETH';
 }
 
-// Format currency as USD (for display purposes)
-export function formatUsd(amount: number): string {
-  return new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currency: 'USD',
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  }).format(amount);
-}
-
 // Format number with compact notation (1.2K, 1.2M, etc)
 export function formatNumber(num: number): string {
   return new Intl.NumberFormat('en-US', {
     notation: 'compact',
     maximumFractionDigits: 1,
   }).format(num);
-}
-
-// Format date/time
-export function formatDate(date: Date | string): string {
-  const d = typeof date === 'string' ? new Date(date) : date;
-  return new Intl.DateTimeFormat('en-US', {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  }).format(d);
 }
 
 // Format relative time (2 minutes ago)
@@ -167,49 +145,6 @@ export function debounce<TArgs extends unknown[]>(
       timeoutId = null;
     }, wait);
   };
-}
-
-// Safe localStorage helpers - handles SSR, incognito mode, and quota errors
-export const safeStorage = {
-  getItem: (key: string): string | null => {
-    if (typeof window === 'undefined') return null;
-    try {
-      return localStorage.getItem(key);
-    } catch {
-      devLog.warn(`Failed to read localStorage key: ${key}`);
-      return null;
-    }
-  },
-  setItem: (key: string, value: string): boolean => {
-    if (typeof window === 'undefined') return false;
-    try {
-      localStorage.setItem(key, value);
-      return true;
-    } catch {
-      devLog.warn(`Failed to write localStorage key: ${key}`);
-      return false;
-    }
-  },
-  removeItem: (key: string): boolean => {
-    if (typeof window === 'undefined') return false;
-    try {
-      localStorage.removeItem(key);
-      return true;
-    } catch {
-      devLog.warn(`Failed to remove localStorage key: ${key}`);
-      return false;
-    }
-  },
-};
-
-// Copy to clipboard
-export async function copyToClipboard(text: string): Promise<boolean> {
-  try {
-    await navigator.clipboard.writeText(text);
-    return true;
-  } catch {
-    return false;
-  }
 }
 
 // Validate Ethereum address
