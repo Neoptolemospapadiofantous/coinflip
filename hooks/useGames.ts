@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
 import { Game, parseGame } from '@/types/game';
+import { DB_COLUMNS } from '@/types/database';
 import { devLog, isValidAddress } from '@/lib/utils';
 import { queryKeys } from '@/lib/queryKeys';
 import {
@@ -15,22 +16,17 @@ import {
 } from '@/lib/constants';
 import { useIsLoggedIn } from '@/lib/data';
 import { getBlockchainDataSource } from '@/lib/data/blockchain';
-
-// Columns needed for game list displays (lobby, active games panel, history)
-// Optimized to fetch only what's needed instead of SELECT *
-// Note: block_number and updated_at are required by isValidGame validation
-const GAME_LIST_COLUMNS = `
-  id, tx_hash, tier, amount, creator_address, creator_choice,
-  joiner_address, joiner_choice, status, winner_address, coin_result,
-  payout, fee, block_number, created_at, updated_at, matched_at, resolved_at
-`;
-
-// Minimal columns for pending games in lobby (don't need resolution data)
-// Note: block_number and updated_at are required by isValidGame validation
-const PENDING_GAME_COLUMNS = `
-  id, tx_hash, tier, amount, creator_address, creator_choice, status,
-  block_number, created_at, updated_at
-`;
+import {
+  queryAllGames,
+  queryPendingGames,
+  queryActiveGames,
+  queryPlayerGames,
+  queryUserActiveGames,
+  queryGameById,
+  queryGameStats,
+  queryPlayerStats,
+  queryPlayerStatsBasic,
+} from '@/lib/queries';
 
 /**
  * Normalize an array of games from Supabase
@@ -52,16 +48,11 @@ function normalizeGames(data: unknown[] | null): Game[] {
  */
 
 // Fetch all games (limited to 100 most recent for performance)
-// TODO: Use games_public view after migration 029 is applied
 export function useGames() {
   return useQuery({
     queryKey: queryKeys.games.all,
     queryFn: async (): Promise<Game[]> => {
-      const { data, error } = await supabase
-        .from('games')
-        .select(GAME_LIST_COLUMNS)
-        .order('created_at', { ascending: false })
-        .limit(100);
+      const { data, error } = await queryAllGames();
 
       if (error) {
         devLog.error('Error fetching games:', error);
@@ -77,33 +68,14 @@ export function useGames() {
 }
 
 // Fetch pending games (waiting for second player)
-// Uses blockchain for wallet-only users, Supabase for registered users
+// Always uses Supabase - pending games are public data that doesn't require auth
 export function usePendingGames() {
-  const isLoggedIn = useIsLoggedIn();
-
   return useQuery({
-    queryKey: [...queryKeys.games.pending, isLoggedIn ? 'supabase' : 'blockchain'],
+    queryKey: queryKeys.games.pending,
     queryFn: async (): Promise<Game[]> => {
-      // Wallet-only users: fetch from blockchain
-      if (!isLoggedIn) {
-        devLog.log('[usePendingGames] Using blockchain data source');
-        try {
-          const blockchainSource = getBlockchainDataSource();
-          return await blockchainSource.getPendingGames();
-        } catch (err) {
-          devLog.error('[usePendingGames] Blockchain fetch failed:', err);
-          // Return empty array on failure - user can retry
-          return [];
-        }
-      }
-
-      // Registered users: fetch from Supabase (faster, indexed)
+      // Always use Supabase for pending games - it's public data and much faster
       devLog.log('[usePendingGames] Using Supabase data source');
-      const { data, error } = await supabase
-        .from('games')
-        .select(PENDING_GAME_COLUMNS)
-        .eq('status', 'pending')
-        .order('created_at', { ascending: false });
+      const { data, error } = await queryPendingGames();
 
       if (error) {
         devLog.error('Error fetching pending games:', error);
@@ -112,9 +84,9 @@ export function usePendingGames() {
 
       return normalizeGames(data);
     },
-    staleTime: isLoggedIn ? PENDING_GAMES_STALE_TIME_MS : 30000, // Blockchain: 30s cache
-    refetchInterval: isLoggedIn ? false : 15000, // Blockchain: poll every 15s
-    retry: isLoggedIn ? 2 : 1, // Less retries for blockchain (slower)
+    staleTime: PENDING_GAMES_STALE_TIME_MS,
+    refetchInterval: false, // Disabled - central sync invalidates when needed
+    retry: 2,
   });
 }
 
@@ -139,11 +111,7 @@ export function useActiveGames() {
       }
 
       // Registered users: fetch from Supabase
-      const { data, error} = await supabase
-        .from('games')
-        .select(GAME_LIST_COLUMNS)
-        .in('status', ['pending', 'matched'])
-        .order('created_at', { ascending: false });
+      const { data, error} = await queryActiveGames();
 
       if (error) {
         devLog.error('Error fetching active games:', error);
@@ -187,14 +155,7 @@ export function usePlayerGames(address: string | undefined, limit: number = 50) 
       }
 
       // Registered users: fetch from Supabase
-      const lowerAddress = address.toLowerCase();
-
-      const { data, error } = await supabase
-        .from('games')
-        .select(GAME_LIST_COLUMNS)
-        .or(`creator_address.ilike.${lowerAddress},joiner_address.ilike.${lowerAddress}`)
-        .order('created_at', { ascending: false })
-        .limit(limit);
+      const { data, error } = await queryPlayerGames(address, limit);
 
       if (error) {
         devLog.error('Error fetching player games:', error);
@@ -240,15 +201,7 @@ export function useUserActiveGames(address: string | undefined) {
       }
 
       // Registered users: fetch from Supabase
-      const lowerAddress = address.toLowerCase();
-
-      const { data, error } = await supabase
-        .from('games')
-        .select(GAME_LIST_COLUMNS)
-        .or(`creator_address.ilike.${lowerAddress},joiner_address.ilike.${lowerAddress}`)
-        .in('status', ['pending', 'matched'])
-        .order('created_at', { ascending: false })
-        .limit(10);
+      const { data, error } = await queryUserActiveGames(address);
 
       if (error) {
         devLog.error('Error fetching user active games:', error);
@@ -278,20 +231,16 @@ export function usePlayerStats(address: string | undefined) {
         return null;
       }
 
-      const lowerAddress = address.toLowerCase();
-
       // Use enhanced RPC that returns everything in one query
       // (basic stats + tier breakdown + pending count)
-      const { data: rpcData, error: rpcError } = await supabase
-        .rpc('get_player_stats_v2', { player_address: lowerAddress });
+      const { data: rpcData, error: rpcError } = await queryPlayerStats(address);
 
       if (rpcError) {
         devLog.error('Error fetching player stats via RPC:', rpcError);
         // Fallback to basic RPC if v2 doesn't exist yet
         if (rpcError.code === '42883') { // function does not exist
           devLog.warn('get_player_stats_v2 not found, falling back to basic stats');
-          const { data: fallbackData } = await supabase
-            .rpc('get_player_stats', { player_address: lowerAddress });
+          const { data: fallbackData } = await queryPlayerStatsBasic(address);
           const stats = Array.isArray(fallbackData) ? fallbackData[0] : fallbackData;
           return {
             totalGames: Number(stats?.total_games) || 0,
@@ -375,11 +324,7 @@ export function useGame(gameId: string | null) {
       }
 
       // Registered users: fetch from Supabase
-      const { data, error } = await supabase
-        .from('games')
-        .select(GAME_LIST_COLUMNS)
-        .eq('id', gameId)
-        .single();
+      const { data, error } = await queryGameById(gameId);
 
       if (error) {
         devLog.error('Error fetching game:', error);
@@ -393,12 +338,6 @@ export function useGame(gameId: string | null) {
     refetchInterval: isLoggedIn ? false : 10000, // Poll more frequently for single game
   });
 }
-
-// Columns for game statistics - must match the game_statistics view exactly
-const GAME_STATS_COLUMNS = `
-  total_games, pending_games, matched_games, resolved_games, cancelled_games,
-  avg_game_duration_seconds, total_volume_wei, total_unique_players, games_by_tier
-`;
 
 // Fetch game statistics
 // Uses blockchain for wallet-only users, Supabase for registered users
@@ -433,10 +372,7 @@ export function useGameStats() {
       }
 
       // Registered users: fetch from Supabase
-      const { data, error } = await supabase
-        .from('game_statistics')
-        .select(GAME_STATS_COLUMNS)
-        .single();
+      const { data, error } = await queryGameStats();
 
       if (error) {
         devLog.error('Error fetching game stats:', error);

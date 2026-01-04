@@ -5,43 +5,17 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
 import { devLog } from '@/lib/utils';
 import { RealtimePostgresChangesPayload } from '@supabase/supabase-js';
+import { REALTIME_CHANNELS } from '@/lib/realtime';
+import { queryPendingByTier, queryTierMatchStats, queryActivityFeed, queryIndexerState, queryRealtimeStats } from '@/lib/queries';
+import type { DbPendingByTier, DbTierMatchStats, DbActivityFeed, DbRealtimeStats } from '@/types/database';
 
 // ============================================
-// TYPES
+// TYPES (Re-export from database types for backwards compatibility)
 // ============================================
 
-export interface PendingByTier {
-  tier_id: number;
-  amount: string;
-  amount_usd: number;
-  pending_count: number;
-  oldest_pending_at: string | null;
-}
-
-export interface TierMatchStats {
-  tier: number;
-  total_resolved: number;
-  currently_pending: number;
-  avg_match_time_seconds: number | null;
-  median_match_time_seconds: number | null;
-  p90_match_time_seconds: number | null;
-  recent_avg_match_time_seconds: number | null;
-  recent_match_count: number;
-}
-
-export interface ActivityFeedItem {
-  id: number;
-  event_type: 'game_created' | 'game_matched' | 'game_resolved' | 'big_win';
-  game_id: number;
-  player_address: string;
-  opponent_address: string | null;
-  tier: number;
-  amount: string;
-  payout: string | null;
-  is_winner: boolean | null;
-  coin_result: boolean | null;
-  created_at: string;
-}
+export type PendingByTier = DbPendingByTier;
+export type TierMatchStats = DbTierMatchStats;
+export type ActivityFeedItem = DbActivityFeed;
 
 export interface IndexerState {
   last_block: string;
@@ -108,10 +82,7 @@ export function usePendingByTier() {
   const query = useQuery({
     queryKey: realtimeStatsKeys.pendingByTier,
     queryFn: async (): Promise<PendingByTier[]> => {
-      const { data, error } = await supabase
-        .from('pending_games_by_tier')
-        .select('*')
-        .order('tier_id');
+      const { data, error } = await queryPendingByTier();
 
       if (error) {
         devLog.warn('[PendingByTier] Error fetching:', error.message);
@@ -128,7 +99,7 @@ export function usePendingByTier() {
   // - Games leaving pending status (matched/cancelled)
   useEffect(() => {
     const channel = supabase
-      .channel('pending-by-tier-sync')
+      .channel(REALTIME_CHANNELS.PENDING_BY_TIER)
       .on(
         'postgres_changes',
         {
@@ -169,10 +140,7 @@ export function useTierMatchTimes() {
   const query = useQuery({
     queryKey: realtimeStatsKeys.matchTimes,
     queryFn: async (): Promise<TierMatchStats[]> => {
-      const { data, error } = await supabase
-        .from('tier_match_stats')
-        .select('*')
-        .order('tier');
+      const { data, error } = await queryTierMatchStats();
 
       if (error) {
         devLog.warn('[TierMatchTimes] Error fetching:', error.message);
@@ -188,7 +156,7 @@ export function useTierMatchTimes() {
   // Update match times when games get matched
   useEffect(() => {
     const channel = supabase
-      .channel('match-times-sync')
+      .channel(REALTIME_CHANNELS.MATCH_TIMES)
       .on(
         'postgres_changes',
         {
@@ -226,11 +194,7 @@ export function useActivityFeed(limit: number = 10) {
   const query = useQuery({
     queryKey: [...realtimeStatsKeys.activityFeed, limit],
     queryFn: async (): Promise<ActivityFeedItem[]> => {
-      const { data, error } = await supabase
-        .from('activity_feed')
-        .select('*')
-        .order('created_at', { ascending: false })
-        .limit(limit);
+      const { data, error } = await queryActivityFeed(limit);
 
       if (error) {
         devLog.warn('[ActivityFeed] Error fetching:', error.message);
@@ -249,7 +213,7 @@ export function useActivityFeed(limit: number = 10) {
     devLog.log('[ActivityFeed] Setting up realtime subscription...');
 
     const channel = supabase
-      .channel('activity-feed-realtime')
+      .channel(REALTIME_CHANNELS.ACTIVITY_FEED)
       .on(
         'postgres_changes',
         {
@@ -327,11 +291,7 @@ export function useIndexerStatus() {
   const query = useQuery({
     queryKey: realtimeStatsKeys.indexerState,
     queryFn: async (): Promise<IndexerState | null> => {
-      const { data, error } = await supabase
-        .from('indexer_state')
-        .select('last_processed_block, updated_at')
-        .eq('indexer_name', 'coinflip_events')
-        .single();
+      const { data, error } = await queryIndexerState();
 
       if (error) {
         devLog.warn('[IndexerStatus] Error fetching:', error.message);
@@ -349,7 +309,7 @@ export function useIndexerStatus() {
   // Realtime subscription for indexer updates
   useEffect(() => {
     const channel = supabase
-      .channel('indexer-state-realtime')
+      .channel(REALTIME_CHANNELS.INDEXER_STATE)
       .on(
         'postgres_changes',
         {
