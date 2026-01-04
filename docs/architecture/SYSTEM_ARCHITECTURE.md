@@ -518,6 +518,231 @@ coinflip/
 
 ---
 
+## Authentication Architecture
+
+### Overview
+
+CoinFlip uses **wallet-based authentication** without traditional username/password. The user's Ethereum wallet address serves as their identity.
+
+```mermaid
+flowchart TB
+    subgraph Browser["🌐 Browser"]
+        W["Wallet (MetaMask)"]
+        RK["RainbowKit UI"]
+        WG["Wagmi Hooks"]
+        AC["Authenticated<br/>Supabase Client"]
+    end
+
+    subgraph Supabase["☁️ Supabase"]
+        RLS["RLS Policies"]
+        GCA["get_caller_address()"]
+        Tables["Protected Tables"]
+    end
+
+    W -->|"Connect"| RK
+    RK -->|"useAccount()"| WG
+    WG -->|"address"| AC
+    AC -->|"x-wallet-address header"| RLS
+    RLS -->|"Calls"| GCA
+    GCA -->|"Validates"| Tables
+```
+
+### Authentication Flow
+
+```mermaid
+sequenceDiagram
+    participant U as User
+    participant W as Wallet
+    participant RK as RainbowKit
+    participant WG as Wagmi
+    participant SC as Supabase Client
+    participant RLS as RLS Policy
+    participant DB as Database
+
+    Note over U,DB: 1. WALLET CONNECTION
+    U->>W: Click "Connect Wallet"
+    W->>RK: Show wallet options
+    U->>RK: Select MetaMask
+    RK->>W: Request connection
+    W->>U: Approve connection
+    W-->>RK: Connected (address)
+    RK-->>WG: Update state
+    WG-->>U: useAccount() returns address
+
+    Note over U,DB: 2. AUTHENTICATED REQUEST
+    U->>SC: Create pending transaction
+    SC->>SC: getAuthenticatedClient(address)
+    SC->>RLS: POST /pending_transactions<br/>Header: x-wallet-address: 0x...
+    RLS->>RLS: get_caller_address()
+    RLS->>RLS: Extract header value
+    RLS->>RLS: Compare with user_address
+    alt Address matches
+        RLS->>DB: Allow INSERT
+        DB-->>SC: Success
+        SC-->>U: Transaction created
+    else Address mismatch
+        RLS-->>SC: 403 Forbidden
+        SC-->>U: RLS Policy Error
+    end
+```
+
+### Key Components
+
+#### 1. Wallet Connection (Client-Side)
+
+```typescript
+// lib/wagmi.ts - Wagmi configuration
+import { createConfig, http } from 'wagmi';
+import { sepolia } from 'wagmi/chains';
+
+export const config = createConfig({
+  chains: [sepolia],
+  transports: {
+    [sepolia.id]: http(),
+  },
+});
+
+// components/ui/WalletButton.tsx
+import { ConnectButton } from '@rainbow-me/rainbowkit';
+// RainbowKit provides the connect UI
+```
+
+#### 2. Authenticated Supabase Client
+
+```typescript
+// lib/supabase.ts
+
+// Base client (NO wallet header - for public queries)
+export const supabase = createClient(url, anonKey);
+
+// Authenticated client (WITH wallet header - for RLS-protected queries)
+export function getAuthenticatedClient(walletAddress: string): SupabaseClient {
+  return createClient(url, anonKey, {
+    global: {
+      headers: {
+        'x-wallet-address': walletAddress.toLowerCase(),
+      },
+    },
+  });
+}
+```
+
+#### 3. Using Authenticated Client in Hooks
+
+```typescript
+// hooks/usePendingTransactions.ts
+
+export function usePendingTransactions() {
+  const { address } = useAccount(); // From wagmi
+
+  // Create authenticated client with wallet header
+  const authClient = useMemo(() => {
+    if (!address) return null;
+    return getAuthenticatedClient(address);
+  }, [address]);
+
+  // Use authClient for all RLS-protected operations
+  const createMutation = useMutation({
+    mutationFn: async (input) => {
+      const { data, error } = await authClient  // ✅ Uses authenticated client
+        .from('pending_transactions')
+        .insert({ user_address: address.toLowerCase(), ... })
+        .select()
+        .single();
+    },
+  });
+}
+```
+
+#### 4. RLS Policy (Database-Side)
+
+```sql
+-- Migration 031: RLS Security
+
+-- Helper function to extract wallet address from request
+CREATE OR REPLACE FUNCTION get_caller_address()
+RETURNS TEXT AS $$
+DECLARE
+  header_wallet TEXT;
+BEGIN
+  -- Extract x-wallet-address header
+  header_wallet := current_setting('request.headers', true)::json->>'x-wallet-address';
+
+  -- Validate it's a valid Ethereum address
+  IF header_wallet IS NOT NULL AND header_wallet ~ '^0x[a-fA-F0-9]{40}$' THEN
+    RETURN lower(header_wallet);
+  END IF;
+
+  RETURN NULL;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER STABLE;
+
+-- RLS Policy: Users can only access their own data
+CREATE POLICY "pending_transactions_insert"
+  ON pending_transactions FOR INSERT
+  WITH CHECK (
+    lower(user_address) = get_caller_address()
+  );
+```
+
+### Protected vs Public Tables
+
+| Table | RLS | Access Pattern |
+|-------|-----|----------------|
+| `games` | Public READ | Anyone can view games |
+| `tiers` | Public READ | Anyone can view tiers |
+| `activity_feed` | Public READ | Anyone can view activity |
+| `pending_transactions` | **User-only** | Only owner can CRUD |
+| `user_preferences` | **User-only** | Only owner can CRUD |
+| `user_game_notifications` | **User-only** | Only owner can CRUD |
+
+### Auth Flow by Feature
+
+```mermaid
+flowchart LR
+    subgraph Public["Public (No Auth)"]
+        P1["View games"]
+        P2["View leaderboard"]
+        P3["View activity feed"]
+        P4["View statistics"]
+    end
+
+    subgraph WalletRequired["Wallet Required"]
+        W1["Create game"]
+        W2["Join game"]
+        W3["Cancel game"]
+    end
+
+    subgraph RLSProtected["RLS Protected"]
+        R1["Save preferences"]
+        R2["Track pending tx"]
+        R3["Notification state"]
+    end
+
+    P1 --> |"supabase"| DB1[(Supabase)]
+    W1 --> |"wagmi"| BC[(Blockchain)]
+    R1 --> |"authClient"| DB2[(Supabase + RLS)]
+```
+
+### Common Issues & Solutions
+
+| Issue | Cause | Solution |
+|-------|-------|----------|
+| `403 Forbidden` on INSERT | Missing `x-wallet-address` header | Use `getAuthenticatedClient(address)` |
+| `get_caller_address()` returns NULL | Invalid or missing header | Ensure address is lowercase, valid format |
+| RLS blocks own data | Address case mismatch | Always use `.toLowerCase()` |
+| Auth works in dev, fails in prod | Client not passing header | Check client instantiation |
+
+### Security Considerations
+
+1. **No Private Keys**: App never accesses wallet private keys
+2. **Signature Verification**: For high-security ops, require signed messages
+3. **Address Validation**: RLS validates address format (0x + 40 hex chars)
+4. **Case Normalization**: All addresses stored/compared as lowercase
+5. **Rate Limiting**: Client-side rate limits on game creation/joining
+
+---
+
 ## Key Relationships
 
 | Layer | Depends On | Used By |

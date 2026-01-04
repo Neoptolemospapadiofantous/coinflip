@@ -220,6 +220,7 @@
         <a href="#components">Components</a>
         <a href="#dataflow">Data Flow</a>
         <a href="#state">State</a>
+        <a href="#auth">Authentication</a>
         <a href="#external">External Services</a>
         <a href="#files">File Structure</a>
     </nav>
@@ -630,6 +631,168 @@ flowchart LR
     Zustand --> Components
     Components["Components"]
                 </pre>
+            </div>
+        </section>
+
+        <!-- Authentication -->
+        <section id="auth">
+            <h2>Authentication Architecture<span class="new-badge">NEW</span></h2>
+            <div class="description">
+                CoinFlip uses <strong>wallet-based authentication</strong>. The user's Ethereum wallet address serves as their identity.
+                RLS (Row-Level Security) policies in Supabase use the <code>x-wallet-address</code> header to identify users.
+            </div>
+            <div class="diagram-container">
+                <pre class="mermaid">
+flowchart TB
+    subgraph Browser["BROWSER"]
+        W["Wallet<br/>(MetaMask)"]
+        RK["RainbowKit<br/>Connect UI"]
+        WG["Wagmi Hooks<br/>useAccount()"]
+        AC["getAuthenticatedClient()<br/>x-wallet-address header"]
+    end
+
+    subgraph Supabase["SUPABASE"]
+        RLS["RLS Policies"]
+        GCA["get_caller_address()<br/>Extracts header"]
+        Tables["Protected Tables<br/>pending_transactions<br/>user_preferences<br/>user_game_notifications"]
+    end
+
+    W -->|"Connect"| RK
+    RK -->|"address"| WG
+    WG -->|"address"| AC
+    AC -->|"Header: x-wallet-address"| RLS
+    RLS -->|"Calls"| GCA
+    GCA -->|"Validates & Authorizes"| Tables
+                </pre>
+            </div>
+
+            <h3 style="margin-top: 30px; color: var(--accent-blue);">Authentication Flow</h3>
+            <div class="diagram-container">
+                <pre class="mermaid">
+sequenceDiagram
+    participant U as User
+    participant W as Wallet
+    participant RK as RainbowKit
+    participant SC as Supabase Client
+    participant RLS as RLS Policy
+    participant DB as Database
+
+    Note over U,DB: 1. WALLET CONNECTION
+    U->>W: Click Connect Wallet
+    W->>RK: Show wallet options
+    U->>RK: Select wallet
+    RK->>W: Request connection
+    W-->>RK: Connected (address)
+    RK-->>U: useAccount() returns 0x...
+
+    Note over U,DB: 2. AUTHENTICATED REQUEST
+    U->>SC: Save preferences
+    SC->>SC: getAuthenticatedClient(address)
+    SC->>RLS: Request + x-wallet-address header
+    RLS->>RLS: get_caller_address()
+    RLS->>RLS: Compare user_address == header
+    alt Match
+        RLS->>DB: Allow operation
+        DB-->>U: Success
+    else No Match
+        RLS-->>U: 403 Forbidden
+    end
+                </pre>
+            </div>
+
+            <h3 style="margin-top: 30px; color: var(--accent-blue);">Table Access Patterns</h3>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Table</th>
+                        <th>RLS</th>
+                        <th>Client</th>
+                        <th>Access Pattern</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><code>games</code></td>
+                        <td>Public READ</td>
+                        <td><code>supabase</code></td>
+                        <td>Anyone can view games</td>
+                    </tr>
+                    <tr>
+                        <td><code>tiers</code></td>
+                        <td>Public READ</td>
+                        <td><code>supabase</code></td>
+                        <td>Anyone can view tier config</td>
+                    </tr>
+                    <tr>
+                        <td><code>activity_feed</code></td>
+                        <td>Public READ</td>
+                        <td><code>supabase</code></td>
+                        <td>Anyone can view activity</td>
+                    </tr>
+                    <tr style="background: rgba(63, 185, 80, 0.1);">
+                        <td><code>pending_transactions</code></td>
+                        <td><strong>User-only</strong></td>
+                        <td><code>authClient</code></td>
+                        <td>Only owner can CRUD</td>
+                    </tr>
+                    <tr style="background: rgba(63, 185, 80, 0.1);">
+                        <td><code>user_preferences</code></td>
+                        <td><strong>User-only</strong></td>
+                        <td><code>authClient</code></td>
+                        <td>Only owner can CRUD</td>
+                    </tr>
+                    <tr style="background: rgba(63, 185, 80, 0.1);">
+                        <td><code>user_game_notifications</code></td>
+                        <td><strong>User-only</strong></td>
+                        <td><code>authClient</code></td>
+                        <td>Only owner can CRUD</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <h3 style="margin-top: 30px; color: var(--accent-blue);">Key Code Patterns</h3>
+            <div class="file-tree">
+<pre>
+<span style="color:#58a6ff">// lib/supabase.ts</span>
+
+<span style="color:#8b949e">// Base client - NO wallet header (for public queries)</span>
+export const supabase = createClient(url, anonKey);
+
+<span style="color:#8b949e">// Authenticated client - WITH wallet header (for RLS-protected queries)</span>
+export function getAuthenticatedClient(walletAddress: string) {
+  return createClient(url, anonKey, {
+    global: {
+      headers: {
+        <span style="color:#3fb950">'x-wallet-address': walletAddress.toLowerCase()</span>
+      }
+    }
+  });
+}
+
+<span style="color:#58a6ff">// hooks/usePendingTransactions.ts</span>
+
+const { address } = useAccount();  <span style="color:#8b949e">// From wagmi</span>
+
+<span style="color:#8b949e">// Create authenticated client with wallet header</span>
+const authClient = useMemo(() => {
+  if (!address) return null;
+  return <span style="color:#3fb950">getAuthenticatedClient(address)</span>;
+}, [address]);
+
+<span style="color:#8b949e">// Use authClient for all RLS-protected operations</span>
+await <span style="color:#3fb950">authClient</span>.from('pending_transactions').insert({...});
+</pre>
+            </div>
+
+            <div class="legend">
+                <div class="legend-item">
+                    <div class="legend-color" style="background: var(--accent-green);"></div>
+                    <span>RLS Protected (requires authClient)</span>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-color" style="background: var(--accent-blue);"></div>
+                    <span>Public (base supabase client)</span>
+                </div>
             </div>
         </section>
 
