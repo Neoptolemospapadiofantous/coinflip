@@ -24,8 +24,20 @@ import '@rainbow-me/rainbowkit/styles.css';
 function GlobalErrorHandler({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     const handleUnhandledRejection = (event: PromiseRejectionEvent) => {
+      // Handle empty error objects (common with contract reverts)
+      const reason = event.reason;
+      let errorMessage: string;
+
+      if (!reason) {
+        errorMessage = 'Unknown error';
+      } else if (typeof reason === 'object' && Object.keys(reason).length === 0) {
+        // Empty object {} - common with contract reverts without message
+        errorMessage = 'Transaction failed - the game may no longer be available';
+      } else {
+        errorMessage = reason?.message || String(reason);
+      }
+
       // Don't show user-cancelled wallet errors
-      const errorMessage = event.reason?.message || String(event.reason);
       const isUserCancel = errorMessage.includes('User rejected') ||
                           errorMessage.includes('User denied') ||
                           errorMessage.includes('user rejected');

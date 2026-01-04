@@ -31,7 +31,7 @@ export function TierSelector() {
 
   // Helper to get pending count for a tier
   const getPendingCount = (tierId: number) => {
-    const tierData = pendingByTier?.find((t) => t.tier_id === tierId);
+    const tierData = pendingByTier?.find((t) => t.tier === tierId);
     return tierData?.pending_count || 0;
   };
 
