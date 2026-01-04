@@ -23,7 +23,7 @@ import { useCreateGame, useCancelGame } from '@/hooks/useContract';
 import { useTiers } from '@/hooks/useTiers';
 import { useCreatedGameTracking } from '@/hooks/useCreatedGameTracking';
 import { useOptimisticUpdates } from '@/hooks/useOptimisticUpdates';
-import { Info, Loader2, CheckCircle2, AlertCircle, Clock, Users, X, Plus, Gamepad2, Zap } from 'lucide-react';
+import { Info, Loader2, CheckCircle2, AlertCircle, Clock, Users, X, Plus, Gamepad2, Zap, Activity } from 'lucide-react';
 import { parseError } from '@/lib/errors';
 import { formatGameId, formatCurrency, devLog } from '@/lib/utils';
 import { PLATFORM_FEE_PERCENT } from '@/lib/constants';
@@ -35,6 +35,7 @@ import { playSound } from '@/lib/sounds';
 import { usePendingTransactions, useGameLimits } from '@/hooks/usePendingTransactions';
 import { useUserPreferences } from '@/hooks/useUserPreferences';
 import { useNotificationState } from '@/hooks/useNotificationState';
+import { usePendingByTier, useTierMatchTimes, getEstimatedMatchTime } from '@/hooks/useRealtimeStats';
 
 enum GameStep {
   SELECT_TIER = 'select_tier',
@@ -87,6 +88,10 @@ export default function PlayPage() {
   const { data: tiers } = useTiers();
   const queryClient = useQueryClient();
   const { optimisticCreateGame, rollbackOptimisticCreate, optimisticCancelGame, rollbackOptimisticCancel, removeOptimisticGame } = useOptimisticUpdates();
+
+  // Realtime stats for activity display
+  const { data: pendingByTier } = usePendingByTier();
+  const { data: matchTimes } = useTierMatchTimes();
 
   // Refs for race condition prevention
   const isCancellingRef = useRef(false);
@@ -741,6 +746,18 @@ export default function PlayPage() {
                                   </Text>
                                 </Flex>
                               </Flex>
+                              {/* Estimated Match Time */}
+                              {selectedTier !== null && (
+                                <Flex justify="between" align="center" className="border-t border-slate-700/50 pt-3">
+                                  <Text size="2" color="gray">Est. Match Time:</Text>
+                                  <Flex align="center" gap="1">
+                                    <Activity className="w-3 h-3 text-purple-400" />
+                                    <Text size="2" weight="bold" className="text-purple-400">
+                                      {getEstimatedMatchTime(matchTimes ?? null, selectedTier).estimate}
+                                    </Text>
+                                  </Flex>
+                                </Flex>
+                              )}
                             </Flex>
                           </Card>
 
