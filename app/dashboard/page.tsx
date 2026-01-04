@@ -1,6 +1,6 @@
 'use client';
 
-import { Flex, Card, Text, Heading, Box, Grid, Badge, Button } from '@radix-ui/themes';
+import { Flex, Card, Text, Heading, Box, Grid, Badge, Button, Skeleton } from '@radix-ui/themes';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import {
   Dices,
@@ -12,21 +12,31 @@ import {
   Zap,
   ArrowRight,
   Activity,
+  Flame,
+  Target,
+  History,
 } from 'lucide-react';
 import Link from 'next/link';
-import { useAccount } from 'wagmi';
-import { usePlayerStats } from '@/hooks/useGames';
+import { useAccount, useChainId } from 'wagmi';
+import { usePlayerStats, usePlayerGames } from '@/hooks/useGames';
+import { usePlayerRank } from '@/hooks/useLeaderboard';
 import { useAuth } from '@/hooks/useAuth';
 import { formatEther } from 'viem';
+import { useMemo } from 'react';
+import { RecentGamesTable } from '@/components/shared';
+import { PieChart, Pie, Cell, ResponsiveContainer } from 'recharts';
 
 export default function DashboardPage() {
   const { address } = useAccount();
+  const chainId = useChainId();
   const { user } = useAuth();
-  const { data: playerStats } = usePlayerStats(address);
+  const { data: playerStats, isLoading: isLoadingStats } = usePlayerStats(address);
+  const { data: playerRank, isLoading: isLoadingRank } = usePlayerRank(address);
+  const { data: recentGames = [], isLoading: isLoadingGames } = usePlayerGames(address, 5);
 
-  const formatAmount = (wei: string | undefined) => {
+  const formatAmount = (wei: string | undefined | bigint) => {
     if (!wei || wei === '0') return '0';
-    const eth = parseFloat(formatEther(BigInt(wei)));
+    const eth = parseFloat(formatEther(BigInt(wei.toString())));
     return eth.toFixed(4);
   };
 
@@ -36,6 +46,27 @@ export default function DashboardPage() {
 
   // Calculate net profit
   const netProfit = (playerStats?.totalWon ?? BigInt(0)) - (playerStats?.totalWagered ?? BigInt(0));
+
+  // Calculate win streak from recent games
+  const winStreak = useMemo(() => {
+    if (!recentGames || !address) return 0;
+    let streak = 0;
+    for (const game of recentGames) {
+      if (game.status !== 'resolved') continue;
+      if (game.winner_address?.toLowerCase() === address.toLowerCase()) {
+        streak++;
+      } else {
+        break;
+      }
+    }
+    return streak;
+  }, [recentGames, address]);
+
+  // Pie chart data for win/loss
+  const pieData = useMemo(() => [
+    { name: 'Wins', value: playerStats?.wins ?? 0, color: '#22c55e' },
+    { name: 'Losses', value: playerStats?.losses ?? 0, color: '#ef4444' },
+  ].filter(d => d.value > 0), [playerStats?.wins, playerStats?.losses]);
 
   const stats = [
     {
@@ -68,12 +99,20 @@ export default function DashboardPage() {
     <DashboardLayout title="Dashboard" description="Welcome back! Here's your gaming overview.">
       <Flex direction="column" gap="6">
         {/* Welcome Card */}
-        <Card className="bg-gradient-to-br from-cyan-500/10 to-purple-500/10 border border-cyan-500/30">
+        <Card className="bg-gradient-to-br from-cyan-500/10 to-purple-500/10 border border-cyan-500/30 animate-fade-in hover-lift">
           <Flex justify="between" align="center" p="5">
             <Flex direction="column" gap="2">
-              <Heading size="6">
-                Welcome back, {user?.email?.split('@')[0] || 'Player'}!
-              </Heading>
+              <Flex align="center" gap="3">
+                <Heading size="6">
+                  Welcome back, {user?.email?.split('@')[0] || 'Player'}!
+                </Heading>
+                {winStreak >= 2 && (
+                  <Badge color="orange" variant="soft" className="animate-pulse">
+                    <Flame className="w-3 h-3" />
+                    {winStreak} Win Streak!
+                  </Badge>
+                )}
+              </Flex>
               <Text size="2" color="gray">
                 Ready for another round? Your luck awaits.
               </Text>
@@ -90,8 +129,12 @@ export default function DashboardPage() {
 
         {/* Stats Grid */}
         <Grid columns={{ initial: '2', md: '4' }} gap="4">
-          {stats.map((stat) => (
-            <Card key={stat.label} className="card-simple">
+          {stats.map((stat, i) => (
+            <Card
+              key={stat.label}
+              className="card-simple hover-lift animate-fade-in"
+              style={{ animationDelay: `${i * 50}ms` }}
+            >
               <Flex direction="column" gap="3" p="4">
                 <Flex align="center" justify="between">
                   <Text size="2" color="gray">
@@ -99,74 +142,112 @@ export default function DashboardPage() {
                   </Text>
                   {stat.icon}
                 </Flex>
-                <Text size="7" weight="bold">
-                  {stat.value}
-                </Text>
+                {isLoadingStats ? (
+                  <Skeleton className="h-10 w-16" />
+                ) : (
+                  <Text size="7" weight="bold">
+                    {stat.value}
+                  </Text>
+                )}
               </Flex>
             </Card>
           ))}
         </Grid>
 
-        {/* Financial Stats */}
-        <Grid columns={{ initial: '1', md: '3' }} gap="4">
-          <Card className="card-simple">
+        {/* Financial Stats + Mini Chart */}
+        <Grid columns={{ initial: '1', md: '4' }} gap="4">
+          <Card className="card-simple hover-lift animate-fade-in">
             <Flex direction="column" gap="3" p="4">
               <Flex align="center" gap="2">
                 <Wallet className="w-5 h-5 text-cyan-400" />
-                <Text size="2" color="gray">
-                  Total Wagered
-                </Text>
+                <Text size="2" color="gray">Total Wagered</Text>
               </Flex>
-              <Flex align="baseline" gap="2">
-                <Text size="6" weight="bold">
-                  {formatAmount(playerStats?.totalWagered?.toString())}
-                </Text>
-                <Text size="2" color="gray">
-                  ETH
-                </Text>
-              </Flex>
+              {isLoadingStats ? (
+                <Skeleton className="h-8 w-24" />
+              ) : (
+                <Flex align="baseline" gap="2">
+                  <Text size="6" weight="bold">
+                    {formatAmount(playerStats?.totalWagered?.toString())}
+                  </Text>
+                  <Text size="2" color="gray">ETH</Text>
+                </Flex>
+              )}
             </Flex>
           </Card>
 
-          <Card className="card-simple">
+          <Card className="card-simple hover-lift animate-fade-in">
             <Flex direction="column" gap="3" p="4">
               <Flex align="center" gap="2">
                 <Trophy className="w-5 h-5 text-green-400" />
-                <Text size="2" color="gray">
-                  Total Won
-                </Text>
+                <Text size="2" color="gray">Total Won</Text>
               </Flex>
-              <Flex align="baseline" gap="2">
-                <Text size="6" weight="bold" className="text-green-400">
-                  {formatAmount(playerStats?.totalWon?.toString())}
-                </Text>
-                <Text size="2" color="gray">
-                  ETH
-                </Text>
-              </Flex>
+              {isLoadingStats ? (
+                <Skeleton className="h-8 w-24" />
+              ) : (
+                <Flex align="baseline" gap="2">
+                  <Text size="6" weight="bold" className="text-green-400">
+                    {formatAmount(playerStats?.totalWon?.toString())}
+                  </Text>
+                  <Text size="2" color="gray">ETH</Text>
+                </Flex>
+              )}
             </Flex>
           </Card>
 
-          <Card className="card-simple">
+          <Card className="card-simple hover-lift animate-fade-in">
             <Flex direction="column" gap="3" p="4">
               <Flex align="center" gap="2">
                 <Activity className="w-5 h-5 text-purple-400" />
-                <Text size="2" color="gray">
-                  Net Profit
-                </Text>
+                <Text size="2" color="gray">Net Profit</Text>
               </Flex>
-              <Flex align="baseline" gap="2">
-                <Text
-                  size="6"
-                  weight="bold"
-                  className={netProfit >= 0n ? 'text-green-400' : 'text-red-400'}
-                >
-                  {netProfit >= 0n ? '+' : ''}
-                  {formatAmount(netProfit.toString())}
-                </Text>
-                <Text size="2" color="gray">
-                  ETH
-                </Text>
+              {isLoadingStats ? (
+                <Skeleton className="h-8 w-24" />
+              ) : (
+                <Flex align="baseline" gap="2">
+                  <Text
+                    size="6"
+                    weight="bold"
+                    className={netProfit >= 0n ? 'text-green-400' : 'text-red-400'}
+                  >
+                    {netProfit >= 0n ? '+' : ''}
+                    {formatAmount(netProfit.toString())}
+                  </Text>
+                  <Text size="2" color="gray">ETH</Text>
+                </Flex>
+              )}
+            </Flex>
+          </Card>
+
+          {/* Mini Win/Loss Pie Chart */}
+          <Card className="card-simple hover-lift animate-fade-in">
+            <Flex direction="column" gap="2" p="4" align="center">
+              <Text size="2" color="gray">Win Distribution</Text>
+              {isLoadingStats ? (
+                <Skeleton className="h-16 w-16 rounded-full" />
+              ) : pieData.length > 0 ? (
+                <ResponsiveContainer width={80} height={80}>
+                  <PieChart>
+                    <Pie
+                      data={pieData}
+                      cx="50%"
+                      cy="50%"
+                      innerRadius={25}
+                      outerRadius={35}
+                      dataKey="value"
+                      stroke="none"
+                    >
+                      {pieData.map((entry, index) => (
+                        <Cell key={`cell-${index}`} fill={entry.color} />
+                      ))}
+                    </Pie>
+                  </PieChart>
+                </ResponsiveContainer>
+              ) : (
+                <Text size="1" color="gray">No games yet</Text>
+              )}
+              <Flex gap="3">
+                <Text size="1" className="text-green-400">{playerStats?.wins ?? 0}W</Text>
+                <Text size="1" className="text-red-400">{playerStats?.losses ?? 0}L</Text>
               </Flex>
             </Flex>
           </Card>
@@ -175,7 +256,7 @@ export default function DashboardPage() {
         {/* Quick Actions */}
         <Grid columns={{ initial: '1', md: '2' }} gap="4">
           {/* Active Games Card */}
-          <Card className="card-interactive">
+          <Card className="card-interactive hover-lift animate-fade-in">
             <Flex direction="column" gap="4" p="5">
               <Flex align="center" justify="between">
                 <Flex align="center" gap="2">
@@ -198,66 +279,91 @@ export default function DashboardPage() {
             </Flex>
           </Card>
 
-          {/* Recent Activity Card */}
-          <Card className="card-interactive">
+          {/* Your Ranking Card */}
+          <Card className="card-interactive hover-lift animate-fade-in">
             <Flex direction="column" gap="4" p="5">
               <Flex align="center" justify="between">
                 <Flex align="center" gap="2">
-                  <Zap className="w-5 h-5 text-cyan-400" />
-                  <Heading size="4">Quick Play</Heading>
+                  <Target className="w-5 h-5 text-cyan-400" />
+                  <Heading size="4">Your Ranking</Heading>
                 </Flex>
-                <Badge color="cyan" variant="soft">
-                  Instant Match
-                </Badge>
+                <Link href="/leaderboard">
+                  <Button variant="ghost" size="1" className="cursor-pointer">
+                    View Full
+                    <ArrowRight className="w-4 h-4" />
+                  </Button>
+                </Link>
               </Flex>
-              <Text size="2" color="gray">
-                Jump into a game instantly with our quick match feature.
-              </Text>
-              <Link href="/play">
-                <Button size="2" className="cursor-pointer w-full">
-                  <Dices className="w-4 h-4" />
-                  Start New Game
-                </Button>
-              </Link>
+
+              {isLoadingRank ? (
+                <Flex gap="4" justify="between">
+                  {[...Array(4)].map((_, i) => (
+                    <Skeleton key={i} className="h-12 w-16" />
+                  ))}
+                </Flex>
+              ) : playerRank && playerRank.player_total_games > 0 ? (
+                <Grid columns="4" gap="3">
+                  <Flex direction="column" align="center" gap="1" className="p-2 rounded-lg bg-slate-800/50">
+                    <Trophy className="w-4 h-4 text-green-400" />
+                    <Text size="4" weight="bold">#{playerRank.rank_by_wins}</Text>
+                    <Text size="1" color="gray">Wins</Text>
+                  </Flex>
+                  <Flex direction="column" align="center" gap="1" className="p-2 rounded-lg bg-slate-800/50">
+                    <TrendingUp className="w-4 h-4 text-cyan-400" />
+                    <Text size="4" weight="bold">#{playerRank.rank_by_profit}</Text>
+                    <Text size="1" color="gray">Profit</Text>
+                  </Flex>
+                  <Flex direction="column" align="center" gap="1" className="p-2 rounded-lg bg-slate-800/50">
+                    <Zap className="w-4 h-4 text-yellow-400" />
+                    <Text size="4" weight="bold">#{playerRank.rank_by_winrate}</Text>
+                    <Text size="1" color="gray">Win %</Text>
+                  </Flex>
+                  <Flex direction="column" align="center" gap="1" className="p-2 rounded-lg bg-slate-800/50">
+                    <Wallet className="w-4 h-4 text-purple-400" />
+                    <Text size="4" weight="bold">#{playerRank.rank_by_volume}</Text>
+                    <Text size="1" color="gray">Volume</Text>
+                  </Flex>
+                </Grid>
+              ) : (
+                <Flex direction="column" align="center" gap="2" className="p-4 rounded-lg bg-slate-800/50">
+                  <Text size="2" color="gray">Play some games to appear on the leaderboard!</Text>
+                  <Link href="/play">
+                    <Button size="2" className="cursor-pointer">
+                      <Dices className="w-4 h-4" />
+                      Start Playing
+                    </Button>
+                  </Link>
+                </Flex>
+              )}
             </Flex>
           </Card>
         </Grid>
 
-        {/* Leaderboard Preview */}
-        <Card className="card-simple">
+        {/* Recent Games */}
+        <Card className="card-simple animate-fade-in">
           <Flex direction="column" gap="4" p="5">
             <Flex align="center" justify="between">
               <Flex align="center" gap="2">
-                <Trophy className="w-5 h-5 text-yellow-400" />
-                <Heading size="4">Your Ranking</Heading>
+                <History className="w-5 h-5 text-purple-400" />
+                <Heading size="4">Recent Games</Heading>
               </Flex>
-              <Link href="/leaderboard">
+              <Link href="/history">
                 <Button variant="ghost" size="1" className="cursor-pointer">
-                  View Full Leaderboard
+                  View All History
                   <ArrowRight className="w-4 h-4" />
                 </Button>
               </Link>
             </Flex>
-            <Flex align="center" gap="4" className="p-4 rounded-lg bg-slate-800/50">
-              <Box className="w-12 h-12 rounded-full bg-gradient-to-br from-cyan-500 to-purple-500 flex items-center justify-center">
-                <Text size="5" weight="bold">
-                  #?
-                </Text>
-              </Box>
-              <Flex direction="column" gap="1">
-                <Text size="3" weight="medium">
-                  {address ? `${address.slice(0, 6)}...${address.slice(-4)}` : 'Connect Wallet'}
-                </Text>
-                <Text size="2" color="gray">
-                  {playerStats?.totalGames ?? 0} games played
-                </Text>
-              </Flex>
-              <Box className="ml-auto">
-                <Text size="2" color="cyan">
-                  {winRate.toFixed(1)}% win rate
-                </Text>
-              </Box>
-            </Flex>
+
+            <RecentGamesTable
+              games={recentGames}
+              userAddress={address}
+              chainId={chainId}
+              isLoading={isLoadingGames}
+              compact
+              maxRows={5}
+              emptyMessage="No games played yet. Start your first game!"
+            />
           </Flex>
         </Card>
       </Flex>
