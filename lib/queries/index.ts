@@ -8,3 +8,4 @@
 export * from './games';
 export * from './stats';
 export * from './user';
+export * from './cache-config';
