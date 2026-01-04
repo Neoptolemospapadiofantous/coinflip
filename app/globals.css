@@ -853,29 +853,56 @@
 
   /* ===================================
      RECHARTS TOOLTIP & LEGEND STYLING
-     Force light text on dark background
+     Force dark background, light text
      =================================== */
 
-  /* Tooltip text colors */
-  .recharts-tooltip-wrapper .recharts-default-tooltip {
+  /* Tooltip container - dark background */
+  .recharts-tooltip-wrapper .recharts-default-tooltip,
+  .recharts-default-tooltip {
+    background-color: rgba(15, 23, 42, 0.95) !important;
     background: rgba(15, 23, 42, 0.95) !important;
     border: 1px solid rgba(6, 182, 212, 0.5) !important;
     border-radius: 8px !important;
+    padding: 10px !important;
   }
 
-  .recharts-tooltip-wrapper .recharts-tooltip-label {
+  /* Tooltip label (header) */
+  .recharts-tooltip-wrapper .recharts-tooltip-label,
+  .recharts-default-tooltip .recharts-tooltip-label,
+  .recharts-tooltip-label {
+    color: #e2e8f0 !important;
+    margin-bottom: 4px !important;
+  }
+
+  /* Tooltip item list */
+  .recharts-tooltip-wrapper .recharts-tooltip-item-list,
+  .recharts-default-tooltip .recharts-tooltip-item-list,
+  .recharts-tooltip-item-list {
     color: #e2e8f0 !important;
   }
 
-  .recharts-tooltip-wrapper .recharts-tooltip-item {
+  /* Tooltip items */
+  .recharts-tooltip-wrapper .recharts-tooltip-item,
+  .recharts-default-tooltip .recharts-tooltip-item,
+  .recharts-tooltip-item {
     color: #e2e8f0 !important;
   }
 
-  .recharts-tooltip-wrapper .recharts-tooltip-item-name {
+  .recharts-tooltip-wrapper .recharts-tooltip-item-name,
+  .recharts-default-tooltip .recharts-tooltip-item-name,
+  .recharts-tooltip-item-name {
     color: #e2e8f0 !important;
   }
 
-  .recharts-tooltip-wrapper .recharts-tooltip-item-value {
+  .recharts-tooltip-wrapper .recharts-tooltip-item-separator,
+  .recharts-default-tooltip .recharts-tooltip-item-separator,
+  .recharts-tooltip-item-separator {
+    color: #e2e8f0 !important;
+  }
+
+  .recharts-tooltip-wrapper .recharts-tooltip-item-value,
+  .recharts-default-tooltip .recharts-tooltip-item-value,
+  .recharts-tooltip-item-value {
     color: #e2e8f0 !important;
   }
 
@@ -885,6 +912,12 @@
   }
 
   .recharts-legend-item-text {
+    color: #e2e8f0 !important;
+  }
+
+  /* Force all text inside tooltip to be light */
+  .recharts-tooltip-wrapper *,
+  .recharts-default-tooltip * {
     color: #e2e8f0 !important;
   }
 }
