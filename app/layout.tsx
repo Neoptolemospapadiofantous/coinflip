@@ -2,11 +2,9 @@ import type { Metadata } from 'next';
 import { Inter } from 'next/font/google';
 import '@radix-ui/themes/styles.css';
 import './globals.css';
-import { Providers } from '@/components/Providers';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { ThemeProvider } from '@/components/providers/ThemeProvider';
-import { ActiveGamesPanel } from '@/components/game/ActiveGamesPanel';
-import { ActivityFeed } from '@/components/game/ActivityFeed';
+import { ClientProviders } from '@/components/ClientProviders';
 
 const inter = Inter({ subsets: ['latin'] });
 
@@ -26,15 +24,9 @@ export default function RootLayout({
       <body className={inter.className}>
         <ThemeProvider>
           <ErrorBoundary>
-            <Providers>
+            <ClientProviders>
               {children}
-              <ActiveGamesPanel />
-              <ActivityFeed
-                limit={8}
-                collapsible={true}
-                className="fixed bottom-4 left-4 z-40 w-72"
-              />
-            </Providers>
+            </ClientProviders>
           </ErrorBoundary>
         </ThemeProvider>
       </body>

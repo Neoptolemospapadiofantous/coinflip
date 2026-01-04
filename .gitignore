@@ -44,6 +44,8 @@ logs/
 .env*.local
 .env*.production
 *.env.backup
+.env.vercel
+.env.supabase
 
 # vercel
 .vercel
