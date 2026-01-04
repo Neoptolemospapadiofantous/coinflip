@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useMemo } from 'react';
 import { useAccount } from 'wagmi';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase, getAuthenticatedClient } from '@/lib/supabase';
-import { devLog, isValidAddress } from '@/lib/utils';
+import { devLog } from '@/lib/utils';
 import { useUserActiveGames } from './useGames';
 import { MAX_CONCURRENT_GAMES } from '@/store/gameStore';
 import { PENDING_TX_CLEANUP_INTERVAL_MS, PENDING_TX_STALE_TIME_MS } from '@/lib/constants';
@@ -270,7 +270,7 @@ export function usePendingTransactions() {
         id,
         updates: { tx_hash: txHash, status: 'submitted' },
       });
-    } catch (err) {
+    } catch (_err) {
       // Error already logged by mutation's onError - don't propagate
       devLog.warn('[PendingTx] setTxHash failed for id:', id);
     }
@@ -283,7 +283,7 @@ export function usePendingTransactions() {
         id,
         updates: { status: 'confirmed' },
       });
-    } catch (err) {
+    } catch (_err) {
       // Error already logged by mutation's onError - don't propagate
       devLog.warn('[PendingTx] markConfirmed failed for id:', id);
     }
@@ -296,7 +296,7 @@ export function usePendingTransactions() {
         id,
         updates: { status: 'failed', error_message: errorMessage || null },
       });
-    } catch (err) {
+    } catch (_err) {
       // Error already logged by mutation's onError - don't propagate
       devLog.warn('[PendingTx] markFailed failed for id:', id);
     }
@@ -306,7 +306,7 @@ export function usePendingTransactions() {
   const removePendingTransaction = useCallback(async (id: number) => {
     try {
       await deleteMutation.mutateAsync(id);
-    } catch (err) {
+    } catch (_err) {
       // Error already logged by mutation's onError - don't propagate
       devLog.warn('[PendingTx] removePendingTransaction failed for id:', id);
     }

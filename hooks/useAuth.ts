@@ -9,7 +9,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { useAccount, useSignMessage } from 'wagmi';
-import { Session, User as SupabaseUser } from '@supabase/supabase-js';
+import { Session } from '@supabase/supabase-js';
 import { supabase } from '@/lib/supabase';
 import {
   signInWithGoogle,

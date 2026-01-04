@@ -203,12 +203,13 @@ export function formatLeaderboardValue(
   const num = typeof value === 'string' ? parseFloat(value) : value;
 
   switch (type) {
-    case 'eth':
+    case 'eth': {
       // Convert from wei to ETH
       const eth = num / 1e18;
       if (eth >= 1000) return `${(eth / 1000).toFixed(2)}K`;
       if (eth >= 1) return eth.toFixed(2);
       return eth.toFixed(4);
+    }
     case 'usd':
       if (num >= 1000000) return `$${(num / 1000000).toFixed(2)}M`;
       if (num >= 1000) return `$${(num / 1000).toFixed(2)}K`;

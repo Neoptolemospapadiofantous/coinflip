@@ -1,7 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import { supabase } from '@/lib/supabase';
 import { Game, parseGame } from '@/types/game';
-import { DB_COLUMNS } from '@/types/database';
 import { devLog, isValidAddress } from '@/lib/utils';
 import { queryKeys } from '@/lib/queryKeys';
 import {

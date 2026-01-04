@@ -6,8 +6,8 @@ import { supabase } from '@/lib/supabase';
 import { devLog } from '@/lib/utils';
 import { RealtimePostgresChangesPayload } from '@supabase/supabase-js';
 import { REALTIME_CHANNELS } from '@/lib/realtime';
-import { queryPendingByTier, queryTierMatchStats, queryActivityFeed, queryIndexerState, queryRealtimeStats } from '@/lib/queries';
-import type { DbPendingByTier, DbTierMatchStats, DbActivityFeed, DbRealtimeStats } from '@/types/database';
+import { queryPendingByTier, queryTierMatchStats, queryActivityFeed, queryIndexerState } from '@/lib/queries';
+import type { DbPendingByTier, DbTierMatchStats, DbActivityFeed } from '@/types/database';
 
 // ============================================
 // TYPES (Re-export from database types for backwards compatibility)
