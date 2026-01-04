@@ -404,7 +404,10 @@ export default function HistoryPage() {
                       <CartesianGrid strokeDasharray="3 3" stroke={theme.colors.neutral[700]} />
                       <XAxis dataKey="tier" stroke={theme.colors.neutral[400]} tick={{ fill: theme.colors.neutral[400] }} />
                       <YAxis stroke={theme.colors.neutral[400]} tick={{ fill: theme.colors.neutral[400] }} />
-                      <Tooltip content={<CustomTooltip />} />
+                      <Tooltip
+                        content={<CustomTooltip />}
+                        cursor={{ fill: 'rgba(6, 182, 212, 0.1)' }}
+                      />
                       <Legend
                         formatter={(value) => <span style={{ color: theme.colors.neutral[200] }}>{value}</span>}
                       />
