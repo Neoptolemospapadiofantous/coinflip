@@ -1,0 +1,905 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CoinFlip Architecture Diagram</title>
+    <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
+    <style>
+        :root {
+            --bg-primary: #0d1117;
+            --bg-secondary: #161b22;
+            --bg-tertiary: #21262d;
+            --text-primary: #c9d1d9;
+            --text-secondary: #8b949e;
+            --border-color: #30363d;
+            --accent-blue: #58a6ff;
+            --accent-green: #3fb950;
+            --accent-purple: #a371f7;
+            --accent-orange: #d29922;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            line-height: 1.6;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        header {
+            text-align: center;
+            padding: 40px 20px;
+            border-bottom: 1px solid var(--border-color);
+            margin-bottom: 40px;
+        }
+
+        h1 {
+            font-size: 2.5rem;
+            margin-bottom: 10px;
+            background: linear-gradient(135deg, var(--accent-blue), var(--accent-purple));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .subtitle {
+            color: var(--text-secondary);
+            font-size: 1.1rem;
+        }
+
+        nav {
+            position: sticky;
+            top: 0;
+            background: var(--bg-secondary);
+            padding: 15px 20px;
+            border-bottom: 1px solid var(--border-color);
+            z-index: 100;
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            justify-content: center;
+        }
+
+        nav a {
+            color: var(--text-secondary);
+            text-decoration: none;
+            padding: 8px 16px;
+            border-radius: 6px;
+            background: var(--bg-tertiary);
+            transition: all 0.2s;
+            font-size: 0.9rem;
+        }
+
+        nav a:hover {
+            background: var(--accent-blue);
+            color: white;
+        }
+
+        section {
+            margin-bottom: 60px;
+            padding: 30px;
+            background: var(--bg-secondary);
+            border-radius: 12px;
+            border: 1px solid var(--border-color);
+        }
+
+        h2 {
+            font-size: 1.5rem;
+            margin-bottom: 20px;
+            padding-bottom: 10px;
+            border-bottom: 2px solid var(--accent-blue);
+            display: inline-block;
+        }
+
+        .diagram-container {
+            background: var(--bg-primary);
+            padding: 20px;
+            border-radius: 8px;
+            overflow-x: auto;
+            margin-top: 20px;
+        }
+
+        .mermaid {
+            display: flex;
+            justify-content: center;
+        }
+
+        .description {
+            color: var(--text-secondary);
+            margin-bottom: 20px;
+            padding: 15px;
+            background: var(--bg-tertiary);
+            border-radius: 6px;
+            border-left: 4px solid var(--accent-blue);
+        }
+
+        .file-tree {
+            background: var(--bg-primary);
+            padding: 20px;
+            border-radius: 8px;
+            font-family: 'Fira Code', 'Monaco', monospace;
+            font-size: 0.85rem;
+            overflow-x: auto;
+        }
+
+        .file-tree pre {
+            margin: 0;
+            white-space: pre;
+        }
+
+        .highlight {
+            color: var(--accent-green);
+        }
+
+        .new-badge {
+            background: var(--accent-green);
+            color: black;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-size: 0.7rem;
+            font-weight: bold;
+            margin-left: 8px;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+        }
+
+        th, td {
+            padding: 12px;
+            text-align: left;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        th {
+            background: var(--bg-tertiary);
+            color: var(--accent-blue);
+        }
+
+        tr:hover {
+            background: var(--bg-tertiary);
+        }
+
+        .legend {
+            display: flex;
+            gap: 20px;
+            flex-wrap: wrap;
+            margin-top: 20px;
+            padding: 15px;
+            background: var(--bg-tertiary);
+            border-radius: 6px;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .legend-color {
+            width: 16px;
+            height: 16px;
+            border-radius: 4px;
+        }
+
+        footer {
+            text-align: center;
+            padding: 30px;
+            color: var(--text-secondary);
+            border-top: 1px solid var(--border-color);
+            margin-top: 40px;
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <h1>CoinFlip System Architecture</h1>
+        <p class="subtitle">Comprehensive view of the application structure and data flow</p>
+    </header>
+
+    <nav>
+        <a href="#overview">Overview</a>
+        <a href="#types">Types Layer</a>
+        <a href="#queries">Queries Layer</a>
+        <a href="#validation">Validation</a>
+        <a href="#realtime">Realtime</a>
+        <a href="#hooks">Hooks</a>
+        <a href="#components">Components</a>
+        <a href="#dataflow">Data Flow</a>
+        <a href="#state">State</a>
+        <a href="#external">External Services</a>
+        <a href="#files">File Structure</a>
+    </nav>
+
+    <div class="container">
+
+        <!-- Overview -->
+        <section id="overview">
+            <h2>High-Level Architecture</h2>
+            <div class="description">
+                The CoinFlip application follows a layered architecture with clear separation of concerns. Data flows from external services (Supabase, Blockchain) through the data layer, into hooks, and finally to components.
+            </div>
+            <div class="diagram-container">
+                <pre class="mermaid">
+flowchart TB
+    subgraph Client["CLIENT (Browser)"]
+        direction TB
+        Pages["Pages<br/>app/*.tsx"]
+        Components["Components<br/>components/*"]
+        Providers["Providers<br/>QueryClient, Wagmi, Theme"]
+    end
+
+    subgraph HooksLayer["HOOKS LAYER"]
+        direction TB
+        GameHooks["Game Hooks<br/>useGames, usePlayerGames"]
+        RealtimeHooks["Realtime Hooks<br/>useRealtimeStats, useActivityFeed"]
+        ContractHooks["Contract Hooks<br/>useContract, useGameSync"]
+        UserHooks["User Hooks<br/>useUserPreferences, useAuth"]
+    end
+
+    subgraph DataLayer["DATA LAYER"]
+        direction TB
+        Queries["lib/queries/*<br/>Centralized Queries"]
+        Validation["lib/validation/*<br/>Zod Schemas"]
+        Realtime["lib/realtime/*<br/>Subscription Registry"]
+        DataSources["lib/data/*<br/>Blockchain/Supabase Sources"]
+    end
+
+    subgraph State["STATE MANAGEMENT"]
+        direction TB
+        ReactQuery["React Query<br/>Server State Cache"]
+        Zustand["Zustand Stores<br/>gameStore, uiStore"]
+    end
+
+    subgraph External["EXTERNAL SERVICES"]
+        direction TB
+        Supabase["Supabase<br/>Database + Realtime"]
+        Blockchain["Ethereum Sepolia<br/>Smart Contract"]
+        Chainlink["Chainlink VRF<br/>Randomness"]
+    end
+
+    Client --> HooksLayer
+    HooksLayer --> DataLayer
+    DataLayer --> State
+    DataLayer --> External
+    Blockchain --> Chainlink
+                </pre>
+            </div>
+        </section>
+
+        <!-- Types Layer -->
+        <section id="types">
+            <h2>Types Layer <span class="new-badge">ENHANCED</span></h2>
+            <div class="description">
+                <strong>types/database.ts</strong> is the single source of truth for all database types. All other type definitions derive from or extend these base types.
+            </div>
+            <div class="diagram-container">
+                <pre class="mermaid">
+flowchart LR
+    subgraph DatabaseTypes["types/database.ts"]
+        direction TB
+        Tables["TABLE TYPES<br/>━━━━━━━━━━━━━<br/>DbGame<br/>DbTier<br/>DbUserPreferences<br/>DbPendingTransaction<br/>DbActivityFeed<br/>DbIndexerState"]
+        Views["VIEW TYPES<br/>━━━━━━━━━━━━━<br/>DbGameStatistics<br/>DbPendingByTier<br/>DbTierMatchStats"]
+        RPCs["RPC TYPES<br/>━━━━━━━━━━━━━<br/>DbPlayerStatsV2<br/>DbLeaderboardEntry<br/>DbPlayerRank"]
+        Constants["CONSTANTS<br/>━━━━━━━━━━━━━<br/>DB_COLUMNS.GAME_LIST<br/>DB_COLUMNS.GAME_PENDING<br/>DB_COLUMNS.GAME_STATS"]
+    end
+
+    subgraph DerivedTypes["Derived Types"]
+        Game["types/game.ts<br/>Game interface<br/>parseGame()"]
+        Tier["types/tier.ts<br/>Tier interface"]
+    end
+
+    DatabaseTypes --> DerivedTypes
+                </pre>
+            </div>
+        </section>
+
+        <!-- Queries Layer -->
+        <section id="queries">
+            <h2>Queries Layer <span class="new-badge">NEW</span></h2>
+            <div class="description">
+                <strong>lib/queries/*</strong> centralizes all Supabase query functions. Hooks import from here instead of writing inline queries, ensuring consistency and maintainability.
+            </div>
+            <div class="diagram-container">
+                <pre class="mermaid">
+flowchart TB
+    subgraph GamesQueries["games.ts"]
+        G1["queryAllGames()"]
+        G2["queryPendingGames()"]
+        G3["queryActiveGames()"]
+        G4["queryPlayerGames()"]
+        G5["queryUserActiveGames()"]
+        G6["queryGameById()"]
+    end
+
+    subgraph StatsQueries["stats.ts"]
+        S1["queryGameStats()"]
+        S2["queryPendingByTier()"]
+        S3["queryTierMatchStats()"]
+        S4["queryActivityFeed()"]
+        S5["queryIndexerState()"]
+        S6["queryPlayerStats()"]
+        S7["queryLeaderboard()"]
+    end
+
+    subgraph UserQueries["user.ts"]
+        U1["queryUserPreferences()"]
+        U2["upsertUserPreferences()"]
+        U3["queryPendingTransactions()"]
+        U4["createPendingTransaction()"]
+        U5["queryUserGameNotifications()"]
+    end
+
+    GamesQueries --> Hooks
+    StatsQueries --> Hooks
+    UserQueries --> Hooks
+
+    Hooks["HOOKS<br/>useGames, useRealtimeStats, etc."]
+                </pre>
+            </div>
+        </section>
+
+        <!-- Validation Layer -->
+        <section id="validation">
+            <h2>Validation Layer <span class="new-badge">NEW</span></h2>
+            <div class="description">
+                <strong>lib/validation/*</strong> provides runtime type validation using Zod. This catches schema mismatches early and ensures data integrity.
+            </div>
+            <div class="diagram-container">
+                <pre class="mermaid">
+flowchart LR
+    subgraph Schemas["schemas.ts - Zod Schemas"]
+        ZS1["DbGameSchema"]
+        ZS2["DbTierSchema"]
+        ZS3["DbActivityFeedSchema"]
+        ZS4["DbPendingByTierSchema"]
+        ZS5["DbGameStatisticsSchema"]
+        ZS6["DbLeaderboardEntrySchema"]
+    end
+
+    subgraph Parsers["parse.ts - Parse Functions"]
+        P1["parseDbGame()"]
+        P2["parseDbGames()"]
+        P3["parseDbActivityFeed()"]
+        P4["parseDbPendingByTier()"]
+        P5["parseDbGameStatistics()"]
+    end
+
+    subgraph Output["Validated Output"]
+        O1["ValidatedGame"]
+        O2["ValidatedActivityFeed"]
+        O3["ValidatedPendingByTier"]
+    end
+
+    Schemas --> Parsers
+    Parsers --> Output
+                </pre>
+            </div>
+        </section>
+
+        <!-- Realtime Layer -->
+        <section id="realtime">
+            <h2>Realtime Layer <span class="new-badge">NEW</span></h2>
+            <div class="description">
+                <strong>lib/realtime/registry.ts</strong> defines all realtime channels in one place. This prevents duplicate subscriptions and provides consistent channel naming.
+            </div>
+            <div class="diagram-container">
+                <pre class="mermaid">
+flowchart TB
+    subgraph Registry["registry.ts"]
+        Channels["REALTIME_CHANNELS"]
+        Config["CHANNEL_CONFIG"]
+        Tracking["Channel Tracking"]
+    end
+
+    subgraph ChannelList["Defined Channels"]
+        C1["GLOBAL_GAME_SYNC<br/>games: INSERT/UPDATE/DELETE"]
+        C2["ACTIVITY_FEED<br/>activity_feed: INSERT"]
+        C3["INDEXER_STATE<br/>indexer_state: UPDATE"]
+        C4["PENDING_BY_TIER<br/>games: * (pending status)"]
+        C5["MATCH_TIMES<br/>games: UPDATE (matched)"]
+    end
+
+    subgraph Invalidation["Query Invalidation"]
+        I1["games:INSERT → games/*"]
+        I2["games:UPDATE → games/*, stats"]
+        I3["activity_feed:INSERT → activity-feed"]
+    end
+
+    Registry --> ChannelList
+    ChannelList --> Invalidation
+                </pre>
+            </div>
+        </section>
+
+        <!-- Hooks -->
+        <section id="hooks">
+            <h2>Hooks Layer</h2>
+            <div class="description">
+                Hooks are organized by domain. They consume the data layer and expose typed data to components.
+            </div>
+            <div class="diagram-container">
+                <pre class="mermaid">
+flowchart TB
+    subgraph GameDataHooks["Game Data"]
+        GH1["useGames()"]
+        GH2["usePendingGames()"]
+        GH3["useActiveGames()"]
+        GH4["usePlayerGames()"]
+        GH5["useGame()"]
+        GH6["useGameStats()"]
+        GH7["usePlayerStats()"]
+    end
+
+    subgraph RealtimeHooks["Realtime"]
+        RH1["useRealtimeStats()"]
+        RH2["usePendingByTier()"]
+        RH3["useTierMatchTimes()"]
+        RH4["useActivityFeed()"]
+        RH5["useIndexerStatus()"]
+        RH6["useRealtimeSync()"]
+    end
+
+    subgraph TransactionHooks["Transactions"]
+        TH1["usePendingTransactions()"]
+        TH2["useGameLimits()"]
+        TH3["useCreatedGameTracking()"]
+        TH4["useOptimisticUpdates()"]
+    end
+
+    subgraph ContractHooks["Blockchain"]
+        CH1["useContract()"]
+        CH2["useGameTimeout()"]
+        CH3["useActiveGameMonitor()"]
+        CH4["useGameSync()"]
+    end
+
+    subgraph UserHooks["User"]
+        UH1["useUserPreferences()"]
+        UH2["useNotificationState()"]
+        UH3["useAuth()"]
+        UH4["useSupabaseAuth()"]
+    end
+
+    subgraph LeaderboardHooks["Leaderboard"]
+        LH1["useLeaderboard()"]
+        LH2["usePlayerRank()"]
+        LH3["useLeaderboardStats()"]
+    end
+                </pre>
+            </div>
+        </section>
+
+        <!-- Components -->
+        <section id="components">
+            <h2>Component Hierarchy</h2>
+            <div class="description">
+                Components are organized in a provider hierarchy with clear boundaries between layout, game-specific, and UI components.
+            </div>
+            <div class="diagram-container">
+                <pre class="mermaid">
+flowchart TB
+    subgraph Root["app/layout.tsx"]
+        Providers["Providers.tsx"]
+    end
+
+    subgraph ProviderStack["Provider Stack"]
+        P1["QueryClientProvider"]
+        P2["WagmiProvider"]
+        P3["ThemeProvider"]
+        P4["DataProvider"]
+        P5["GlobalErrorHandler"]
+    end
+
+    subgraph Pages["Pages"]
+        Page1["/ (Home/Play)"]
+        Page2["/queue"]
+        Page3["/history"]
+        Page4["/leaderboard"]
+        Page5["/stats"]
+        Page6["/settings"]
+    end
+
+    subgraph GameComponents["Game Components"]
+        GC1["GameSessionModal"]
+        GC2["TierSelector"]
+        GC3["ActiveGamesPanel"]
+        GC4["ActivityFeed"]
+        GC5["CoinFlip2D"]
+    end
+
+    subgraph LayoutComponents["Layout"]
+        LC1["Header"]
+        LC2["Footer"]
+        LC3["AppLayout"]
+        LC4["Sidebar"]
+    end
+
+    subgraph UIComponents["UI Components"]
+        UC1["WalletButton"]
+        UC2["NetworkIndicator"]
+        UC3["SyncStatus"]
+        UC4["SoundToggle"]
+    end
+
+    Root --> ProviderStack
+    ProviderStack --> Pages
+    Pages --> GameComponents
+    Pages --> LayoutComponents
+    LayoutComponents --> UIComponents
+                </pre>
+            </div>
+        </section>
+
+        <!-- Data Flow -->
+        <section id="dataflow">
+            <h2>Data Flow</h2>
+            <div class="description">
+                Data flows through multiple layers with validation at each step. Realtime updates invalidate the cache, triggering re-renders.
+            </div>
+            <div class="diagram-container">
+                <pre class="mermaid">
+sequenceDiagram
+    participant U as User
+    participant C as Component
+    participant H as Hook
+    participant Q as Query
+    participant V as Validator
+    participant S as Supabase
+    participant RT as Realtime
+    participant BC as Blockchain
+
+    rect rgb(40, 44, 52)
+    Note over U,S: READ FLOW
+    U->>C: View Page
+    C->>H: useGames()
+    H->>Q: queryAllGames()
+    Q->>S: SELECT from games
+    S-->>Q: Raw Data
+    Q-->>H: Data
+    H->>V: parseDbGames()
+    V-->>H: Validated[]
+    H-->>C: Game[]
+    C-->>U: Render
+    end
+
+    rect rgb(40, 52, 44)
+    Note over U,BC: WRITE FLOW
+    U->>C: Create Game
+    C->>H: useContract()
+    H->>BC: createGame()
+    BC-->>H: TX Hash
+    H->>Q: createPendingTx()
+    Q->>S: INSERT
+    end
+
+    rect rgb(52, 44, 40)
+    Note over S,C: REALTIME UPDATE
+    BC->>S: Indexer writes
+    S->>RT: games INSERT
+    RT->>H: Callback
+    H->>H: Invalidate cache
+    H-->>C: Updated data
+    end
+                </pre>
+            </div>
+        </section>
+
+        <!-- State -->
+        <section id="state">
+            <h2>State Management</h2>
+            <div class="description">
+                Server state is managed by React Query (with cache invalidation via realtime). Client state uses Zustand stores.
+            </div>
+            <div class="diagram-container">
+                <pre class="mermaid">
+flowchart LR
+    subgraph ReactQuery["React Query (Server State)"]
+        RQ1["['games'] cache"]
+        RQ2["['games', 'pending'] cache"]
+        RQ3["['player-stats', addr] cache"]
+        RQ4["['activity-feed'] cache"]
+        RQ5["['leaderboard', type] cache"]
+    end
+
+    subgraph Zustand["Zustand (Client State)"]
+        Z1["gameStore<br/>selectedTier<br/>selectedChoice<br/>isCreating<br/>optimisticGames"]
+        Z2["uiStore<br/>sidebarOpen<br/>activeModal<br/>theme"]
+    end
+
+    subgraph Realtime["Realtime Triggers"]
+        RT1["games:* → invalidate games"]
+        RT2["activity:INSERT → invalidate feed"]
+    end
+
+    Realtime --> ReactQuery
+    ReactQuery --> Components
+    Zustand --> Components
+    Components["Components"]
+                </pre>
+            </div>
+        </section>
+
+        <!-- External Services -->
+        <section id="external">
+            <h2>External Services</h2>
+            <div class="description">
+                The application integrates with Supabase (database + realtime), Ethereum (smart contract), and Chainlink VRF (randomness).
+            </div>
+            <div class="diagram-container">
+                <pre class="mermaid">
+flowchart TB
+    subgraph Supabase["SUPABASE"]
+        subgraph Tables["Tables"]
+            T1["games"]
+            T2["tiers"]
+            T3["user_preferences"]
+            T4["pending_transactions"]
+            T5["activity_feed"]
+            T6["indexer_state"]
+        end
+        subgraph Views["Views"]
+            V1["game_statistics"]
+            V2["pending_games_by_tier"]
+            V3["tier_match_stats"]
+        end
+        subgraph RPCs["RPC Functions"]
+            R1["get_player_stats_v2"]
+            R2["get_leaderboard_by_*"]
+            R3["cleanup_expired_*"]
+        end
+        RT["Realtime Engine"]
+    end
+
+    subgraph Blockchain["ETHEREUM SEPOLIA"]
+        Contract["CoinFlip.sol<br/>createGame()<br/>joinGame()<br/>cancelGame()"]
+        Events["Events<br/>GameCreated<br/>GameJoined<br/>GameResolved"]
+    end
+
+    subgraph Chainlink["CHAINLINK VRF"]
+        VRF["Random Number<br/>Request/Callback"]
+    end
+
+    subgraph Indexer["EVENT INDEXER"]
+        IX["scripts/event-indexer.ts<br/>Processes events<br/>Writes to Supabase"]
+    end
+
+    Contract --> VRF
+    VRF --> Contract
+    Contract --> Events
+    Events --> Indexer
+    Indexer --> Tables
+                </pre>
+            </div>
+        </section>
+
+        <!-- File Structure -->
+        <section id="files">
+            <h2>File Structure</h2>
+            <div class="description">
+                Complete file structure with newly created files highlighted.
+            </div>
+            <div class="file-tree">
+<pre>
+coinflip/
+├── app/                              <span style="color:#8b949e"># Next.js App Router</span>
+│   ├── layout.tsx                   <span style="color:#8b949e"># Root layout + providers</span>
+│   ├── page.tsx                     <span style="color:#8b949e"># Home/Play page</span>
+│   ├── queue/page.tsx
+│   ├── history/page.tsx
+│   ├── leaderboard/page.tsx
+│   ├── stats/page.tsx
+│   ├── settings/page.tsx
+│   ├── dashboard/page.tsx
+│   └── api/
+│       ├── health/route.ts
+│       └── rpc/route.ts
+│
+├── components/
+│   ├── Providers.tsx                <span style="color:#8b949e"># All providers + error handler</span>
+│   ├── game/
+│   │   ├── GameSessionModal.tsx
+│   │   ├── TierSelector.tsx
+│   │   ├── ActiveGamesPanel.tsx
+│   │   ├── ActivityFeed.tsx
+│   │   ├── CoinChoice.tsx
+│   │   └── CoinFlip2D.tsx
+│   ├── layout/
+│   │   ├── Header.tsx
+│   │   ├── Footer.tsx
+│   │   └── AppLayout.tsx
+│   └── ui/
+│       ├── WalletButton.tsx
+│       ├── NetworkIndicator.tsx
+│       └── SyncStatus.tsx
+│
+├── hooks/                            <span style="color:#8b949e"># 20+ custom hooks</span>
+│   ├── useGames.ts                  <span style="color:#58a6ff"># Updated: uses centralized queries</span>
+│   ├── useRealtimeStats.ts          <span style="color:#58a6ff"># Updated: uses centralized queries</span>
+│   ├── useContract.ts
+│   ├── usePendingTransactions.ts
+│   ├── useUserPreferences.ts
+│   ├── useLeaderboard.ts
+│   ├── useRealtimeSync.tsx
+│   ├── useCreatedGameTracking.ts
+│   ├── useGameSync.ts
+│   ├── useOptimisticUpdates.ts
+│   └── ...
+│
+├── lib/
+│   ├── supabase.ts                  <span style="color:#8b949e"># Supabase client</span>
+│   ├── wagmi.ts                     <span style="color:#8b949e"># Wagmi config</span>
+│   │
+│   ├── <span class="highlight">queries/</span>                     <span style="color:#3fb950"># NEW: Centralized queries</span>
+│   │   ├── <span class="highlight">index.ts</span>
+│   │   ├── <span class="highlight">games.ts</span>
+│   │   ├── <span class="highlight">stats.ts</span>
+│   │   └── <span class="highlight">user.ts</span>
+│   │
+│   ├── <span class="highlight">validation/</span>                  <span style="color:#3fb950"># NEW: Zod validation</span>
+│   │   ├── <span class="highlight">index.ts</span>
+│   │   ├── <span class="highlight">schemas.ts</span>
+│   │   └── <span class="highlight">parse.ts</span>
+│   │
+│   ├── <span class="highlight">realtime/</span>                    <span style="color:#3fb950"># NEW: Realtime registry</span>
+│   │   ├── <span class="highlight">index.ts</span>
+│   │   └── <span class="highlight">registry.ts</span>
+│   │
+│   ├── data/                        <span style="color:#8b949e"># Data layer abstraction</span>
+│   │   ├── blockchain.ts
+│   │   ├── supabase-source.ts
+│   │   ├── provider.tsx
+│   │   └── types.ts
+│   │
+│   ├── contracts/
+│   │   ├── abi.ts
+│   │   └── addresses.ts
+│   ├── auth/
+│   ├── constants.ts
+│   ├── queryKeys.ts
+│   └── utils.ts
+│
+├── types/
+│   ├── <span class="highlight">database.ts</span>                  <span style="color:#3fb950"># NEW: Single source of truth</span>
+│   ├── game.ts
+│   └── tier.ts
+│
+├── store/
+│   ├── gameStore.ts
+│   └── uiStore.ts
+│
+├── scripts/
+│   ├── event-indexer.ts             <span style="color:#8b949e"># Blockchain indexer</span>
+│   ├── deploy.ts
+│   └── ...
+│
+├── contracts/
+│   └── CoinFlip.sol
+│
+├── tests/
+│   ├── unit/
+│   ├── contracts/
+│   └── api/
+│
+└── docs/
+    └── architecture/
+        ├── SYSTEM_ARCHITECTURE.md
+        └── architecture-diagram.html  <span style="color:#8b949e"># This file</span>
+</pre>
+            </div>
+        </section>
+
+        <!-- Summary Table -->
+        <section>
+            <h2>Layer Dependencies</h2>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Layer</th>
+                        <th>Location</th>
+                        <th>Depends On</th>
+                        <th>Used By</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><strong>Database Types</strong></td>
+                        <td>types/database.ts</td>
+                        <td>-</td>
+                        <td>Everything</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Queries</strong></td>
+                        <td>lib/queries/*</td>
+                        <td>types/database.ts, lib/supabase.ts</td>
+                        <td>Hooks</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Validation</strong></td>
+                        <td>lib/validation/*</td>
+                        <td>types/database.ts, Zod</td>
+                        <td>Hooks, Queries</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Realtime</strong></td>
+                        <td>lib/realtime/*</td>
+                        <td>lib/supabase.ts</td>
+                        <td>Hooks</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Hooks</strong></td>
+                        <td>hooks/*</td>
+                        <td>Queries, Validation, Realtime, Store</td>
+                        <td>Components</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Store</strong></td>
+                        <td>store/*</td>
+                        <td>-</td>
+                        <td>Components, Hooks</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Components</strong></td>
+                        <td>components/*</td>
+                        <td>Hooks, Store</td>
+                        <td>Pages</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Pages</strong></td>
+                        <td>app/*</td>
+                        <td>Components</td>
+                        <td>-</td>
+                    </tr>
+                </tbody>
+            </table>
+        </section>
+
+    </div>
+
+    <footer>
+        <p>CoinFlip Architecture Documentation | Generated January 2025</p>
+    </footer>
+
+    <script>
+        mermaid.initialize({
+            startOnLoad: true,
+            theme: 'dark',
+            themeVariables: {
+                primaryColor: '#58a6ff',
+                primaryTextColor: '#c9d1d9',
+                primaryBorderColor: '#30363d',
+                lineColor: '#8b949e',
+                secondaryColor: '#21262d',
+                tertiaryColor: '#161b22',
+                background: '#0d1117',
+                mainBkg: '#161b22',
+                secondBkg: '#21262d',
+                border1: '#30363d',
+                border2: '#30363d',
+                fontFamily: '-apple-system, BlinkMacSystemFont, Segoe UI, Roboto, sans-serif'
+            },
+            flowchart: {
+                curve: 'basis',
+                padding: 20
+            },
+            sequence: {
+                actorMargin: 50,
+                messageMargin: 40
+            }
+        });
+    </script>
+</body>
+</html>
