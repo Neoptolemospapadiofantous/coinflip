@@ -1,5 +1,19 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 
+/**
+ * Supabase Client Configuration
+ *
+ * This module provides a single main client instance and a cache of authenticated
+ * clients (one per wallet address) for RLS-protected queries.
+ *
+ * NOTE: Multiple GoTrueClient warnings may appear in the console. This is expected
+ * because we intentionally create separate clients for authenticated wallet users
+ * to set the x-wallet-address header for RLS policies. These clients are cached
+ * to minimize creation, but some duplication is unavoidable.
+ *
+ * For centralized database types, see: @/types/database
+ */
+
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
 
@@ -7,10 +21,12 @@ if (!supabaseUrl || !supabaseAnonKey) {
   throw new Error('Missing Supabase environment variables');
 }
 
-// Base Supabase client (used for public queries without auth)
+// Base Supabase client (used for public queries and auth)
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {
-    persistSession: false, // We use Web3 wallet auth, not Supabase auth
+    persistSession: true, // Persist auth session across page refreshes
+    autoRefreshToken: true,
+    detectSessionInUrl: true,
   },
   realtime: {
     params: {
@@ -72,59 +88,7 @@ export function clearAuthClientCache(walletAddress?: string): void {
   }
 }
 
-// Database types (will be generated from Supabase schema)
-export interface Database {
-  public: {
-    Tables: {
-      games: {
-        Row: {
-          id: number;
-          tx_hash: string;
-          tier: number;
-          amount: string;
-          creator_address: string;
-          creator_choice: boolean;
-          joiner_address: string | null;
-          joiner_choice: boolean | null;
-          status: string;
-          winner_address: string | null;
-          coin_result: boolean | null;
-          payout: string | null;
-          fee: string | null;
-          block_number: number;
-          matched_tx_hash: string | null;
-          matched_block_number: number | null;
-          resolved_tx_hash: string | null;
-          resolved_block_number: number | null;
-          cancelled_tx_hash: string | null;
-          cancelled_block_number: number | null;
-          created_at: string;
-          matched_at: string | null;
-          resolved_at: string | null;
-          cancelled_at: string | null;
-          updated_at: string;
-          contract_address: string | null;
-          contract_version: number | null;
-        };
-        Insert: Omit<Database['public']['Tables']['games']['Row'], 'created_at' | 'updated_at'>;
-        Update: Partial<Database['public']['Tables']['games']['Row']>;
-      };
-      tiers: {
-        Row: {
-          id: number;
-          amount: string;
-          amount_usd: number;
-          win_amount: string;
-          win_amount_usd: number;
-          players_in_queue: number;
-          enabled: boolean;
-          created_at: string;
-        };
-        Insert: Omit<Database['public']['Tables']['tiers']['Row'], 'created_at'>;
-        Update: Partial<Database['public']['Tables']['tiers']['Row']>;
-      };
-      // Note: Queue functionality is handled by the games table with status='pending'
-      // No separate queue table exists - games with pending status serve as the queue
-    };
-  };
-}
+// NOTE: For comprehensive database types, use @/types/database
+// This legacy Database interface is kept for backwards compatibility
+// but prefer importing from types/database.ts for new code
+export type { DbGame, DbTier, DbUserPreferences, DbPendingTransaction } from '@/types/database';

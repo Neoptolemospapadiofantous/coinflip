@@ -3,6 +3,9 @@
  * Prevents typos and makes refactoring easier
  */
 
+export type LeaderboardType = 'wins' | 'profit' | 'winrate' | 'volume';
+export type LeaderboardPeriod = 'all' | 'month' | 'week' | 'today';
+
 export const queryKeys = {
   // Game queries
   games: {
@@ -18,6 +21,15 @@ export const queryKeys = {
   stats: {
     game: ['game-stats'] as const,
     player: (address: string) => ['player-stats', address] as const,
+  },
+
+  // Leaderboard queries
+  leaderboard: {
+    all: ['leaderboard'] as const,
+    byType: (type: LeaderboardType, period?: LeaderboardPeriod) =>
+      ['leaderboard', type, period ?? 'all'] as const,
+    playerRank: (address: string) => ['leaderboard', 'player-rank', address] as const,
+    stats: ['leaderboard', 'stats'] as const,
   },
 
   // Pending transactions

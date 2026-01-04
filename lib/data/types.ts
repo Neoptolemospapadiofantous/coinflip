@@ -172,6 +172,9 @@ export interface GameNotifications {
   resolvedSoundPlayed: boolean;
 }
 
+// Note: ActivityFeedItem uses camelCase for the data layer interface
+// The database version (DbActivityFeed) uses snake_case
+// Use transformActivityFeedItem to convert between them
 export interface ActivityFeedItem {
   id: string;
   eventType: 'game_created' | 'game_matched' | 'game_resolved' | 'big_win';
@@ -184,6 +187,37 @@ export interface ActivityFeedItem {
   isWinner: boolean | null;
   coinResult: boolean | null;
   createdAt: string;
+}
+
+/**
+ * Transform database ActivityFeed (snake_case) to interface ActivityFeedItem (camelCase)
+ */
+export function transformActivityFeedItem(db: {
+  id: number;
+  event_type: string;
+  game_id: number;
+  player_address: string;
+  opponent_address: string | null;
+  tier: number;
+  amount: string;
+  payout: string | null;
+  is_winner: boolean | null;
+  coin_result: boolean | null;
+  created_at: string;
+}): ActivityFeedItem {
+  return {
+    id: String(db.id),
+    eventType: db.event_type as ActivityFeedItem['eventType'],
+    gameId: String(db.game_id),
+    playerAddress: db.player_address,
+    opponentAddress: db.opponent_address,
+    tier: db.tier,
+    amount: db.amount,
+    payout: db.payout,
+    isWinner: db.is_winner,
+    coinResult: db.coin_result,
+    createdAt: db.created_at,
+  };
 }
 
 export interface MatchTimeEstimate {

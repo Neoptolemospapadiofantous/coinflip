@@ -1,5 +1,5 @@
 import { getDefaultConfig } from '@rainbow-me/rainbowkit';
-import { http } from 'viem';
+import { http, cookieStorage, createStorage } from 'wagmi';
 import { polygon, polygonAmoy, sepolia } from 'wagmi/chains';
 
 // Create a custom transport that uses our API proxy to avoid CORS issues
@@ -28,4 +28,8 @@ export const config = getDefaultConfig({
     [polygon.id]: createProxyTransport(polygon.id),
   },
   ssr: true,
+  // Persist wallet connection state across page refreshes
+  storage: createStorage({
+    storage: cookieStorage,
+  }),
 });
