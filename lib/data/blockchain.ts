@@ -81,18 +81,6 @@ const GameCreatedEvent = parseAbiItem(
   'event GameCreated(uint256 indexed gameId, address indexed creator, uint256 tier, uint256 amount)'
 );
 
-const GameMatchedEvent = parseAbiItem(
-  'event GameMatched(uint256 indexed gameId, address indexed joiner)'
-);
-
-const GameResolvedEvent = parseAbiItem(
-  'event GameResolved(uint256 indexed gameId, address indexed winner, uint256 payout, bool coinResult)'
-);
-
-const GameCancelledEvent = parseAbiItem(
-  'event GameCancelled(uint256 indexed gameId)'
-);
-
 // ============================================
 // CONTRACT READS
 // ============================================

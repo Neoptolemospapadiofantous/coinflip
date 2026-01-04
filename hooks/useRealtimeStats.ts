@@ -254,7 +254,8 @@ export function useActivityFeed(limit: number = 10) {
     if (query.data && query.data.length > 0) {
       setRealtimeItems([]);
     }
-  }, [query.dataUpdatedAt]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [query.dataUpdatedAt]); // Only react to data timestamp changes, not data content
 
   // Merge realtime items with query data using useMemo
   const mergedData = useMemo(() => {

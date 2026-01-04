@@ -48,14 +48,6 @@ type SelectedGame = Game & { tierInfo: Tier };
 
 // Note: Games can now be cancelled immediately (no timeout required)
 
-// Helper to format time ago with live updates
-function formatTimeAgo(createdAt: string, now: number): string {
-  const seconds = Math.floor((now - new Date(createdAt).getTime()) / 1000);
-  if (seconds < 60) return `${seconds}s`;
-  if (seconds < 3600) return `${Math.floor(seconds / 60)}m`;
-  return `${Math.floor(seconds / 3600)}h`;
-}
-
 // Helper to parse join game errors into user-friendly messages
 function parseJoinError(error: Error | null): { title: string; message: string; isExpired?: boolean } {
   if (!error) return { title: '', message: '' };
@@ -131,7 +123,6 @@ export default function QueuePage() {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [joinedGameId, setJoinedGameId] = useState<string | null>(null);
   const [cancelingGameId, setCancelingGameId] = useState<string | null>(null);
-  const [now, setNow] = useState(Date.now()); // For live time updates
   const [currentPage, setCurrentPage] = useState(0);
   const [tierFilter, setTierFilter] = useState<string>('all');
   const [sortBy, setSortBy] = useState<'time' | 'amount'>('time');
@@ -164,16 +155,6 @@ export default function QueuePage() {
     return () => {
       mountedRef.current = false;
     };
-  }, []);
-
-  // Live time updates - refresh every second for accurate cancel countdown
-  useEffect(() => {
-    const interval = setInterval(() => {
-      if (mountedRef.current) {
-        setNow(Date.now());
-      }
-    }, 1000);
-    return () => clearInterval(interval);
   }, []);
 
   // Real-time updates are handled centrally by useRealtimeSync (in Providers)

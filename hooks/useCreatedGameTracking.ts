@@ -1,7 +1,6 @@
 'use client';
 
 import { useEffect, useState, useRef, useCallback } from 'react';
-import { useChainId } from 'wagmi';
 import { supabase } from '@/lib/supabase';
 import { Game, parseGame } from '@/types/game';
 import { devLog } from '@/lib/utils';
@@ -42,8 +41,6 @@ export function useCreatedGameTracking({
   onGameResolved,
   onGameCancelled,
 }: UseCreatedGameTrackingOptions): TrackingState & { cancelTracking: () => void } {
-  const chainId = useChainId();
-
   const [state, setState] = useState<TrackingState>({
     game: null,
     isSearching: false,

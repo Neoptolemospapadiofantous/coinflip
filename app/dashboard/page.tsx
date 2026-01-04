@@ -1,6 +1,6 @@
 'use client';
 
-import { Flex, Card, Text, Heading, Box, Grid, Badge, Button, Skeleton } from '@radix-ui/themes';
+import { Flex, Card, Text, Heading, Grid, Badge, Button, Skeleton } from '@radix-ui/themes';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import {
   Dices,
@@ -15,18 +15,12 @@ import {
   Flame,
   Target,
   History,
-  Settings,
-  Volume2,
-  VolumeX,
-  FastForward,
-  Play,
 } from 'lucide-react';
 import Link from 'next/link';
 import { useAccount, useChainId } from 'wagmi';
 import { usePlayerStats, usePlayerGames } from '@/hooks/useGames';
 import { usePlayerRank } from '@/hooks/useLeaderboard';
 import { useAuth } from '@/hooks/useAuth';
-import { useUserPreferences } from '@/hooks/useUserPreferences';
 import { formatEther } from 'viem';
 import { useMemo } from 'react';
 import { RecentGamesTable } from '@/components/shared';
@@ -40,13 +34,6 @@ export default function DashboardPage() {
   const { data: playerStats, isLoading: isLoadingStats } = usePlayerStats(address);
   const { data: playerRank, isLoading: isLoadingRank } = usePlayerRank(address);
   const { data: recentGames = [], isLoading: isLoadingGames } = usePlayerGames(address, 5);
-  const {
-    soundEnabled,
-    skipAnimation,
-    setSoundEnabled,
-    setSkipAnimation,
-    isLoading: isLoadingPrefs,
-  } = useUserPreferences();
 
   const formatAmount = (wei: string | undefined | bigint) => {
     if (!wei || wei === '0') return '0';
@@ -268,7 +255,7 @@ export default function DashboardPage() {
         </Grid>
 
         {/* Quick Actions */}
-        <Grid columns={{ initial: '1', md: '3' }} gap="4">
+        <Grid columns={{ initial: '1', md: '2' }} gap="4">
           {/* Active Games Card */}
           <Card className="card-interactive hover-lift animate-fade-in">
             <Flex direction="column" gap="4" p="5">
@@ -290,71 +277,6 @@ export default function DashboardPage() {
                   <ArrowRight className="w-4 h-4" />
                 </Button>
               </Link>
-            </Flex>
-          </Card>
-
-          {/* Quick Settings Card */}
-          <Card className="card-simple hover-lift animate-fade-in">
-            <Flex direction="column" gap="4" p="5">
-              <Flex align="center" gap="2">
-                <Settings className="w-5 h-5 text-cyan-400" />
-                <Heading size="4">Quick Settings</Heading>
-              </Flex>
-
-              {isLoadingPrefs ? (
-                <Flex direction="column" gap="3">
-                  <Skeleton className="h-10 w-full" />
-                  <Skeleton className="h-10 w-full" />
-                </Flex>
-              ) : (
-                <Flex direction="column" gap="3">
-                  {/* Sound Toggle */}
-                  <Button
-                    variant={soundEnabled ? 'solid' : 'soft'}
-                    color={soundEnabled ? 'cyan' : 'gray'}
-                    size="2"
-                    className="cursor-pointer w-full justify-start"
-                    onClick={() => setSoundEnabled(!soundEnabled)}
-                  >
-                    {soundEnabled ? (
-                      <Volume2 className="w-4 h-4" />
-                    ) : (
-                      <VolumeX className="w-4 h-4" />
-                    )}
-                    Sound Effects
-                    <Badge
-                      color={soundEnabled ? 'green' : 'gray'}
-                      variant="soft"
-                      className="ml-auto"
-                    >
-                      {soundEnabled ? 'ON' : 'OFF'}
-                    </Badge>
-                  </Button>
-
-                  {/* Animation Toggle */}
-                  <Button
-                    variant={!skipAnimation ? 'solid' : 'soft'}
-                    color={!skipAnimation ? 'cyan' : 'gray'}
-                    size="2"
-                    className="cursor-pointer w-full justify-start"
-                    onClick={() => setSkipAnimation(!skipAnimation)}
-                  >
-                    {skipAnimation ? (
-                      <FastForward className="w-4 h-4" />
-                    ) : (
-                      <Play className="w-4 h-4" />
-                    )}
-                    Coin Animation
-                    <Badge
-                      color={!skipAnimation ? 'green' : 'gray'}
-                      variant="soft"
-                      className="ml-auto"
-                    >
-                      {skipAnimation ? 'SKIP' : 'ON'}
-                    </Badge>
-                  </Button>
-                </Flex>
-              )}
             </Flex>
           </Card>
 

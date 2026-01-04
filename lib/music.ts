@@ -42,6 +42,9 @@ class MusicManager {
   private startAmbientLoop() {
     if (!this.audioContext || !this.masterGain) return;
 
+    // Clear any existing loops first to prevent duplicates
+    this.stopAllSounds();
+
     // Bass drone - low frequency pad
     const bassFreqs = [55, 65.41, 73.42, 82.41]; // A1, C2, D2, E2
     let bassIndex = 0;

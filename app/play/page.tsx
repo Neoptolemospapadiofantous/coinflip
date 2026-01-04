@@ -25,7 +25,7 @@ import { useCreatedGameTracking } from '@/hooks/useCreatedGameTracking';
 import { useOptimisticUpdates } from '@/hooks/useOptimisticUpdates';
 import { Info, Loader2, CheckCircle2, AlertCircle, Clock, Users, X, Plus, Gamepad2, Zap, Activity } from 'lucide-react';
 import { parseError } from '@/lib/errors';
-import { formatGameId, formatCurrency, devLog } from '@/lib/utils';
+import { formatGameId, devLog } from '@/lib/utils';
 import { PLATFORM_FEE_PERCENT } from '@/lib/constants';
 import { Game } from '@/types/game';
 import { useQueryClient } from '@tanstack/react-query';
@@ -70,13 +70,12 @@ export default function PlayPage() {
   // DB-backed pending transactions for persistence across refreshes
   const {
     addPendingTransaction: addDbPendingTx,
-    getPendingCreate,
     markConfirmed: markDbTxConfirmed,
     markFailed: markDbTxFailed,
   } = usePendingTransactions();
 
   // DB-backed user preferences for quick re-bet
-  const { lastGameSettings, clearLastGameSettings } = useUserPreferences();
+  const { lastGameSettings } = useUserPreferences();
 
   // DB-backed notification state for deduplication across devices/tabs
   const { markModalShown } = useNotificationState();
@@ -87,10 +86,10 @@ export default function PlayPage() {
   const { cancelGame, isLoading: isCancelling, error: cancelError, isSuccess: cancelSuccess, wasRejected: cancelWasRejected, reset: resetCancelState } = useCancelGame();
   const { data: tiers } = useTiers();
   const queryClient = useQueryClient();
-  const { optimisticCreateGame, rollbackOptimisticCreate, optimisticCancelGame, rollbackOptimisticCancel, removeOptimisticGame } = useOptimisticUpdates();
+  const { optimisticCreateGame, rollbackOptimisticCreate, removeOptimisticGame } = useOptimisticUpdates();
 
   // Realtime stats for activity display
-  const { data: pendingByTier } = usePendingByTier();
+  usePendingByTier(); // Subscribe to pending games for realtime updates
   const { data: matchTimes } = useTierMatchTimes();
 
   // Refs for race condition prevention

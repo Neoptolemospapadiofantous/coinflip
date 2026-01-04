@@ -7,7 +7,7 @@ import { useRouter } from 'next/navigation';
 import { CoinFlip2D } from './CoinFlip2D';
 import { Confetti } from '@/components/effects/Confetti';
 import { Game } from '@/types/game';
-import { formatCurrency, formatGameId, devLog } from '@/lib/utils';
+import { formatCurrency, devLog } from '@/lib/utils';
 import { CopyableGameId } from '@/components/ui/CopyableGameId';
 import { invalidateGameQueries, removeGameFromPendingCache } from '@/lib/queryUtils';
 import { Loader2, Users, Trophy, Zap, AlertTriangle, Clock, XCircle, Layers } from 'lucide-react';
@@ -32,8 +32,6 @@ interface GameSessionModalProps {
 const VRF_TIMEOUT_SECONDS = 120;
 // Max retries for fetching complete game data
 const MAX_DATA_RETRIES = 10;
-// Game expiry time (5 minutes) - after this, Chainlink Automation will auto-cancel
-const GAME_EXPIRY_MS = 5 * 60 * 1000;
 
 export function GameSessionModal({ game, open, onClose, userAddress, modalType }: GameSessionModalProps) {
   const [isFlipping, setIsFlipping] = useState(false);
@@ -458,7 +456,7 @@ export function GameSessionModal({ game, open, onClose, userAddress, modalType }
       {/* Confetti on win */}
       <Confetti show={showConfetti} duration={5000} onComplete={() => setShowConfetti(false)} />
 
-      <Dialog.Root open={open} onOpenChange={(isOpen) => { /* Prevent auto-close on outside click/Escape - only close via explicit buttons */ }}>
+      <Dialog.Root open={open} onOpenChange={(_isOpen) => { /* Prevent auto-close on outside click/Escape - only close via explicit buttons */ }}>
       <Dialog.Content
         maxWidth="600px"
         className="backdrop-blur-xl bg-slate-900/95 border-2 border-cyan-500/30 max-h-[90vh] overflow-y-auto fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-50 w-[calc(100vw-2rem)] sm:w-auto"

@@ -1,19 +1,9 @@
 'use client';
 
 import { ConnectButton } from '@rainbow-me/rainbowkit';
-import { Wallet, ChevronDown, Copy, ExternalLink, LogOut } from 'lucide-react';
-import { useState } from 'react';
-import { formatEther } from 'viem';
+import { Wallet, ChevronDown } from 'lucide-react';
 
 export function WalletButton() {
-  const [copied, setCopied] = useState(false);
-
-  const copyAddress = (address: string) => {
-    navigator.clipboard.writeText(address);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  };
-
   return (
     <ConnectButton.Custom>
       {({

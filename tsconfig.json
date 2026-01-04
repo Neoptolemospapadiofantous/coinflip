@@ -41,6 +41,7 @@
     "test",
     "tests/contracts",
     "hardhat.config.ts",
-    "typechain-types"
+    "typechain-types",
+    "supabase/functions"
   ]
 }

@@ -17,7 +17,6 @@ import { RealtimeChannel } from '@supabase/supabase-js';
 import { supabase, getAuthenticatedClient } from '@/lib/supabase';
 import { Game, parseGame } from '@/types/game';
 import {
-  GameDataSource,
   EnhancedDataSource,
   Tier,
   PlayerStats,

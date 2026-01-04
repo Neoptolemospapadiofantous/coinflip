@@ -1,6 +1,6 @@
 'use client';
 
-import { Zap, Shield, Dices, Wallet, User, Cloud, Link as LinkIcon, Bell, Clock } from 'lucide-react';
+import { Zap, Shield, Dices, Wallet, User, Cloud, Bell } from 'lucide-react';
 import {
   Button,
   Flex,

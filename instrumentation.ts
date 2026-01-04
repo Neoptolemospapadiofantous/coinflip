@@ -1,5 +1,6 @@
 // This file runs once when the server starts
 // Perfect place for global polyfills and environment validation
+/* eslint-disable @typescript-eslint/no-explicit-any */
 
 export async function register() {
   if (typeof window === 'undefined') {

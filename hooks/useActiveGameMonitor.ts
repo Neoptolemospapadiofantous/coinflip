@@ -4,7 +4,6 @@ import { useEffect, useRef, useCallback } from 'react';
 import { useAccount } from 'wagmi';
 import { usePlayerGames } from './useGames';
 import { validateGameState } from './useGameSync';
-import { Game } from '@/types/game';
 import { useGameStore } from '@/store/gameStore';
 import { useNotificationState } from './useNotificationState';
 import { devLog } from '@/lib/utils';

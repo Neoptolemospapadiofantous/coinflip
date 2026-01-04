@@ -1,11 +1,10 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Flex, Card, Text, Heading, Box, Grid, Button, Switch, TextField, Separator } from '@radix-ui/themes';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import {
   User,
-  Bell,
   Wallet,
   Shield,
   Mail,
@@ -15,10 +14,17 @@ import {
   Loader2,
   CheckCircle,
   AlertCircle,
+  Volume2,
+  Music,
+  Zap,
 } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { useAccount } from 'wagmi';
 import { ConnectButton } from '@rainbow-me/rainbowkit';
+import { useUserPreferences } from '@/hooks/useUserPreferences';
+import { soundManager } from '@/lib/sounds';
+import { musicManager } from '@/lib/music';
+import { useUIStore } from '@/store/uiStore';
 
 export default function SettingsPage() {
   const { user, linkCurrentWallet, unlinkWallet, isWalletLinked } = useAuth();
@@ -27,13 +33,32 @@ export default function SettingsPage() {
   const [linkingWallet, setLinkingWallet] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
-  // Notification preferences
-  const [notifications, setNotifications] = useState({
-    gameMatched: true,
-    gameResolved: true,
-    emailNotifications: false,
-    soundEnabled: true,
-  });
+  // Database-backed preferences
+  const {
+    soundEnabled,
+    skipAnimation,
+    setSoundEnabled,
+    setSkipAnimation,
+    emailNotificationsEnabled,
+    emailOnGameMatched,
+    emailOnGameResolved,
+    setEmailNotificationsEnabled,
+    setEmailOnGameMatched,
+    setEmailOnGameResolved,
+  } = useUserPreferences();
+
+  // Music from UI store
+  const musicEnabled = useUIStore((state) => state.musicEnabled);
+  const toggleMusic = useUIStore((state) => state.toggleMusic);
+
+  // Sync sound/music managers with preferences
+  useEffect(() => {
+    soundManager.setEnabled(soundEnabled);
+  }, [soundEnabled]);
+
+  useEffect(() => {
+    musicManager.setEnabled(musicEnabled);
+  }, [musicEnabled]);
 
   const handleSavePreferences = async () => {
     setSaving(true);
@@ -200,64 +225,101 @@ export default function SettingsPage() {
           </Flex>
         </Card>
 
-        {/* Notification Settings */}
+        {/* Audio & Animation Settings */}
         <Card className="card-simple">
           <Flex direction="column" gap="4" p="5">
             <Flex align="center" gap="2">
-              <Bell className="w-5 h-5 text-yellow-400" />
-              <Heading size="4">Notifications</Heading>
+              <Volume2 className="w-5 h-5 text-cyan-400" />
+              <Heading size="4">Audio & Animation</Heading>
             </Flex>
             <Separator size="4" />
             <Flex direction="column" gap="4">
               <Flex align="center" justify="between" className="p-3 rounded-lg bg-slate-800/30">
                 <Flex direction="column" gap="1">
-                  <Text size="2" weight="medium">Game Matched</Text>
-                  <Text size="1" color="gray">Get notified when someone joins your game</Text>
+                  <Flex align="center" gap="2">
+                    <Volume2 className="w-4 h-4 text-cyan-400" />
+                    <Text size="2" weight="medium">Sound Effects</Text>
+                  </Flex>
+                  <Text size="1" color="gray">Play sounds for game events (win, loss, match)</Text>
                 </Flex>
                 <Switch
-                  checked={notifications.gameMatched}
-                  onCheckedChange={(checked) =>
-                    setNotifications({ ...notifications, gameMatched: checked })
-                  }
+                  checked={soundEnabled}
+                  onCheckedChange={setSoundEnabled}
                 />
               </Flex>
 
               <Flex align="center" justify="between" className="p-3 rounded-lg bg-slate-800/30">
                 <Flex direction="column" gap="1">
-                  <Text size="2" weight="medium">Game Resolved</Text>
-                  <Text size="1" color="gray">Get notified when a game is completed</Text>
+                  <Flex align="center" gap="2">
+                    <Music className="w-4 h-4 text-purple-400" />
+                    <Text size="2" weight="medium">Background Music</Text>
+                  </Flex>
+                  <Text size="1" color="gray">Play ambient synthwave music while playing</Text>
                 </Flex>
                 <Switch
-                  checked={notifications.gameResolved}
-                  onCheckedChange={(checked) =>
-                    setNotifications({ ...notifications, gameResolved: checked })
-                  }
+                  checked={musicEnabled}
+                  onCheckedChange={toggleMusic}
                 />
               </Flex>
 
               <Flex align="center" justify="between" className="p-3 rounded-lg bg-slate-800/30">
                 <Flex direction="column" gap="1">
-                  <Text size="2" weight="medium">Email Notifications</Text>
+                  <Flex align="center" gap="2">
+                    <Zap className="w-4 h-4 text-yellow-400" />
+                    <Text size="2" weight="medium">Skip Animations</Text>
+                  </Flex>
+                  <Text size="1" color="gray">Skip coin flip animations for faster results</Text>
+                </Flex>
+                <Switch
+                  checked={skipAnimation}
+                  onCheckedChange={setSkipAnimation}
+                />
+              </Flex>
+            </Flex>
+          </Flex>
+        </Card>
+
+        {/* Email Notification Settings */}
+        <Card className="card-simple">
+          <Flex direction="column" gap="4" p="5">
+            <Flex align="center" gap="2">
+              <Mail className="w-5 h-5 text-yellow-400" />
+              <Heading size="4">Email Notifications</Heading>
+            </Flex>
+            <Separator size="4" />
+            <Flex direction="column" gap="4">
+              <Flex align="center" justify="between" className="p-3 rounded-lg bg-slate-800/30">
+                <Flex direction="column" gap="1">
+                  <Text size="2" weight="medium">Enable Email Notifications</Text>
                   <Text size="1" color="gray">Receive email updates about your games</Text>
                 </Flex>
                 <Switch
-                  checked={notifications.emailNotifications}
-                  onCheckedChange={(checked) =>
-                    setNotifications({ ...notifications, emailNotifications: checked })
-                  }
+                  checked={emailNotificationsEnabled}
+                  onCheckedChange={setEmailNotificationsEnabled}
                 />
               </Flex>
 
-              <Flex align="center" justify="between" className="p-3 rounded-lg bg-slate-800/30">
+              <Flex align="center" justify="between" className={`p-3 rounded-lg bg-slate-800/30 ${!emailNotificationsEnabled ? 'opacity-50' : ''}`}>
                 <Flex direction="column" gap="1">
-                  <Text size="2" weight="medium">Sound Effects</Text>
-                  <Text size="1" color="gray">Play sounds for game events</Text>
+                  <Text size="2" weight="medium">Game Matched</Text>
+                  <Text size="1" color="gray">Email when someone joins your game</Text>
                 </Flex>
                 <Switch
-                  checked={notifications.soundEnabled}
-                  onCheckedChange={(checked) =>
-                    setNotifications({ ...notifications, soundEnabled: checked })
-                  }
+                  checked={emailOnGameMatched}
+                  onCheckedChange={setEmailOnGameMatched}
+                  disabled={!emailNotificationsEnabled}
+                />
+              </Flex>
+
+              <Flex align="center" justify="between" className={`p-3 rounded-lg bg-slate-800/30 ${!emailNotificationsEnabled ? 'opacity-50' : ''}`}>
+                <Flex direction="column" gap="1">
+                  <Text size="2" weight="medium">Game Resolved</Text>
+                  <Text size="1" color="gray">Email when a game is completed with results</Text>
+                </Flex>
+                <Switch
+                  checked={emailOnGameResolved}
+                  onCheckedChange={setEmailOnGameResolved}
+                  disabled={!emailNotificationsEnabled}
                 />
               </Flex>
             </Flex>

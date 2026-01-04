@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Flex, Card, Text, Heading, Box, Button, Badge, Separator } from '@radix-ui/themes';
+import { Flex, Card, Text, Heading, Box, Button, Badge } from '@radix-ui/themes';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import {
   Bell,
@@ -10,7 +10,6 @@ import {
   Clock,
   CheckCheck,
   Trash2,
-  Filter,
   X,
 } from 'lucide-react';
 

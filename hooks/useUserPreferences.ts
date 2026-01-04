@@ -18,6 +18,10 @@ export interface UserPreferences {
   last_game_amount: string | null;
   default_tier: number | null;
   default_choice: boolean | null;
+  // Email notification preferences
+  email_notifications_enabled: boolean;
+  email_on_game_matched: boolean;
+  email_on_game_resolved: boolean;
   created_at: string;
   updated_at: string;
 }
@@ -40,6 +44,10 @@ const DEFAULT_PREFERENCES: Omit<UserPreferences, 'user_address' | 'created_at' |
   last_game_amount: null,
   default_tier: null,
   default_choice: null,
+  // Email notifications off by default
+  email_notifications_enabled: false,
+  email_on_game_matched: true,
+  email_on_game_resolved: true,
 };
 
 /**
@@ -161,6 +169,19 @@ export function useUserPreferences() {
     updatePreference('activity_feed_collapsed', collapsed);
   }, [updatePreference]);
 
+  // Email notification setters
+  const setEmailNotificationsEnabled = useCallback((enabled: boolean) => {
+    updatePreference('email_notifications_enabled', enabled);
+  }, [updatePreference]);
+
+  const setEmailOnGameMatched = useCallback((enabled: boolean) => {
+    updatePreference('email_on_game_matched', enabled);
+  }, [updatePreference]);
+
+  const setEmailOnGameResolved = useCallback((enabled: boolean) => {
+    updatePreference('email_on_game_resolved', enabled);
+  }, [updatePreference]);
+
   // Save last game settings for quick re-bet
   const saveLastGameSettings = useCallback((settings: LastGameSettings) => {
     if (!address) return;
@@ -215,6 +236,11 @@ export function useUserPreferences() {
     defaultChoice: preferences?.default_choice ?? null,
     lastGameSettings,
 
+    // Email notification values
+    emailNotificationsEnabled: preferences?.email_notifications_enabled ?? false,
+    emailOnGameMatched: preferences?.email_on_game_matched ?? true,
+    emailOnGameResolved: preferences?.email_on_game_resolved ?? true,
+
     // Update methods
     updatePreference,
     setSkipAnimation,
@@ -225,6 +251,9 @@ export function useUserPreferences() {
     setDefaultChoice,
     saveLastGameSettings,
     clearLastGameSettings,
+    setEmailNotificationsEnabled,
+    setEmailOnGameMatched,
+    setEmailOnGameResolved,
 
     // Mutation state
     isUpdating: updateMutation.isPending,

@@ -7,7 +7,7 @@ import { useUserActiveGames } from '@/hooks/useGames';
 import { usePendingTransactions, PendingTransaction } from '@/hooks/usePendingTransactions';
 import { useUserPreferences } from '@/hooks/useUserPreferences';
 import { Game } from '@/types/game';
-import { Users, Loader2, Trophy, ChevronRight, Wifi, WifiOff, Clock, ChevronDown, ChevronUp, RefreshCw } from 'lucide-react';
+import { Users, Loader2, Trophy, Wifi, WifiOff, Clock, ChevronDown, ChevronUp, RefreshCw } from 'lucide-react';
 import { formatCurrency, formatGameId, devLog } from '@/lib/utils';
 import { useAccount } from 'wagmi';
 import { useConnectionStatus } from '@/hooks/useRealtimeSync';

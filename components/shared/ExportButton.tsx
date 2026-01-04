@@ -4,7 +4,7 @@ import { memo, useState, useCallback } from 'react';
 import { Button, Flex, Text, DropdownMenu } from '@radix-ui/themes';
 import { Download, FileText, FileSpreadsheet, Check, Loader2 } from 'lucide-react';
 import { Game } from '@/types/game';
-import { formatCurrency, getCoinSideLabel, formatAddress } from '@/lib/utils';
+import { getCoinSideLabel, formatAddress } from '@/lib/utils';
 
 type ExportFormat = 'csv' | 'json';
 

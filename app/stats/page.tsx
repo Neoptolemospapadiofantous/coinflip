@@ -11,13 +11,11 @@ import {
   Target,
   Flame,
   Calendar,
-  Clock,
   BarChart3,
   Award,
-  Zap,
 } from 'lucide-react';
 import { useAccount } from 'wagmi';
-import { usePlayerStats, usePlayerGames, useGameStats } from '@/hooks/useGames';
+import { usePlayerStats, usePlayerGames } from '@/hooks/useGames';
 import { usePlayerRank } from '@/hooks/useLeaderboard';
 import { formatEther } from 'viem';
 import { useTiers } from '@/hooks/useTiers';
@@ -31,8 +29,6 @@ import {
   CartesianGrid,
   Tooltip,
   ResponsiveContainer,
-  BarChart,
-  Bar,
   Legend,
 } from 'recharts';
 import { getDateRangeStart, type DateRangeFilter } from '@/components/shared';
@@ -43,7 +39,6 @@ export default function StatsPage() {
   const { data: playerStats, isLoading: isLoadingStats } = usePlayerStats(address);
   const { data: recentGames = [], isLoading: isLoadingGames } = usePlayerGames(address, 200);
   const { data: playerRank } = usePlayerRank(address);
-  const { data: gameStats } = useGameStats();
   const { data: tiers = [] } = useTiers();
   const [dateRange, setDateRange] = useState<DateRangeFilter>('all');
 

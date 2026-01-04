@@ -379,6 +379,7 @@ export function useRealtimeSync() {
       globalConnectionStatus = 'disconnected';
       notifyListeners();
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); // Empty dependency array - subscription lives for component lifetime
 
   return isConnected;

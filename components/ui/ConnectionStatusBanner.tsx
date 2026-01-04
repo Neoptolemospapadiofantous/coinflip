@@ -2,11 +2,11 @@
 
 import { useEffect, useState, useRef } from 'react';
 import { Flex, Text } from '@radix-ui/themes';
-import { WifiOff, RefreshCw, Wifi, X } from 'lucide-react';
+import { WifiOff, RefreshCw, X } from 'lucide-react';
 import { useConnectionStatus } from '@/hooks/useRealtimeSync';
 
 export function ConnectionStatusBanner() {
-  const { status, isConnected, isPolling, isDisconnected } = useConnectionStatus();
+  const { isConnected, isPolling, isDisconnected } = useConnectionStatus();
   const [showBanner, setShowBanner] = useState(false);
   const [dismissed, setDismissed] = useState(false);
   const wasConnectedRef = useRef(true);

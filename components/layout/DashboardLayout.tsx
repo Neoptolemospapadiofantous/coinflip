@@ -1,12 +1,15 @@
 'use client';
 
-import { Flex, Box, Text, Container } from '@radix-ui/themes';
+import { Flex, Box, Text, Container, Button, Tooltip } from '@radix-ui/themes';
 import { Sidebar } from './Sidebar';
-import { Header } from './Header';
 import { useAuth } from '@/hooks/useAuth';
+import { useUserPreferences } from '@/hooks/useUserPreferences';
 import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
-import { Loader2 } from 'lucide-react';
+import { Loader2, Volume2, VolumeX, Zap, ZapOff, Music, Music2 } from 'lucide-react';
+import { soundManager } from '@/lib/sounds';
+import { musicManager } from '@/lib/music';
+import { useUIStore } from '@/store/uiStore';
 
 interface DashboardLayoutProps {
   children: React.ReactNode;
@@ -91,6 +94,27 @@ function DashboardHeader({
   title?: string;
   description?: string;
 }) {
+  const {
+    soundEnabled,
+    skipAnimation,
+    setSoundEnabled,
+    setSkipAnimation,
+  } = useUserPreferences();
+
+  // Music from UI store
+  const musicEnabled = useUIStore((state) => state.musicEnabled);
+  const toggleMusic = useUIStore((state) => state.toggleMusic);
+
+  // Sync sound manager with preferences
+  useEffect(() => {
+    soundManager.setEnabled(soundEnabled);
+  }, [soundEnabled]);
+
+  // Sync music manager with UI store
+  useEffect(() => {
+    musicManager.setEnabled(musicEnabled);
+  }, [musicEnabled]);
+
   return (
     <Box className="h-16 border-b border-slate-700/50 bg-slate-900/50 backdrop-blur-sm px-6 flex items-center justify-between">
       <Flex direction="column" gap="0">
@@ -106,9 +130,58 @@ function DashboardHeader({
         )}
       </Flex>
 
-      {/* Right side - can add notifications, search, etc. */}
-      <Flex align="center" gap="4">
-        {/* Placeholder for future additions */}
+      {/* Right side - Quick settings */}
+      <Flex align="center" gap="2">
+        {/* Music Toggle */}
+        <Tooltip content={musicEnabled ? 'Music: ON' : 'Music: OFF'}>
+          <Button
+            variant="ghost"
+            size="2"
+            color={musicEnabled ? 'purple' : 'gray'}
+            className="cursor-pointer"
+            onClick={toggleMusic}
+          >
+            {musicEnabled ? (
+              <Music className="w-5 h-5" />
+            ) : (
+              <Music2 className="w-5 h-5" />
+            )}
+          </Button>
+        </Tooltip>
+
+        {/* Sound Toggle */}
+        <Tooltip content={soundEnabled ? 'Sound: ON' : 'Sound: OFF'}>
+          <Button
+            variant="ghost"
+            size="2"
+            color={soundEnabled ? 'cyan' : 'gray'}
+            className="cursor-pointer"
+            onClick={() => setSoundEnabled(!soundEnabled)}
+          >
+            {soundEnabled ? (
+              <Volume2 className="w-5 h-5" />
+            ) : (
+              <VolumeX className="w-5 h-5" />
+            )}
+          </Button>
+        </Tooltip>
+
+        {/* Animation Toggle */}
+        <Tooltip content={skipAnimation ? 'Animation: SKIP' : 'Animation: ON'}>
+          <Button
+            variant="ghost"
+            size="2"
+            color={!skipAnimation ? 'cyan' : 'gray'}
+            className="cursor-pointer"
+            onClick={() => setSkipAnimation(!skipAnimation)}
+          >
+            {skipAnimation ? (
+              <ZapOff className="w-5 h-5" />
+            ) : (
+              <Zap className="w-5 h-5" />
+            )}
+          </Button>
+        </Tooltip>
       </Flex>
     </Box>
   );

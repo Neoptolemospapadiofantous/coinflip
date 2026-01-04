@@ -4,7 +4,7 @@
  */
 
 import { describe, it, expect, beforeEach } from 'vitest';
-import { useGameStore, MAX_CONCURRENT_GAMES } from '@/store/gameStore';
+import { useGameStore } from '@/store/gameStore';
 import { mockGame } from '../../test-utils';
 
 describe('store/gameStore', () => {

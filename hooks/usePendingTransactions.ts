@@ -270,7 +270,7 @@ export function usePendingTransactions() {
         id,
         updates: { tx_hash: txHash, status: 'submitted' },
       });
-    } catch (_err) {
+    } catch {
       // Error already logged by mutation's onError - don't propagate
       devLog.warn('[PendingTx] setTxHash failed for id:', id);
     }
@@ -283,7 +283,7 @@ export function usePendingTransactions() {
         id,
         updates: { status: 'confirmed' },
       });
-    } catch (_err) {
+    } catch {
       // Error already logged by mutation's onError - don't propagate
       devLog.warn('[PendingTx] markConfirmed failed for id:', id);
     }
@@ -296,7 +296,7 @@ export function usePendingTransactions() {
         id,
         updates: { status: 'failed', error_message: errorMessage || null },
       });
-    } catch (_err) {
+    } catch {
       // Error already logged by mutation's onError - don't propagate
       devLog.warn('[PendingTx] markFailed failed for id:', id);
     }
@@ -306,7 +306,7 @@ export function usePendingTransactions() {
   const removePendingTransaction = useCallback(async (id: number) => {
     try {
       await deleteMutation.mutateAsync(id);
-    } catch (_err) {
+    } catch {
       // Error already logged by mutation's onError - don't propagate
       devLog.warn('[PendingTx] removePendingTransaction failed for id:', id);
     }

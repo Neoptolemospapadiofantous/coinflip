@@ -1,11 +1,11 @@
 'use client';
 
 import { AppLayout } from '@/components/layout/AppLayout';
-import { Container, Section, Heading, Card, Flex, Text, Grid, Badge, Button, Skeleton, Select } from '@radix-ui/themes';
+import { Container, Section, Heading, Card, Flex, Text, Grid, Button, Skeleton, Select } from '@radix-ui/themes';
 import { useAccount } from 'wagmi';
 import { usePlayerGames, usePlayerStats } from '@/hooks/useGames';
 import { useTiers } from '@/hooks/useTiers';
-import { formatCurrency, formatRelativeTime, formatGameId, getCoinSideLabel, formatTxHash, getBlockExplorerUrl } from '@/lib/utils';
+import { formatCurrency } from '@/lib/utils';
 import { PLATFORM_FEE_PERCENT } from '@/lib/constants';
 import { useMemo, useState } from 'react';
 import {
@@ -23,7 +23,7 @@ import {
   Legend,
   ResponsiveContainer,
 } from 'recharts';
-import { TrendingUp, TrendingDown, Trophy, Target, DollarSign, Percent, ExternalLink, ChevronLeft, ChevronRight } from 'lucide-react';
+import { TrendingUp, TrendingDown, Trophy, Target, DollarSign, Percent, ChevronLeft, ChevronRight } from 'lucide-react';
 import { useChainId } from 'wagmi';
 import Link from 'next/link';
 import { FilterControls, ExportButton, getDateRangeStart } from '@/components/shared';
@@ -183,9 +183,8 @@ export default function HistoryPage() {
   }, [filteredGames, currentPage]);
 
   // Reset page when filters change
-  useMemo(() => {
-    setCurrentPage(1);
-  }, [tierFilter, dateRange, statusFilter, sortOption]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useMemo(() => setCurrentPage(1), [tierFilter, dateRange, statusFilter, sortOption]);
 
   // Recent games for timeline with cumulative profit
   const recentGames = useMemo(() => {

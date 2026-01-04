@@ -10,7 +10,7 @@
  * Also handles offline fallback - if Supabase is down, falls back to blockchain.
  */
 
-import React, { createContext, useContext, useEffect, useState, useMemo, useCallback } from 'react';
+import React, { createContext, useContext, useEffect, useState, useMemo } from 'react';
 import { useAccount } from 'wagmi';
 import { Session } from '@supabase/supabase-js';
 import { supabase } from '@/lib/supabase';
@@ -35,7 +35,7 @@ interface DataProviderProps {
 
 export function DataProvider({ children }: DataProviderProps) {
   // Auth state
-  const { address: walletAddress, isConnected: isWalletConnected } = useAccount();
+  const { address: walletAddress } = useAccount();
   const [session, setSession] = useState<Session | null>(null);
   const [isLoadingAuth, setIsLoadingAuth] = useState(true);
 

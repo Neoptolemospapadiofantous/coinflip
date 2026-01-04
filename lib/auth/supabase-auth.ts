@@ -282,7 +282,7 @@ export async function getCurrentUser(): Promise<User | null> {
  * Link a wallet address to the current user account
  * This allows cross-device wallet recognition
  */
-export async function linkWallet(walletAddress: string, signature: string): Promise<AuthResult> {
+export async function linkWallet(walletAddress: string, _signature: string): Promise<AuthResult> {
   try {
     // Verify the signature matches the wallet address
     // This would typically be done server-side for security
