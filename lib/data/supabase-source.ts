@@ -48,6 +48,19 @@ const GAME_COLUMNS = `
 // HELPER FUNCTIONS
 // ============================================
 
+/**
+ * Validate and sanitize Ethereum address for use in queries
+ * Prevents SQL injection by ensuring only valid hex characters
+ */
+function sanitizeAddress(address: string): string {
+  const lower = address.toLowerCase();
+  // Strict validation: must be 0x followed by exactly 40 hex characters
+  if (!/^0x[a-f0-9]{40}$/.test(lower)) {
+    throw new Error('Invalid Ethereum address format');
+  }
+  return lower;
+}
+
 function normalizeGames(data: unknown[] | null): Game[] {
   if (!data) return [];
   return data
@@ -180,12 +193,12 @@ export class SupabaseDataSource implements EnhancedDataSource {
   // ============================================
 
   async getPlayerGames(address: string, limit = 50): Promise<Game[]> {
-    const lowerAddress = address.toLowerCase();
+    const safeAddress = sanitizeAddress(address);
 
     const { data, error } = await this.getClient()
       .from('games')
       .select(GAME_COLUMNS)
-      .or(`creator_address.ilike.${lowerAddress},joiner_address.ilike.${lowerAddress}`)
+      .or(`creator_address.ilike.${safeAddress},joiner_address.ilike.${safeAddress}`)
       .order('created_at', { ascending: false })
       .limit(limit);
 
@@ -198,12 +211,12 @@ export class SupabaseDataSource implements EnhancedDataSource {
   }
 
   async getPlayerActiveGames(address: string): Promise<Game[]> {
-    const lowerAddress = address.toLowerCase();
+    const safeAddress = sanitizeAddress(address);
 
     const { data, error } = await this.getClient()
       .from('games')
       .select(GAME_COLUMNS)
-      .or(`creator_address.ilike.${lowerAddress},joiner_address.ilike.${lowerAddress}`)
+      .or(`creator_address.ilike.${safeAddress},joiner_address.ilike.${safeAddress}`)
       .in('status', ['pending', 'matched'])
       .order('created_at', { ascending: false });
 
