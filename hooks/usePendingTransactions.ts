@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useMemo } from 'react';
 import { useAccount } from 'wagmi';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { supabase } from '@/lib/supabase';
+import { supabase, getAuthenticatedClient } from '@/lib/supabase';
 import { devLog, isValidAddress } from '@/lib/utils';
 import { useUserActiveGames } from './useGames';
 import { MAX_CONCURRENT_GAMES } from '@/store/gameStore';
@@ -52,6 +52,13 @@ export function usePendingTransactions() {
     [normalizedAddress]
   );
 
+  // Get authenticated client with wallet address header for RLS
+  // Memoize to avoid creating new clients on every render
+  const authClient = useMemo(() => {
+    if (!address) return null;
+    return getAuthenticatedClient(address);
+  }, [address]);
+
   // Refs for stable references in realtime callback
   const queryClientRef = useRef(queryClient);
   const queryKeyRef = useRef(queryKey);
@@ -62,9 +69,9 @@ export function usePendingTransactions() {
   const { data: pendingTransactions, isLoading, refetch } = useQuery({
     queryKey,
     queryFn: async (): Promise<PendingTransaction[]> => {
-      if (!address) return [];
+      if (!address || !authClient) return [];
 
-      const { data, error } = await supabase
+      const { data, error } = await authClient
         .from('pending_transactions')
         .select('*')
         .eq('user_address', address.toLowerCase())
@@ -78,7 +85,7 @@ export function usePendingTransactions() {
 
       return data || [];
     },
-    enabled: !!address,
+    enabled: !!address && !!authClient,
     staleTime: PENDING_TX_STALE_TIME_MS,
     gcTime: 60 * 1000, // 1 minute
     // Fallback polling in case realtime fails (DB trigger updates status)
@@ -143,13 +150,14 @@ export function usePendingTransactions() {
   const createMutation = useMutation({
     mutationFn: async (input: CreatePendingTxInput): Promise<PendingTransaction> => {
       if (!address) throw new Error('Wallet not connected');
+      if (!authClient) throw new Error('Auth client not initialized');
 
       // Convert game_id to number if it's a string
       const gameId = input.game_id
         ? (typeof input.game_id === 'string' ? Number(input.game_id) : input.game_id)
         : null;
 
-      const { data, error } = await supabase
+      const { data, error } = await authClient
         .from('pending_transactions')
         .insert({
           user_address: address.toLowerCase(),
@@ -187,7 +195,9 @@ export function usePendingTransactions() {
   // Update a pending transaction (e.g., add tx_hash, change status)
   const updateMutation = useMutation({
     mutationFn: async ({ id, updates }: { id: number; updates: Partial<Pick<PendingTransaction, 'tx_hash' | 'status' | 'error_message'>> }) => {
-      const { error } = await supabase
+      if (!authClient) throw new Error('Auth client not initialized');
+
+      const { error } = await authClient
         .from('pending_transactions')
         .update(updates)
         .eq('id', id);
@@ -216,7 +226,9 @@ export function usePendingTransactions() {
   // Delete/remove a pending transaction
   const deleteMutation = useMutation({
     mutationFn: async (id: number) => {
-      const { error } = await supabase
+      if (!authClient) throw new Error('Auth client not initialized');
+
+      const { error } = await authClient
         .from('pending_transactions')
         .delete()
         .eq('id', id);
@@ -340,13 +352,14 @@ export function usePendingTransactions() {
 
   // Cleanup expired transactions on mount and periodically with retry logic
   useEffect(() => {
-    if (!address) return;
+    if (!address || !authClient) return;
 
     const MAX_RETRIES = 3;
 
     const cleanupExpired = async (retryCount = 0): Promise<void> => {
       try {
-        const { error } = await supabase.rpc('cleanup_expired_pending_transactions');
+        // Use authClient for RLS compliance
+        const { error } = await authClient.rpc('cleanup_expired_pending_transactions');
         if (error) {
           throw error;
         }
@@ -377,7 +390,7 @@ export function usePendingTransactions() {
     return () => {
       clearInterval(cleanupInterval);
     };
-  }, [address]);
+  }, [address, authClient]);
 
   return {
     // Data
