@@ -48,6 +48,11 @@ const CONTRACT_ADDRESS = getCoinFlipAddress(11155111); // Sepolia
 const POLLING_INTERVAL = 12000; // 12 seconds (1 block)
 const MAX_BLOCK_RANGE = 10000; // Max blocks to scan per query
 
+// Log contract address on load (for debugging)
+if (typeof window !== 'undefined') {
+  devLog.log('[BlockchainDS] Contract address:', CONTRACT_ADDRESS);
+}
+
 // ============================================
 // CLIENT SETUP
 // ============================================
@@ -78,7 +83,7 @@ export function resetBlockchainClient(): void {
 // ============================================
 
 const GameCreatedEvent = parseAbiItem(
-  'event GameCreated(uint256 indexed gameId, address indexed creator, uint256 tier, uint256 amount)'
+  'event GameCreated(uint256 indexed gameId, address indexed creator, uint8 tier, uint256 amount, bool choice)'
 );
 
 // ============================================
