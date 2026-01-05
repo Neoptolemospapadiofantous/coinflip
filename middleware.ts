@@ -3,6 +3,7 @@
  *
  * Implements security headers, CSP, rate limiting, and request validation
  * Runs on every request matching the config.matcher patterns
+ * Updated: CSP relaxed for Next.js compatibility
  */
 
 import { NextResponse } from 'next/server';
