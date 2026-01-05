@@ -1,9 +1,11 @@
 'use client';
 
-import { useEffect, useState, useRef, useCallback } from 'react';
+import { useEffect, useState, useRef, useCallback, useMemo } from 'react';
 import { supabase } from '@/lib/supabase';
 import { Game, parseGame } from '@/types/game';
 import { devLog } from '@/lib/utils';
+import { useIsLoggedIn } from '@/lib/data';
+import { getBlockchainDataSource } from '@/lib/data/blockchain';
 
 interface UseCreatedGameTrackingOptions {
   txHash: string | undefined;
@@ -30,7 +32,9 @@ const SEARCH_TIMEOUT = 30000;
 /**
  * Hook to track a newly created game from transaction to discovery
  *
- * Uses DB polling to find the game after transaction is confirmed.
+ * In centralized mode: Uses DB polling to find the game after transaction is confirmed.
+ * In decentralized mode: Uses blockchain polling to find the game.
+ *
  * Contract event watching is handled globally by useContractEventSync.
  */
 export function useCreatedGameTracking({
@@ -48,6 +52,11 @@ export function useCreatedGameTracking({
     elapsedSeconds: 0,
     phase: 'waiting_indexer',
   });
+
+  // Check if we're in centralized mode (logged in)
+  const isLoggedIn = useIsLoggedIn();
+  const isLoggedInRef = useRef(isLoggedIn);
+  isLoggedInRef.current = isLoggedIn;
 
   // Refs for lifecycle management
   const mountedRef = useRef(true);
@@ -110,28 +119,64 @@ export function useCreatedGameTracking({
     }
   }, [cleanup]);
 
-  // Function to fetch game from DB
-  // TODO: Use games_public view after migration 029 is applied
-  const fetchGameFromDB = useCallback(async (searchTxHash: string): Promise<Game | null> => {
+  // Function to fetch game - uses DB in centralized mode, blockchain in decentralized mode
+  const fetchGame = useCallback(async (searchTxHash: string, searchCreatorAddress: string): Promise<Game | null> => {
     try {
-      const { data, error } = await supabase
-        .from('games')
-        .select('*')
-        .eq('tx_hash', searchTxHash.toLowerCase())
-        .maybeSingle();
+      if (isLoggedIn) {
+        // Centralized mode: fetch from Supabase
+        const { data, error } = await supabase
+          .from('games')
+          .select('*')
+          .eq('tx_hash', searchTxHash.toLowerCase())
+          .maybeSingle();
 
-      if (error) {
-        devLog.error('Error fetching game:', error);
+        if (error) {
+          devLog.error('Error fetching game from DB:', error);
+          return null;
+        }
+
+        return data ? parseGame(data) : null;
+      } else {
+        // Decentralized mode: fetch from blockchain
+        devLog.log('[GameTracking] Decentralized mode - polling blockchain');
+        const blockchainSource = getBlockchainDataSource();
+
+        // Get all active games for the creator and find the one with matching txHash
+        const games = await blockchainSource.getPlayerActiveGames(searchCreatorAddress);
+
+        // Find game by txHash (if available) or most recent pending game
+        const matchingGame = games.find(g =>
+          g.tx_hash?.toLowerCase() === searchTxHash.toLowerCase()
+        );
+
+        if (matchingGame) {
+          devLog.log('[GameTracking] Found game on blockchain:', matchingGame.id);
+          return matchingGame;
+        }
+
+        // If no txHash match, check for any recent pending game by this creator
+        // This handles the case where txHash isn't indexed yet
+        const pendingGames = games.filter(g =>
+          g.status === 'pending' &&
+          g.creator_address?.toLowerCase() === searchCreatorAddress.toLowerCase()
+        );
+
+        if (pendingGames.length > 0) {
+          // Return most recent
+          const mostRecent = pendingGames.sort((a, b) =>
+            new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime()
+          )[0];
+          devLog.log('[GameTracking] Found pending game on blockchain:', mostRecent.id);
+          return mostRecent;
+        }
+
         return null;
       }
-
-      // Normalize the game data (converts numeric IDs to strings)
-      return data ? parseGame(data) : null;
     } catch (err) {
-      devLog.error('Error in fetchGameFromDB:', err);
+      devLog.error('Error in fetchGame:', err);
       return null;
     }
-  }, []);
+  }, [isLoggedIn]);
 
   // Handle game found
   const handleGameFound = useCallback((game: Game) => {
@@ -164,8 +209,9 @@ export function useCreatedGameTracking({
     }
 
     // Subscribe to status changes if game is still active (pending or matched)
+    // Only subscribe in centralized mode - decentralized mode uses polling
     // We need to track matched games to catch the resolved status
-    if (game.status === 'pending' || game.status === 'matched') {
+    if ((game.status === 'pending' || game.status === 'matched') && isLoggedInRef.current) {
       devLog.log(`📡 Subscribing to status changes for game ${game.id}`);
       subscriptionRef.current = supabase
         .channel(`game-tracking-${game.id}`)
@@ -217,6 +263,10 @@ export function useCreatedGameTracking({
             devLog.warn(`[GameTracking] Subscription ${status} for game ${game.id}`);
           }
         });
+    } else if (game.status === 'pending' || game.status === 'matched') {
+      // Decentralized mode: Use polling instead of subscriptions
+      devLog.log(`⚡ Decentralized mode: Using polling for game ${game.id} status updates`);
+      // Polling will be handled by the useUserActiveGames hook which already supports blockchain mode
     }
   }, [cleanup]);
 
@@ -264,7 +314,7 @@ export function useCreatedGameTracking({
       if (!mountedRef.current || gameIdRef.current) return;
 
       try {
-        const game = await fetchGameFromDB(txHash);
+        const game = await fetchGame(txHash, creatorAddress);
         if (game && mountedRef.current) {
           handleGameFound(game);
         }
@@ -299,7 +349,7 @@ export function useCreatedGameTracking({
     return () => {
       // Don't cleanup on every re-render, only on unmount or txHash change
     };
-  }, [txHash, creatorAddress, cleanup, fetchGameFromDB, handleGameFound]);
+  }, [txHash, creatorAddress, cleanup, fetchGame, handleGameFound]);
 
   // Cleanup on unmount
   useEffect(() => {

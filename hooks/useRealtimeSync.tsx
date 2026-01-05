@@ -8,6 +8,7 @@ import { Game, parseGame } from '@/types/game';
 import { useAccount } from 'wagmi';
 import { devLog, debounce } from '@/lib/utils';
 import { queryKeys } from '@/lib/queryKeys';
+import { useIsLoggedIn } from '@/lib/data';
 import {
   FALLBACK_POLL_INTERVALS_MS,
   REALTIME_DEBOUNCE_MS,
@@ -64,6 +65,7 @@ export function useRealtimeSync() {
   const { address } = useAccount();
   const { updateActiveGame, addActiveGame, removeActiveGame } = useGameStore();
   const [isConnected, setIsConnected] = useState(false);
+  const isLoggedIn = useIsLoggedIn();
 
   // Use refs to avoid recreating callbacks and breaking the subscription
   const queryClientRef = useRef(queryClient);
@@ -109,8 +111,18 @@ export function useRealtimeSync() {
     });
   };
 
-  // Setup single channel for all game updates - NO dependencies to prevent re-subscription
+  // Store isLoggedIn in ref for use in effect
+  const isLoggedInRef = useRef(isLoggedIn);
+  isLoggedInRef.current = isLoggedIn;
+
+  // Setup single channel for all game updates - only in centralized mode
   useEffect(() => {
+    // Skip Supabase subscriptions in decentralized mode
+    if (!isLoggedInRef.current) {
+      devLog.log('📡 [RealtimeSync] Decentralized mode - skipping Supabase channel setup');
+      return;
+    }
+
     devLog.log('📡 [RealtimeSync] Setting up centralized real-time sync...');
     globalConnectionStatus = 'connecting';
 
@@ -380,7 +392,7 @@ export function useRealtimeSync() {
       notifyListeners();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []); // Empty dependency array - subscription lives for component lifetime
+  }, [isLoggedIn]); // Re-run when login state changes (enable/disable realtime sync)
 
   return isConnected;
 }
