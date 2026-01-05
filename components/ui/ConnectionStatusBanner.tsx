@@ -2,14 +2,21 @@
 
 import { useEffect, useState, useRef } from 'react';
 import { Flex, Text } from '@radix-ui/themes';
-import { WifiOff, RefreshCw, X } from 'lucide-react';
+import { WifiOff, RefreshCw, X, Zap } from 'lucide-react';
 import { useConnectionStatus } from '@/hooks/useRealtimeSync';
+import { useDataMode } from '@/lib/data';
 
 export function ConnectionStatusBanner() {
   const { isConnected, isPolling, isDisconnected } = useConnectionStatus();
   const [showBanner, setShowBanner] = useState(false);
   const [dismissed, setDismissed] = useState(false);
   const wasConnectedRef = useRef(true);
+  const dataMode = useDataMode();
+
+  // In decentralized mode, never show connection banner (no Supabase connection to lose)
+  if (dataMode === 'blockchain') {
+    return null;
+  }
 
   // Show banner when connection degrades (was connected, now disconnected or polling)
   useEffect(() => {
@@ -91,6 +98,17 @@ export function ConnectionStatusBanner() {
 // Also export a small inline status indicator for use in headers/footers
 export function ConnectionStatusIndicator() {
   const { isConnected, isConnecting, isPolling } = useConnectionStatus();
+  const dataMode = useDataMode();
+
+  // In decentralized mode, show blockchain indicator
+  if (dataMode === 'blockchain') {
+    return (
+      <Flex align="center" gap="1" className="text-yellow-400">
+        <Zap className="w-3 h-3" />
+        <Text size="1">Blockchain</Text>
+      </Flex>
+    );
+  }
 
   if (isConnected) {
     return (

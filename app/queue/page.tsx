@@ -24,7 +24,7 @@ import { useTiers } from '@/hooks/useTiers';
 import { useJoinGame } from '@/hooks/useContract';
 import { usePendingGames, useGameStats } from '@/hooks/useGames';
 import { formatCurrency, formatGameId, devLog } from '@/lib/utils';
-import { Clock, Users, Loader2, TrendingUp, XCircle, AlertCircle, Wifi, WifiOff, Wallet, ChevronLeft, ChevronRight, Filter, DollarSign, SortAsc, SortDesc } from 'lucide-react';
+import { Clock, Users, Loader2, TrendingUp, XCircle, AlertCircle, Wifi, WifiOff, Wallet, ChevronLeft, ChevronRight, Filter, DollarSign, SortAsc, SortDesc, Zap } from 'lucide-react';
 
 const GAMES_PER_PAGE = 10;
 import Link from 'next/link';
@@ -41,6 +41,7 @@ import { Game } from '@/types/game';
 import { Tier } from '@/types/tier';
 import { usePendingTransactions } from '@/hooks/usePendingTransactions';
 import { useNotificationState } from '@/hooks/useNotificationState';
+import { useDataMode } from '@/lib/data';
 
 // Type for selected game with attached tier info
 // Use tierInfo to avoid conflict with Game.tier (which is number)
@@ -119,6 +120,8 @@ export default function QueuePage() {
   const { cancelGame, isLoading: isCanceling, isSuccess: isCancelSuccess, error: cancelError, wasRejected: cancelWasRejected, reset: resetCancelState } = useCancelGame();
   const { formatTimeRemaining } = useGameTimeout();
   const { isConnected: isLive, isConnecting } = useConnectionStatus();
+  const dataMode = useDataMode();
+  const isBlockchainMode = dataMode === 'blockchain';
   const [selectedGame, setSelectedGame] = useState<SelectedGame | null>(null);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [joinedGameId, setJoinedGameId] = useState<string | null>(null);
@@ -425,7 +428,12 @@ export default function QueuePage() {
                   Join an existing game or create your own
                 </Text>
                 <Flex align="center" gap="1">
-                  {isLive ? (
+                  {isBlockchainMode ? (
+                    <>
+                      <Zap className="w-3 h-3 text-yellow-400" />
+                      <Text size="1" className="text-yellow-400">Blockchain</Text>
+                    </>
+                  ) : isLive ? (
                     <>
                       <Wifi className="w-3 h-3 text-green-400" />
                       <Text size="1" className="text-green-400">Live</Text>
@@ -629,10 +637,10 @@ export default function QueuePage() {
                     {totalGames > 0 && (
                       <Badge size="1" color="purple" variant="soft">{totalGames}</Badge>
                     )}
-                    <Badge size="1" color={isLive ? 'green' : isConnecting ? 'yellow' : 'red'} variant="soft">
+                    <Badge size="1" color={isBlockchainMode ? 'yellow' : isLive ? 'green' : isConnecting ? 'yellow' : 'red'} variant="soft">
                       <Flex align="center" gap="1">
-                        {isLive ? <Wifi className="w-3 h-3" /> : isConnecting ? <Loader2 className="w-3 h-3 animate-spin" /> : <WifiOff className="w-3 h-3" />}
-                        {isLive ? 'Live' : isConnecting ? 'Connecting...' : 'Offline'}
+                        {isBlockchainMode ? <Zap className="w-3 h-3" /> : isLive ? <Wifi className="w-3 h-3" /> : isConnecting ? <Loader2 className="w-3 h-3 animate-spin" /> : <WifiOff className="w-3 h-3" />}
+                        {isBlockchainMode ? 'Blockchain' : isLive ? 'Live' : isConnecting ? 'Connecting...' : 'Offline'}
                       </Flex>
                     </Badge>
                   </Flex>
