@@ -232,10 +232,12 @@ export class BlockchainDataSource implements GameDataSource {
   // ============================================
 
   async getGames(limit = 100): Promise<Game[]> {
+    devLog.log('[BlockchainDS] getGames called, cached:', this.cachedGames.size);
     // Use cached games - scan for new ones via events
     await this.scanForNewGames();
 
     const games = Array.from(this.cachedGames.values());
+    devLog.log(`[BlockchainDS] After scan, total games in cache: ${games.length}`);
     // Sort by block number descending (most recent first)
     games.sort((a, b) => Number(BigInt(b.block_number) - BigInt(a.block_number)));
 
@@ -244,9 +246,11 @@ export class BlockchainDataSource implements GameDataSource {
 
   private async scanForNewGames(): Promise<void> {
     const client = getClient();
+    devLog.log('[BlockchainDS] scanForNewGames called');
 
     try {
       const currentBlock = await client.getBlockNumber();
+      devLog.log(`[BlockchainDS] Current block: ${currentBlock}`);
       const fromBlock = this.lastBlockScanned > 0n
         ? this.lastBlockScanned + 1n
         : currentBlock - BigInt(MAX_BLOCK_RANGE);
@@ -258,12 +262,14 @@ export class BlockchainDataSource implements GameDataSource {
       }
 
       // Get GameCreated events
+      devLog.log(`[BlockchainDS] Fetching logs from block ${fromBlock} to ${currentBlock}`);
       const logs = await client.getLogs({
         address: CONTRACT_ADDRESS,
         event: GameCreatedEvent,
         fromBlock: fromBlock > 0n ? fromBlock : 0n,
         toBlock: currentBlock,
       });
+      devLog.log(`[BlockchainDS] Found ${logs.length} GameCreated events`);
 
       for (const log of logs) {
         const gameId = log.args.gameId;
@@ -289,8 +295,11 @@ export class BlockchainDataSource implements GameDataSource {
   }
 
   async getPendingGames(): Promise<Game[]> {
+    devLog.log('[BlockchainDS] getPendingGames called');
     const games = await this.getGames(200);
-    return games.filter(g => g.status === 'pending');
+    const pending = games.filter(g => g.status === 'pending');
+    devLog.log(`[BlockchainDS] Found ${pending.length} pending games out of ${games.length} total`);
+    return pending;
   }
 
   async getActiveGames(): Promise<Game[]> {

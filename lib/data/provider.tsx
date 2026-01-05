@@ -54,13 +54,32 @@ export function DataProvider({ children }: DataProviderProps) {
   // Listen for Supabase auth changes
   useEffect(() => {
     // Get initial session
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-      setIsLoadingAuth(false);
-    });
+    supabase.auth.getSession()
+      .then(({ data: { session }, error }) => {
+        if (error) {
+          // Auth errors (invalid refresh token, etc.) - just treat as not logged in
+          devLog.log('[DataProvider] Auth error (treating as logged out):', error.message);
+          setSession(null);
+        } else {
+          setSession(session);
+        }
+        setIsLoadingAuth(false);
+      })
+      .catch((err) => {
+        // Catch any unexpected errors
+        devLog.warn('[DataProvider] Unexpected auth error:', err);
+        setSession(null);
+        setIsLoadingAuth(false);
+      });
 
     // Subscribe to auth changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      // Ignore token refresh errors - just log out
+      if (_event === 'TOKEN_REFRESHED' && !session) {
+        devLog.log('[DataProvider] Token refresh failed, treating as logged out');
+        setSession(null);
+        return;
+      }
       setSession(session);
       devLog.log('[DataProvider] Auth state changed:', _event);
     });
