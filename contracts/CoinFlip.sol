@@ -21,22 +21,35 @@ contract CoinFlip is ReentrancyGuard, Pausable, Ownable, AutomationCompatibleInt
     // =============================================================
 
     /// @notice Contract version for upgrade tracking
-    uint8 public constant VERSION = 3;
+    uint8 public constant VERSION = 4;
 
     /// @notice Maximum number of tiers
     uint8 public constant MAX_TIERS = 10;
 
-    /// @notice Maximum concurrent games per player
-    uint8 public constant MAX_GAMES_PER_PLAYER = 5;
+    /// @notice Maximum fee in basis points (10% cap)
+    uint16 public constant MAX_FEE_BASIS_POINTS = 1000;
 
-    /// @notice Platform fee in basis points (300 = 3%)
-    uint16 public constant FEE_BASIS_POINTS = 300;
+    /// @notice Minimum timeout blocks (prevent instant cancellation)
+    uint256 public constant MIN_TIMEOUT_BLOCKS = 10;
 
-    /// @notice Blocks before game can be cancelled (timeout ~5 min on Sepolia)
-    uint256 public constant TIMEOUT_BLOCKS = 25;
+    /// @notice Maximum timeout blocks (prevent games stuck forever)
+    uint256 public constant MAX_TIMEOUT_BLOCKS = 1000;
 
-    /// @notice Blocks before LOCKED game can be refunded if VRF fails (~40 min on Sepolia)
-    uint256 public constant VRF_TIMEOUT_BLOCKS = 200;
+    // =============================================================
+    //                  CONFIGURABLE PARAMETERS
+    // =============================================================
+
+    /// @notice Maximum concurrent games per player (configurable)
+    uint8 public maxGamesPerPlayer = 5;
+
+    /// @notice Platform fee in basis points (default 300 = 3%)
+    uint16 public feeBasisPoints = 300;
+
+    /// @notice Blocks before game can be cancelled (default ~5 min on Sepolia)
+    uint256 public timeoutBlocks = 25;
+
+    /// @notice Blocks before LOCKED game can be refunded if VRF fails (default ~40 min on Sepolia)
+    uint256 public vrfTimeoutBlocks = 200;
 
     /// @notice VRF callback gas limit
     uint32 public constant VRF_CALLBACK_GAS_LIMIT = 100000;
@@ -103,6 +116,9 @@ contract CoinFlip is ReentrancyGuard, Pausable, Ownable, AutomationCompatibleInt
     /// @notice Mapping to track active games per player (address => count)
     mapping(address => uint8) public activeGameCount;
 
+    /// @notice Mapping to track player statistics
+    mapping(address => PlayerStats) public playerStats;
+
     // =============================================================
     //                      ENUMS
     // =============================================================
@@ -137,6 +153,15 @@ contract CoinFlip is ReentrancyGuard, Pausable, Ownable, AutomationCompatibleInt
         uint256 vrfRequestId;   // Chainlink VRF request ID
         bool coinResult;        // Result (false=heads, true=tails)
         address winner;         // Winner address
+    }
+
+    struct PlayerStats {
+        uint256 gamesPlayed;    // Total games participated in
+        uint256 gamesWon;       // Total games won
+        uint256 gamesLost;      // Total games lost
+        uint256 totalWagered;   // Total amount wagered
+        uint256 totalWon;       // Total amount won (payouts received)
+        uint256 totalLost;      // Total amount lost (bets lost)
     }
 
     // =============================================================
@@ -220,6 +245,34 @@ contract CoinFlip is ReentrancyGuard, Pausable, Ownable, AutomationCompatibleInt
         uint256 amount
     );
 
+    event FeeBasisPointsUpdated(
+        uint16 oldFee,
+        uint16 newFee
+    );
+
+    event TimeoutBlocksUpdated(
+        uint256 oldTimeout,
+        uint256 newTimeout
+    );
+
+    event VrfTimeoutBlocksUpdated(
+        uint256 oldTimeout,
+        uint256 newTimeout
+    );
+
+    event MaxGamesPerPlayerUpdated(
+        uint8 oldMax,
+        uint8 newMax
+    );
+
+    event PlayerStatsUpdated(
+        address indexed player,
+        uint256 gamesPlayed,
+        uint256 gamesWon,
+        uint256 totalWagered,
+        uint256 totalWon
+    );
+
     // =============================================================
     //                        ERRORS
     // =============================================================
@@ -241,6 +294,9 @@ contract CoinFlip is ReentrancyGuard, Pausable, Ownable, AutomationCompatibleInt
     error InvalidTierAmount();
     error NoStuckFunds();
     error TooManyActiveGames();
+    error InvalidFeeAmount();
+    error InvalidTimeoutValue();
+    error InvalidMaxGames();
 
     // =============================================================
     //                      CONSTRUCTOR
@@ -293,7 +349,7 @@ contract CoinFlip is ReentrancyGuard, Pausable, Ownable, AutomationCompatibleInt
         if (t.amount == 0) revert InvalidTierAmount();
         if (msg.value != t.amount) revert IncorrectBetAmount();
         if (openGameIds.length >= MAX_OPEN_GAMES) revert TooManyOpenGames();
-        if (activeGameCount[msg.sender] >= MAX_GAMES_PER_PLAYER) revert TooManyActiveGames();
+        if (activeGameCount[msg.sender] >= maxGamesPerPlayer) revert TooManyActiveGames();
 
         // Increment active game count for creator
         activeGameCount[msg.sender]++;
@@ -342,7 +398,7 @@ contract CoinFlip is ReentrancyGuard, Pausable, Ownable, AutomationCompatibleInt
         if (game.state != GameState.OPEN) revert InvalidGameState();
         if (msg.sender == game.playerA) revert CannotJoinOwnGame();
         if (msg.value != t.amount) revert IncorrectBetAmount();
-        if (activeGameCount[msg.sender] >= MAX_GAMES_PER_PLAYER) revert TooManyActiveGames();
+        if (activeGameCount[msg.sender] >= maxGamesPerPlayer) revert TooManyActiveGames();
 
         // Increment active game count for joiner
         activeGameCount[msg.sender]++;
@@ -398,7 +454,7 @@ contract CoinFlip is ReentrancyGuard, Pausable, Ownable, AutomationCompatibleInt
 
         // Creator can cancel immediately, others must wait for timeout
         bool isCreator = msg.sender == game.playerA;
-        bool isTimedOut = block.number >= game.createdBlock + TIMEOUT_BLOCKS;
+        bool isTimedOut = block.number >= game.createdBlock + timeoutBlocks;
 
         if (!isCreator && !isTimedOut) {
             revert TimeoutNotReached();
@@ -430,7 +486,7 @@ contract CoinFlip is ReentrancyGuard, Pausable, Ownable, AutomationCompatibleInt
 
     /**
      * @notice Claim refund for a LOCKED game where VRF failed to respond
-     * @dev Either player can call this after VRF_TIMEOUT_BLOCKS have passed since game was locked
+     * @dev Either player can call this after vrfTimeoutBlocks have passed since game was locked
      * @param gameId The game ID to claim refund for
      */
     function claimVrfTimeout(uint256 gameId)
@@ -446,7 +502,7 @@ contract CoinFlip is ReentrancyGuard, Pausable, Ownable, AutomationCompatibleInt
             revert NotGameParticipant();
         }
         // Use lockedBlock (when VRF was requested) not createdBlock
-        if (block.number < game.lockedBlock + VRF_TIMEOUT_BLOCKS) {
+        if (block.number < game.lockedBlock + vrfTimeoutBlocks) {
             revert VrfTimeoutNotReached();
         }
 
@@ -538,6 +594,75 @@ contract CoinFlip is ReentrancyGuard, Pausable, Ownable, AutomationCompatibleInt
         if (!success) revert TransferFailed();
 
         emit FeesWithdrawn(feeRecipient, amount);
+    }
+
+    /**
+     * @notice Update platform fee
+     * @param newFee New fee in basis points (max 1000 = 10%)
+     */
+    function setFeeBasisPoints(uint16 newFee)
+        external
+        onlyOwner
+    {
+        if (newFee > MAX_FEE_BASIS_POINTS) revert InvalidFeeAmount();
+
+        uint16 oldFee = feeBasisPoints;
+        feeBasisPoints = newFee;
+
+        emit FeeBasisPointsUpdated(oldFee, newFee);
+    }
+
+    /**
+     * @notice Update game timeout blocks
+     * @param newTimeout New timeout in blocks
+     */
+    function setTimeoutBlocks(uint256 newTimeout)
+        external
+        onlyOwner
+    {
+        if (newTimeout < MIN_TIMEOUT_BLOCKS || newTimeout > MAX_TIMEOUT_BLOCKS) {
+            revert InvalidTimeoutValue();
+        }
+
+        uint256 oldTimeout = timeoutBlocks;
+        timeoutBlocks = newTimeout;
+
+        emit TimeoutBlocksUpdated(oldTimeout, newTimeout);
+    }
+
+    /**
+     * @notice Update VRF timeout blocks
+     * @param newTimeout New VRF timeout in blocks
+     */
+    function setVrfTimeoutBlocks(uint256 newTimeout)
+        external
+        onlyOwner
+    {
+        // VRF timeout should be at least 4x the regular timeout
+        if (newTimeout < timeoutBlocks * 4 || newTimeout > MAX_TIMEOUT_BLOCKS * 10) {
+            revert InvalidTimeoutValue();
+        }
+
+        uint256 oldTimeout = vrfTimeoutBlocks;
+        vrfTimeoutBlocks = newTimeout;
+
+        emit VrfTimeoutBlocksUpdated(oldTimeout, newTimeout);
+    }
+
+    /**
+     * @notice Update max games per player
+     * @param newMax New maximum games per player (1-20)
+     */
+    function setMaxGamesPerPlayer(uint8 newMax)
+        external
+        onlyOwner
+    {
+        if (newMax == 0 || newMax > 20) revert InvalidMaxGames();
+
+        uint8 oldMax = maxGamesPerPlayer;
+        maxGamesPerPlayer = newMax;
+
+        emit MaxGamesPerPlayerUpdated(oldMax, newMax);
     }
 
     /**
@@ -659,7 +784,7 @@ contract CoinFlip is ReentrancyGuard, Pausable, Ownable, AutomationCompatibleInt
 
             // Check if game is still OPEN and has timed out
             if (game.state == GameState.OPEN &&
-                block.number >= game.createdBlock + TIMEOUT_BLOCKS) {
+                block.number >= game.createdBlock + timeoutBlocks) {
                 expiredGameIds[count] = gameId;
                 count++;
             }
@@ -691,7 +816,7 @@ contract CoinFlip is ReentrancyGuard, Pausable, Ownable, AutomationCompatibleInt
 
             // Re-validate before cancelling (state may have changed)
             if (game.state == GameState.OPEN &&
-                block.number >= game.createdBlock + TIMEOUT_BLOCKS) {
+                block.number >= game.createdBlock + timeoutBlocks) {
 
                 // Remove from open games array
                 _removeFromOpenGames(gameId);
@@ -776,7 +901,7 @@ contract CoinFlip is ReentrancyGuard, Pausable, Ownable, AutomationCompatibleInt
         returns (uint256)
     {
         uint256 pot = tiers[tierId].amount * 2;
-        uint256 fee = (pot * FEE_BASIS_POINTS) / 10000;
+        uint256 fee = (pot * feeBasisPoints) / 10000;
         return pot - fee;
     }
 
@@ -806,7 +931,7 @@ contract CoinFlip is ReentrancyGuard, Pausable, Ownable, AutomationCompatibleInt
     {
         Game storage game = games[gameId];
         return game.state == GameState.LOCKED &&
-               block.number >= game.lockedBlock + VRF_TIMEOUT_BLOCKS;
+               block.number >= game.lockedBlock + vrfTimeoutBlocks;
     }
 
     /**
@@ -822,7 +947,7 @@ contract CoinFlip is ReentrancyGuard, Pausable, Ownable, AutomationCompatibleInt
         Game storage game = games[gameId];
         if (game.state != GameState.LOCKED) return 0;
 
-        uint256 timeoutBlock = game.lockedBlock + VRF_TIMEOUT_BLOCKS;
+        uint256 timeoutBlock = game.lockedBlock + vrfTimeoutBlocks;
         if (block.number >= timeoutBlock) return 0;
 
         return timeoutBlock - block.number;
@@ -851,7 +976,56 @@ contract CoinFlip is ReentrancyGuard, Pausable, Ownable, AutomationCompatibleInt
         view
         returns (bool)
     {
-        return activeGameCount[player] < MAX_GAMES_PER_PLAYER;
+        return activeGameCount[player] < maxGamesPerPlayer;
+    }
+
+    /**
+     * @notice Get complete player statistics
+     * @param player The player address
+     * @return PlayerStats struct with all statistics
+     */
+    function getPlayerStats(address player)
+        external
+        view
+        returns (PlayerStats memory)
+    {
+        return playerStats[player];
+    }
+
+    /**
+     * @notice Get player win rate in basis points (0-10000)
+     * @param player The player address
+     * @return Win rate in basis points (e.g., 5000 = 50%)
+     */
+    function getPlayerWinRate(address player)
+        external
+        view
+        returns (uint256)
+    {
+        PlayerStats storage stats = playerStats[player];
+        if (stats.gamesPlayed == 0) return 0;
+        return (stats.gamesWon * 10000) / stats.gamesPlayed;
+    }
+
+    /**
+     * @notice Get player profit/loss (positive = profit, negative represented as 0)
+     * @param player The player address
+     * @return profit Total profit (0 if negative)
+     * @return loss Total loss (0 if profitable)
+     */
+    function getPlayerProfitLoss(address player)
+        external
+        view
+        returns (uint256 profit, uint256 loss)
+    {
+        PlayerStats storage stats = playerStats[player];
+        if (stats.totalWon >= stats.totalWagered) {
+            profit = stats.totalWon - stats.totalWagered;
+            loss = 0;
+        } else {
+            profit = 0;
+            loss = stats.totalWagered - stats.totalWon;
+        }
     }
 
     // =============================================================
@@ -921,11 +1095,44 @@ contract CoinFlip is ReentrancyGuard, Pausable, Ownable, AutomationCompatibleInt
         // Calculate payout
         Tier storage t = tiers[game.tier];
         uint256 pot = t.amount * 2;
-        uint256 fee = (pot * FEE_BASIS_POINTS) / 10000;
+        uint256 fee = (pot * feeBasisPoints) / 10000;
         uint256 payout = pot - fee;
 
         // Track fees
         collectedFees += fee;
+
+        // Update player statistics
+        uint256 betAmount = t.amount;
+
+        // Winner stats
+        PlayerStats storage winnerStats = playerStats[winner];
+        winnerStats.gamesPlayed++;
+        winnerStats.gamesWon++;
+        winnerStats.totalWagered += betAmount;
+        winnerStats.totalWon += payout;
+
+        // Loser stats
+        PlayerStats storage loserStats = playerStats[loser];
+        loserStats.gamesPlayed++;
+        loserStats.gamesLost++;
+        loserStats.totalWagered += betAmount;
+        loserStats.totalLost += betAmount;
+
+        // Emit stats events for indexing
+        emit PlayerStatsUpdated(
+            winner,
+            winnerStats.gamesPlayed,
+            winnerStats.gamesWon,
+            winnerStats.totalWagered,
+            winnerStats.totalWon
+        );
+        emit PlayerStatsUpdated(
+            loser,
+            loserStats.gamesPlayed,
+            loserStats.gamesWon,
+            loserStats.totalWagered,
+            loserStats.totalWon
+        );
 
         // Transfer to winner
         (bool success, ) = winner.call{value: payout}("");

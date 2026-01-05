@@ -100,6 +100,67 @@ export const COINFLIP_ABI = [
       { name: 'newRecipient', type: 'address', indexed: true },
     ],
   },
+  {
+    type: 'event',
+    name: 'StuckFundsRecovered',
+    inputs: [
+      { name: 'gameId', type: 'uint256', indexed: true },
+      { name: 'recipient', type: 'address', indexed: true },
+      { name: 'amount', type: 'uint256', indexed: false },
+    ],
+  },
+  {
+    type: 'event',
+    name: 'RefundFailed',
+    inputs: [
+      { name: 'gameId', type: 'uint256', indexed: true },
+      { name: 'player', type: 'address', indexed: true },
+      { name: 'amount', type: 'uint256', indexed: false },
+    ],
+  },
+  {
+    type: 'event',
+    name: 'FeeBasisPointsUpdated',
+    inputs: [
+      { name: 'oldFee', type: 'uint16', indexed: false },
+      { name: 'newFee', type: 'uint16', indexed: false },
+    ],
+  },
+  {
+    type: 'event',
+    name: 'TimeoutBlocksUpdated',
+    inputs: [
+      { name: 'oldTimeout', type: 'uint256', indexed: false },
+      { name: 'newTimeout', type: 'uint256', indexed: false },
+    ],
+  },
+  {
+    type: 'event',
+    name: 'VrfTimeoutBlocksUpdated',
+    inputs: [
+      { name: 'oldTimeout', type: 'uint256', indexed: false },
+      { name: 'newTimeout', type: 'uint256', indexed: false },
+    ],
+  },
+  {
+    type: 'event',
+    name: 'MaxGamesPerPlayerUpdated',
+    inputs: [
+      { name: 'oldMax', type: 'uint8', indexed: false },
+      { name: 'newMax', type: 'uint8', indexed: false },
+    ],
+  },
+  {
+    type: 'event',
+    name: 'PlayerStatsUpdated',
+    inputs: [
+      { name: 'player', type: 'address', indexed: true },
+      { name: 'gamesPlayed', type: 'uint256', indexed: false },
+      { name: 'gamesWon', type: 'uint256', indexed: false },
+      { name: 'totalWagered', type: 'uint256', indexed: false },
+      { name: 'totalWon', type: 'uint256', indexed: false },
+    ],
+  },
 
   // =============================================================
   //                       READ FUNCTIONS
@@ -188,27 +249,63 @@ export const COINFLIP_ABI = [
     outputs: [{ name: '', type: 'uint256' }],
   },
 
-  // Constants
+  // Configurable Parameters (now state variables)
   {
     type: 'function',
-    name: 'TIMEOUT_BLOCKS',
+    name: 'timeoutBlocks',
     stateMutability: 'view',
     inputs: [],
     outputs: [{ name: '', type: 'uint256' }],
   },
   {
     type: 'function',
-    name: 'VRF_TIMEOUT_BLOCKS',
+    name: 'vrfTimeoutBlocks',
     stateMutability: 'view',
     inputs: [],
     outputs: [{ name: '', type: 'uint256' }],
   },
   {
     type: 'function',
-    name: 'FEE_BASIS_POINTS',
+    name: 'feeBasisPoints',
     stateMutability: 'view',
     inputs: [],
     outputs: [{ name: '', type: 'uint16' }],
+  },
+  {
+    type: 'function',
+    name: 'maxGamesPerPlayer',
+    stateMutability: 'view',
+    inputs: [],
+    outputs: [{ name: '', type: 'uint8' }],
+  },
+  // Constants
+  {
+    type: 'function',
+    name: 'VERSION',
+    stateMutability: 'view',
+    inputs: [],
+    outputs: [{ name: '', type: 'uint8' }],
+  },
+  {
+    type: 'function',
+    name: 'MAX_FEE_BASIS_POINTS',
+    stateMutability: 'view',
+    inputs: [],
+    outputs: [{ name: '', type: 'uint16' }],
+  },
+  {
+    type: 'function',
+    name: 'MIN_TIMEOUT_BLOCKS',
+    stateMutability: 'view',
+    inputs: [],
+    outputs: [{ name: '', type: 'uint256' }],
+  },
+  {
+    type: 'function',
+    name: 'MAX_TIMEOUT_BLOCKS',
+    stateMutability: 'view',
+    inputs: [],
+    outputs: [{ name: '', type: 'uint256' }],
   },
   {
     type: 'function',
@@ -288,6 +385,82 @@ export const COINFLIP_ABI = [
     outputs: [],
   },
 
+  // Player active game count
+  {
+    type: 'function',
+    name: 'getActiveGameCount',
+    stateMutability: 'view',
+    inputs: [{ name: 'player', type: 'address' }],
+    outputs: [{ name: '', type: 'uint8' }],
+  },
+  {
+    type: 'function',
+    name: 'canCreateGame',
+    stateMutability: 'view',
+    inputs: [{ name: 'player', type: 'address' }],
+    outputs: [{ name: '', type: 'bool' }],
+  },
+
+  // Player Statistics
+  {
+    type: 'function',
+    name: 'getPlayerStats',
+    stateMutability: 'view',
+    inputs: [{ name: 'player', type: 'address' }],
+    outputs: [
+      {
+        name: '',
+        type: 'tuple',
+        components: [
+          { name: 'gamesPlayed', type: 'uint256' },
+          { name: 'gamesWon', type: 'uint256' },
+          { name: 'gamesLost', type: 'uint256' },
+          { name: 'totalWagered', type: 'uint256' },
+          { name: 'totalWon', type: 'uint256' },
+          { name: 'totalLost', type: 'uint256' },
+        ],
+      },
+    ],
+  },
+  {
+    type: 'function',
+    name: 'getPlayerWinRate',
+    stateMutability: 'view',
+    inputs: [{ name: 'player', type: 'address' }],
+    outputs: [{ name: '', type: 'uint256' }],
+  },
+  {
+    type: 'function',
+    name: 'getPlayerProfitLoss',
+    stateMutability: 'view',
+    inputs: [{ name: 'player', type: 'address' }],
+    outputs: [
+      { name: 'profit', type: 'uint256' },
+      { name: 'loss', type: 'uint256' },
+    ],
+  },
+  {
+    type: 'function',
+    name: 'playerStats',
+    stateMutability: 'view',
+    inputs: [{ name: 'player', type: 'address' }],
+    outputs: [
+      { name: 'gamesPlayed', type: 'uint256' },
+      { name: 'gamesWon', type: 'uint256' },
+      { name: 'gamesLost', type: 'uint256' },
+      { name: 'totalWagered', type: 'uint256' },
+      { name: 'totalWon', type: 'uint256' },
+      { name: 'totalLost', type: 'uint256' },
+    ],
+  },
+  {
+    type: 'function',
+    name: 'activeGameCount',
+    stateMutability: 'view',
+    inputs: [{ name: 'player', type: 'address' }],
+    outputs: [{ name: '', type: 'uint8' }],
+  },
+
   // =============================================================
   //                      WRITE FUNCTIONS
   // =============================================================
@@ -365,7 +538,42 @@ export const COINFLIP_ABI = [
   },
   {
     type: 'function',
+    name: 'setFeeBasisPoints',
+    stateMutability: 'nonpayable',
+    inputs: [{ name: 'newFee', type: 'uint16' }],
+    outputs: [],
+  },
+  {
+    type: 'function',
+    name: 'setTimeoutBlocks',
+    stateMutability: 'nonpayable',
+    inputs: [{ name: 'newTimeout', type: 'uint256' }],
+    outputs: [],
+  },
+  {
+    type: 'function',
+    name: 'setVrfTimeoutBlocks',
+    stateMutability: 'nonpayable',
+    inputs: [{ name: 'newTimeout', type: 'uint256' }],
+    outputs: [],
+  },
+  {
+    type: 'function',
+    name: 'setMaxGamesPerPlayer',
+    stateMutability: 'nonpayable',
+    inputs: [{ name: 'newMax', type: 'uint8' }],
+    outputs: [],
+  },
+  {
+    type: 'function',
     name: 'emergencyRefund',
+    stateMutability: 'nonpayable',
+    inputs: [{ name: 'gameId', type: 'uint256' }],
+    outputs: [],
+  },
+  {
+    type: 'function',
+    name: 'recoverStuckFunds',
     stateMutability: 'nonpayable',
     inputs: [{ name: 'gameId', type: 'uint256' }],
     outputs: [],
@@ -401,6 +609,13 @@ export const COINFLIP_ABI = [
   { type: 'error', name: 'TransferFailed', inputs: [] },
   { type: 'error', name: 'NoFeesToWithdraw', inputs: [] },
   { type: 'error', name: 'InvalidFeeRecipient', inputs: [] },
+  { type: 'error', name: 'TooManyOpenGames', inputs: [] },
+  { type: 'error', name: 'InvalidTierAmount', inputs: [] },
+  { type: 'error', name: 'NoStuckFunds', inputs: [] },
+  { type: 'error', name: 'TooManyActiveGames', inputs: [] },
+  { type: 'error', name: 'InvalidFeeAmount', inputs: [] },
+  { type: 'error', name: 'InvalidTimeoutValue', inputs: [] },
+  { type: 'error', name: 'InvalidMaxGames', inputs: [] },
 ] as const;
 
 // Game state enum matching contract
