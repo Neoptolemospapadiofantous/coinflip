@@ -1,10 +1,11 @@
 'use client';
 
-import { useCallback, useRef } from 'react';
+import { useCallback, useRef, useMemo } from 'react';
 import { useAccount } from 'wagmi';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { getAuthenticatedClient } from '@/lib/supabase';
 import { devLog } from '@/lib/utils';
+import { useIsLoggedIn } from '@/lib/data';
 
 export interface UserPreferences {
   user_address: string;
@@ -53,11 +54,55 @@ const DEFAULT_PREFERENCES: Omit<UserPreferences, 'user_address' | 'created_at' |
 /**
  * Hook for managing user preferences stored in the database
  * Provides automatic sync across devices and sessions
+ *
+ * In decentralized mode (not logged in), returns default values
+ * with no-op update functions (uses localStorage fallback could be added later)
  */
 export function useUserPreferences() {
   const { address } = useAccount();
   const queryClient = useQueryClient();
   const pendingUpdatesRef = useRef<Set<string>>(new Set());
+  const isLoggedIn = useIsLoggedIn();
+
+  // Decentralized mode: return default preferences with no-op functions
+  const noopReturn = useMemo(() => ({
+    preferences: {
+      ...DEFAULT_PREFERENCES,
+      user_address: address?.toLowerCase() ?? '',
+      created_at: '',
+      updated_at: '',
+    } as UserPreferences,
+    isLoading: false,
+    error: null,
+    skipAnimation: false,
+    soundEnabled: true,
+    activeGamesCollapsed: false,
+    activityFeedCollapsed: false,
+    defaultTier: null,
+    defaultChoice: null,
+    lastGameSettings: null as LastGameSettings | null,
+    emailNotificationsEnabled: false,
+    emailOnGameMatched: true,
+    emailOnGameResolved: true,
+    updatePreference: async () => {},
+    setSkipAnimation: async () => {},
+    setSoundEnabled: async () => {},
+    setActiveGamesCollapsed: async () => {},
+    setActivityFeedCollapsed: async () => {},
+    setDefaultTier: async () => {},
+    setDefaultChoice: async () => {},
+    saveLastGameSettings: async () => {},
+    clearLastGameSettings: async () => {},
+    setEmailNotificationsEnabled: async () => {},
+    setEmailOnGameMatched: async () => {},
+    setEmailOnGameResolved: async () => {},
+    isPending: false,
+  }), [address]);
+
+  if (!isLoggedIn) {
+    devLog.log('[Preferences] Decentralized mode - using defaults');
+    return noopReturn;
+  }
 
   // Query key for preferences
   const queryKey = ['user-preferences', address?.toLowerCase()];

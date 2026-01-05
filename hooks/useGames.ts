@@ -66,13 +66,27 @@ export function useGames() {
 }
 
 // Fetch pending games (waiting for second player)
-// Always uses Supabase - pending games are public data that doesn't require auth
+// Uses blockchain for wallet-only users (decentralized), Supabase for registered users (centralized)
 export function usePendingGames() {
+  const isLoggedIn = useIsLoggedIn();
+
   return useQuery({
-    queryKey: queryKeys.games.pending,
+    queryKey: [...queryKeys.games.pending, isLoggedIn ? 'supabase' : 'blockchain'],
     queryFn: async (): Promise<Game[]> => {
-      // Always use Supabase for pending games - it's public data and much faster
-      devLog.log('[usePendingGames] Using Supabase data source');
+      // Wallet-only users (decentralized mode): fetch from blockchain
+      if (!isLoggedIn) {
+        devLog.log('[usePendingGames] Using blockchain data source (decentralized mode)');
+        try {
+          const blockchainSource = getBlockchainDataSource();
+          return await blockchainSource.getPendingGames();
+        } catch (err) {
+          devLog.error('[usePendingGames] Blockchain fetch failed:', err);
+          return [];
+        }
+      }
+
+      // Registered users (centralized mode): fetch from Supabase
+      devLog.log('[usePendingGames] Using Supabase data source (centralized mode)');
       const { data, error } = await queryPendingGames();
 
       if (error) {
@@ -82,8 +96,8 @@ export function usePendingGames() {
 
       return normalizeGames(data);
     },
-    staleTime: PENDING_GAMES_STALE_TIME_MS,
-    refetchInterval: false, // Disabled - central sync invalidates when needed
+    staleTime: isLoggedIn ? PENDING_GAMES_STALE_TIME_MS : 30000,
+    refetchInterval: isLoggedIn ? false : 15000, // Poll every 15s in decentralized mode
     retry: 2,
   });
 }

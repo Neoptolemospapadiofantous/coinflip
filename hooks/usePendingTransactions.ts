@@ -8,6 +8,7 @@ import { devLog } from '@/lib/utils';
 import { useUserActiveGames } from './useGames';
 import { MAX_CONCURRENT_GAMES } from '@/store/gameStore';
 import { PENDING_TX_CLEANUP_INTERVAL_MS, PENDING_TX_STALE_TIME_MS } from '@/lib/constants';
+import { useIsLoggedIn } from '@/lib/data';
 
 export type PendingTxType = 'create' | 'cancel' | 'join';
 export type PendingTxStatus = 'pending' | 'submitted' | 'confirmed' | 'failed' | 'expired';
@@ -39,11 +40,43 @@ export interface CreatePendingTxInput {
 /**
  * Hook for managing pending transactions in the database
  * Tracks blockchain transactions that are awaiting confirmation
+ *
+ * In decentralized mode (not logged in), returns no-op functions
+ * since there's no database to track transactions.
  */
 export function usePendingTransactions() {
   const { address } = useAccount();
   const queryClient = useQueryClient();
   const pendingOpsRef = useRef<Set<string>>(new Set());
+  const isLoggedIn = useIsLoggedIn();
+
+  // Decentralized mode: return empty/no-op values
+  // No database tracking in blockchain-only mode
+  const noopReturn = useMemo(() => ({
+    pendingTransactions: [] as PendingTransaction[],
+    isLoading: false,
+    refetch: async () => ({ data: [] as PendingTransaction[], error: null }),
+    addPendingTransaction: async () => null,
+    setTxHash: async () => {},
+    markConfirmed: async () => {},
+    markFailed: async () => {},
+    removePendingTransaction: async () => {},
+    getPendingCreate: () => undefined,
+    getPendingCancel: () => undefined,
+    getPendingJoin: () => undefined,
+    hasPendingTransaction: () => false,
+    isGameCancelling: () => false,
+    isGameJoining: () => false,
+    isCreating: false,
+    isUpdating: false,
+  }), []);
+
+  // In decentralized mode, return no-op immediately
+  // This prevents any Supabase calls
+  if (!isLoggedIn) {
+    devLog.log('[PendingTx] Decentralized mode - no database tracking');
+    return noopReturn;
+  }
 
   // Query key for pending transactions - memoize to prevent unnecessary re-renders
   const normalizedAddress = address?.toLowerCase() || '';

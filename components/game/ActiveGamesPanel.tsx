@@ -13,13 +13,26 @@ import { useAccount } from 'wagmi';
 import { useConnectionStatus } from '@/hooks/useRealtimeSync';
 import { formatGameTimeRemaining, isGameWarning, isGameExpired } from '@/hooks/useGameTimeout';
 import { useSharedTimer } from '@/hooks/useSharedTimer';
+import { useDataMode } from '@/lib/data';
+import { Zap, Database } from 'lucide-react';
 
-// Connection status indicator component
+// Connection/Mode status indicator component
 function ConnectionStatusIndicator() {
   const { isConnected, isConnecting, isPolling } = useConnectionStatus();
+  const dataMode = useDataMode();
 
+  // In decentralized (blockchain) mode, show blockchain icon
+  if (dataMode === 'blockchain') {
+    return (
+      <span title="Decentralized Mode (Blockchain)" className="flex items-center gap-1">
+        <Zap className="w-3 h-3 text-yellow-400" />
+      </span>
+    );
+  }
+
+  // In centralized (supabase) mode, show connection status
   if (isConnected) {
-    return <span title="Live"><Wifi className="w-3 h-3 text-green-400" /></span>;
+    return <span title="Live Sync"><Wifi className="w-3 h-3 text-green-400" /></span>;
   } else if (isConnecting) {
     return <span title="Connecting"><Loader2 className="w-3 h-3 text-yellow-400 animate-spin" /></span>;
   } else if (isPolling) {

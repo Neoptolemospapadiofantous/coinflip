@@ -1,9 +1,10 @@
 'use client';
 
-import { useCallback, useEffect, useRef } from 'react';
+import { useCallback, useEffect, useRef, useMemo } from 'react';
 import { useAccount } from 'wagmi';
 import { getAuthenticatedClient } from '@/lib/supabase';
 import { devLog } from '@/lib/utils';
+import { useIsLoggedIn } from '@/lib/data';
 
 type NotificationType = 'matched' | 'resolved' | 'expired';
 type SoundType = 'matched' | 'resolved';
@@ -49,10 +50,30 @@ function evictOldCacheEntries(): void {
 /**
  * Hook for tracking notification state in the database
  * Ensures modals and sounds are only shown once per user per game
+ *
+ * In decentralized mode (not logged in), returns no-op functions
+ * since there's no database to track notifications.
  */
 export function useNotificationState() {
   const { address } = useAccount();
   const pendingOpsRef = useRef<Set<string>>(new Set());
+  const isLoggedIn = useIsLoggedIn();
+
+  // Decentralized mode: return no-op functions
+  // In blockchain-only mode, always allow showing modals/sounds (no deduplication)
+  const noopReturn = useMemo(() => ({
+    shouldShowModal: async () => true,
+    shouldPlaySound: async () => true,
+    markModalShown: async () => {},
+    markSoundPlayed: async () => {},
+    prefetchNotifications: async () => {},
+    markMultipleModalsShown: async () => {},
+  }), []);
+
+  if (!isLoggedIn) {
+    devLog.log('[Notification] Decentralized mode - no database tracking');
+    return noopReturn;
+  }
 
   /**
    * Check if a modal should be shown for a game
