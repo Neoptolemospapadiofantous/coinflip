@@ -21,10 +21,13 @@ contract CoinFlip is ReentrancyGuard, Pausable, Ownable, AutomationCompatibleInt
     // =============================================================
 
     /// @notice Contract version for upgrade tracking
-    uint8 public constant VERSION = 2;
+    uint8 public constant VERSION = 3;
 
     /// @notice Maximum number of tiers
     uint8 public constant MAX_TIERS = 10;
+
+    /// @notice Maximum concurrent games per player
+    uint8 public constant MAX_GAMES_PER_PLAYER = 5;
 
     /// @notice Platform fee in basis points (300 = 3%)
     uint16 public constant FEE_BASIS_POINTS = 300;
@@ -96,6 +99,9 @@ contract CoinFlip is ReentrancyGuard, Pausable, Ownable, AutomationCompatibleInt
 
     /// @notice Mapping to track stuck funds from failed refunds (gameId => amount)
     mapping(uint256 => uint256) public stuckFunds;
+
+    /// @notice Mapping to track active games per player (address => count)
+    mapping(address => uint8) public activeGameCount;
 
     // =============================================================
     //                      ENUMS
@@ -234,6 +240,7 @@ contract CoinFlip is ReentrancyGuard, Pausable, Ownable, AutomationCompatibleInt
     error TooManyOpenGames();
     error InvalidTierAmount();
     error NoStuckFunds();
+    error TooManyActiveGames();
 
     // =============================================================
     //                      CONSTRUCTOR
@@ -286,6 +293,10 @@ contract CoinFlip is ReentrancyGuard, Pausable, Ownable, AutomationCompatibleInt
         if (t.amount == 0) revert InvalidTierAmount();
         if (msg.value != t.amount) revert IncorrectBetAmount();
         if (openGameIds.length >= MAX_OPEN_GAMES) revert TooManyOpenGames();
+        if (activeGameCount[msg.sender] >= MAX_GAMES_PER_PLAYER) revert TooManyActiveGames();
+
+        // Increment active game count for creator
+        activeGameCount[msg.sender]++;
 
         // Create game
         gameId = nextGameId++;
@@ -331,6 +342,10 @@ contract CoinFlip is ReentrancyGuard, Pausable, Ownable, AutomationCompatibleInt
         if (game.state != GameState.OPEN) revert InvalidGameState();
         if (msg.sender == game.playerA) revert CannotJoinOwnGame();
         if (msg.value != t.amount) revert IncorrectBetAmount();
+        if (activeGameCount[msg.sender] >= MAX_GAMES_PER_PLAYER) revert TooManyActiveGames();
+
+        // Increment active game count for joiner
+        activeGameCount[msg.sender]++;
 
         // Update game state
         game.playerB = msg.sender;
@@ -395,6 +410,11 @@ contract CoinFlip is ReentrancyGuard, Pausable, Ownable, AutomationCompatibleInt
         // Update state first (CEI pattern)
         game.state = GameState.CANCELLED;
 
+        // Decrement active game count for creator
+        if (activeGameCount[game.playerA] > 0) {
+            activeGameCount[game.playerA]--;
+        }
+
         // Refund creator
         uint256 refundAmount = tiers[game.tier].amount;
         (bool success, ) = game.playerA.call{value: refundAmount}("");
@@ -432,6 +452,14 @@ contract CoinFlip is ReentrancyGuard, Pausable, Ownable, AutomationCompatibleInt
 
         // Update state
         game.state = GameState.CANCELLED;
+
+        // Decrement active game counts for both players
+        if (activeGameCount[game.playerA] > 0) {
+            activeGameCount[game.playerA]--;
+        }
+        if (activeGameCount[game.playerB] > 0) {
+            activeGameCount[game.playerB]--;
+        }
 
         // Refund both players
         uint256 refundAmount = tiers[game.tier].amount;
@@ -536,6 +564,14 @@ contract CoinFlip is ReentrancyGuard, Pausable, Ownable, AutomationCompatibleInt
 
         // Update state first (prevent reentrancy)
         game.state = GameState.CANCELLED;
+
+        // Decrement active game counts
+        if (game.playerA != address(0) && activeGameCount[game.playerA] > 0) {
+            activeGameCount[game.playerA]--;
+        }
+        if (game.playerB != address(0) && activeGameCount[game.playerB] > 0) {
+            activeGameCount[game.playerB]--;
+        }
 
         // Refund player A
         if (game.playerA != address(0)) {
@@ -663,6 +699,11 @@ contract CoinFlip is ReentrancyGuard, Pausable, Ownable, AutomationCompatibleInt
                 // Update state
                 game.state = GameState.CANCELLED;
 
+                // Decrement active game count for creator
+                if (activeGameCount[game.playerA] > 0) {
+                    activeGameCount[game.playerA]--;
+                }
+
                 // Refund creator
                 uint256 refundAmount = tiers[game.tier].amount;
                 (bool success, ) = game.playerA.call{value: refundAmount}("");
@@ -787,6 +828,32 @@ contract CoinFlip is ReentrancyGuard, Pausable, Ownable, AutomationCompatibleInt
         return timeoutBlock - block.number;
     }
 
+    /**
+     * @notice Get active game count for a player
+     * @param player The player address
+     * @return Number of active games
+     */
+    function getActiveGameCount(address player)
+        external
+        view
+        returns (uint8)
+    {
+        return activeGameCount[player];
+    }
+
+    /**
+     * @notice Check if a player can create a new game
+     * @param player The player address
+     * @return True if player can create a new game
+     */
+    function canCreateGame(address player)
+        external
+        view
+        returns (bool)
+    {
+        return activeGameCount[player] < MAX_GAMES_PER_PLAYER;
+    }
+
     // =============================================================
     //                    INTERNAL FUNCTIONS
     // =============================================================
@@ -842,6 +909,14 @@ contract CoinFlip is ReentrancyGuard, Pausable, Ownable, AutomationCompatibleInt
 
         game.winner = winner;
         game.state = GameState.RESOLVED;
+
+        // Decrement active game counts for both players
+        if (activeGameCount[game.playerA] > 0) {
+            activeGameCount[game.playerA]--;
+        }
+        if (activeGameCount[game.playerB] > 0) {
+            activeGameCount[game.playerB]--;
+        }
 
         // Calculate payout
         Tier storage t = tiers[game.tier];
