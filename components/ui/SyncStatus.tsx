@@ -5,6 +5,7 @@ import { Flex, Text, Tooltip } from '@radix-ui/themes';
 import { useIndexerStatus } from '@/hooks/useRealtimeStats';
 import { useConnectionStatus } from '@/hooks/useRealtimeSync';
 import { Wifi, WifiOff, Loader2, Zap } from 'lucide-react';
+import { useDataMode } from '@/lib/data';
 
 /**
  * Unified sync status indicator for the header
@@ -13,9 +14,14 @@ import { Wifi, WifiOff, Loader2, Zap } from 'lucide-react';
 export const SyncStatus = memo(function SyncStatus() {
   const { isConnected, isConnecting, isPolling } = useConnectionStatus();
   const { syncStatus, lastBlock } = useIndexerStatus();
+  const dataMode = useDataMode();
 
   // Calculate overall status
   const status = useMemo(() => {
+    // In blockchain mode, show blockchain status
+    if (dataMode === 'blockchain') {
+      return 'blockchain';
+    }
     if (!isConnected && !isPolling && !isConnecting) {
       return 'offline';
     }
@@ -29,11 +35,21 @@ export const SyncStatus = memo(function SyncStatus() {
       return 'syncing';
     }
     return 'live';
-  }, [isConnected, isConnecting, isPolling, syncStatus]);
+  }, [dataMode, isConnected, isConnecting, isPolling, syncStatus]);
 
   // Status configurations
   const config = useMemo(() => {
     switch (status) {
+      case 'blockchain':
+        return {
+          icon: <Zap className="w-3 h-3" />,
+          label: 'Blockchain',
+          bgClass: 'bg-yellow-500/10 border-yellow-500/30',
+          textClass: 'text-yellow-400',
+          dotClass: 'bg-yellow-500',
+          pulse: true,
+          tooltip: 'Decentralized mode - reading directly from blockchain',
+        };
       case 'live':
         return {
           icon: <Zap className="w-3 h-3" />,
@@ -130,15 +146,18 @@ export const SyncStatus = memo(function SyncStatus() {
 export const SyncStatusDot = memo(function SyncStatusDot() {
   const { isConnected, isConnecting, isPolling } = useConnectionStatus();
   const { syncStatus } = useIndexerStatus();
+  const dataMode = useDataMode();
 
   const status = useMemo(() => {
+    if (dataMode === 'blockchain') return 'blockchain';
     if (!isConnected && !isPolling) return 'offline';
     if (syncStatus === 'stale') return 'stale';
     if (isConnecting || isPolling || syncStatus === 'syncing') return 'syncing';
     return 'synced';
-  }, [isConnected, isConnecting, isPolling, syncStatus]);
+  }, [dataMode, isConnected, isConnecting, isPolling, syncStatus]);
 
   const config = {
+    blockchain: { color: 'bg-yellow-500', pulse: true, label: 'Blockchain mode' },
     synced: { color: 'bg-green-500', pulse: true, label: 'All systems operational' },
     syncing: { color: 'bg-yellow-500', pulse: false, label: 'Syncing data...' },
     stale: { color: 'bg-orange-500', pulse: true, label: 'Data may be outdated' },
