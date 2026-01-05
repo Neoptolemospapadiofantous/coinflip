@@ -36,6 +36,7 @@ import { usePendingTransactions, useGameLimits } from '@/hooks/usePendingTransac
 import { useUserPreferences } from '@/hooks/useUserPreferences';
 import { useNotificationState } from '@/hooks/useNotificationState';
 import { usePendingByTier, useTierMatchTimes, getEstimatedMatchTime } from '@/hooks/useRealtimeStats';
+import { useDataMode, useFeature } from '@/lib/data';
 
 enum GameStep {
   SELECT_TIER = 'select_tier',
@@ -50,6 +51,11 @@ export default function PlayPage() {
   const searchParams = useSearchParams();
   const isQuickRebet = searchParams.get('quickRebet') === 'true';
   const [step, setStep] = useState<GameStep>(GameStep.SELECT_TIER);
+
+  // Check data mode - decentralized (blockchain) vs centralized (supabase)
+  const dataMode = useDataMode();
+  const hasRealtime = useFeature('realtime');
+  const isCentralizedMode = dataMode === 'supabase';
   // Use optimized selectors for state to prevent unnecessary re-renders
   const selectedTier = useSelectedTier();
   const coinChoice = useCoinChoice();
@@ -658,21 +664,23 @@ export default function PlayPage() {
                             </Flex>
                           </Flex>
 
-                          {/* Step 3: Indexing */}
-                          <Flex align="center" gap="3">
-                            <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
-                              trackedGame ? 'bg-green-500/20 text-green-400' : isSuccess && isSearching ? 'bg-cyan-500/20 text-cyan-400' : 'bg-gray-500/20 text-gray-400'
-                            }`}>
-                              {trackedGame ? <CheckCircle2 className="w-5 h-5" /> : isSuccess && isSearching ? <Loader2 className="w-5 h-5 animate-spin" /> : '3'}
-                            </div>
-                            <Flex direction="column">
-                              <Text size="2" weight="bold" className={trackedGame ? 'text-green-400' : isSuccess && isSearching ? 'text-cyan-400' : 'text-gray-400'}>
-                                Syncing to Database
-                              </Text>
-                              {isSuccess && isSearching && !trackedGame && <Text size="1" color="gray">Almost there...</Text>}
-                              {trackedGame && <Text size="1" className="text-green-400">Synced</Text>}
+                          {/* Step 3: Indexing (only in centralized mode) */}
+                          {isCentralizedMode && (
+                            <Flex align="center" gap="3">
+                              <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
+                                trackedGame ? 'bg-green-500/20 text-green-400' : isSuccess && isSearching ? 'bg-cyan-500/20 text-cyan-400' : 'bg-gray-500/20 text-gray-400'
+                              }`}>
+                                {trackedGame ? <CheckCircle2 className="w-5 h-5" /> : isSuccess && isSearching ? <Loader2 className="w-5 h-5 animate-spin" /> : '3'}
+                              </div>
+                              <Flex direction="column">
+                                <Text size="2" weight="bold" className={trackedGame ? 'text-green-400' : isSuccess && isSearching ? 'text-cyan-400' : 'text-gray-400'}>
+                                  Syncing to Database
+                                </Text>
+                                {isSuccess && isSearching && !trackedGame && <Text size="1" color="gray">Almost there...</Text>}
+                                {trackedGame && <Text size="1" className="text-green-400">Synced</Text>}
+                              </Flex>
                             </Flex>
-                          </Flex>
+                          )}
                         </Flex>
                       </Card>
                     )}
@@ -696,13 +704,60 @@ export default function PlayPage() {
                           <Loader2 className="w-16 h-16 text-yellow-400 animate-spin" />
                           <Heading size="5" className="text-gradient-gold">Transaction Confirmed!</Heading>
                           <Text size="2" color="gray" align="center">
-                            Syncing game to database...
+                            {isCentralizedMode ? 'Syncing game to database...' : 'Waiting for blockchain confirmation...'}
                           </Text>
                           {txHash && (
                             <Text size="1" className="font-mono text-gray-500">
                               TX: {txHash.slice(0, 10)}...{txHash.slice(-8)}
                             </Text>
                           )}
+                        </Flex>
+                      </div>
+                    )}
+
+                    {/* Decentralized mode: Show success after blockchain confirmation */}
+                    {!isCentralizedMode && isSuccess && !isSearching && !trackedGame && (
+                      <div className="animate-slide-up">
+                        <Flex direction="column" gap="5" align="center">
+                          <Flex direction="column" gap="2" align="center">
+                            <CheckCircle2 className="w-12 h-12 text-green-400 glow-resolved" />
+                            <Heading size="5" className="text-gradient-gold">Game Created!</Heading>
+                            <Badge size="2" color="cyan" variant="soft">
+                              <Zap className="w-3 h-3 mr-1" />
+                              On Blockchain
+                            </Badge>
+                          </Flex>
+
+                          <Card className="w-full max-w-sm card-simple">
+                            <Flex direction="column" gap="3" p="4">
+                              <Text size="2" color="gray" align="center">
+                                Your game is live on the blockchain. Check the Queue page to see available games and wait for an opponent.
+                              </Text>
+                              {txHash && (
+                                <Text size="1" className="font-mono text-gray-500" align="center">
+                                  TX: {txHash.slice(0, 10)}...{txHash.slice(-8)}
+                                </Text>
+                              )}
+                            </Flex>
+                          </Card>
+
+                          <Flex gap="3">
+                            <Button
+                              size="3"
+                              variant="soft"
+                              onClick={() => window.location.href = '/queue'}
+                            >
+                              View Queue
+                            </Button>
+                            <Button
+                              size="3"
+                              className="bg-gradient-to-r from-cyan-500 to-purple-500"
+                              onClick={handleCreateAnother}
+                            >
+                              <Plus className="w-4 h-4 mr-2" />
+                              Create Another
+                            </Button>
+                          </Flex>
                         </Flex>
                       </div>
                     )}
