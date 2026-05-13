@@ -1,7 +1,6 @@
 'use client';
 
 import React, { memo } from 'react';
-import { Card, Flex, Text, Heading, Grid } from '@radix-ui/themes';
 import { Trophy, Target, TrendingUp, DollarSign, Zap, Users } from 'lucide-react';
 import { formatCurrency, formatNumber } from '@/lib/utils';
 
@@ -13,29 +12,40 @@ interface StatsCardProps {
   glowClass?: string;
 }
 
+const colorHexMap: Record<string, string> = {
+  cyan: '#67e8f9',
+  yellow: '#fbbf24',
+  green: '#86efac',
+  red: '#fca5a5',
+  purple: '#c4b5fd',
+};
+
 export const StatsCard = memo(function StatsCard({ icon, label, value, color = 'cyan', glowClass = 'glow-primary' }: StatsCardProps) {
-  const colorClass = {
-    cyan: 'text-cyan-400',
-    yellow: 'text-yellow-400',
-    green: 'text-green-400',
-    red: 'text-red-400',
-    purple: 'text-purple-400',
-  }[color] || 'text-cyan-400';
+  const accentColor = colorHexMap[color] ?? colorHexMap.cyan;
 
   return (
-    <Card className={`card-simple card-hover ${glowClass}`}>
-      <Flex direction="column" gap="2" p="4">
-        <Flex align="center" gap="2">
+    <div
+      className={glowClass}
+      style={{
+        background: 'rgba(255,255,255,0.03)',
+        border: '1px solid rgba(255,255,255,0.07)',
+        borderRadius: '16px',
+        borderLeft: `3px solid ${accentColor}`,
+        overflow: 'hidden',
+      }}
+    >
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', padding: '16px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
           {icon}
-          <Text size="2" color="gray">
+          <span style={{ fontSize: '12px', color: 'rgba(156,163,175,1)' }}>
             {label}
-          </Text>
-        </Flex>
-        <Heading size="7" className={colorClass}>
+          </span>
+        </div>
+        <span style={{ fontSize: '28px', fontWeight: 700, color: accentColor, lineHeight: 1.2 }}>
           {value}
-        </Heading>
-      </Flex>
-    </Card>
+        </span>
+      </div>
+    </div>
   );
 });
 
@@ -58,7 +68,7 @@ export const GameStatsGrid = memo(function GameStatsGrid({
   const isProfit = BigInt(profitLoss) > BigInt(0);
 
   return (
-    <Grid columns={{ initial: '1', sm: '2', md: '4' }} gap="4">
+    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(1, 1fr)', gap: '16px' }} className="sm:grid-cols-2 md:grid-cols-4">
       <StatsCard
         icon={<Target className="w-5 h-5 text-cyan-400" />}
         label="Total Games"
@@ -90,7 +100,7 @@ export const GameStatsGrid = memo(function GameStatsGrid({
         color={isProfit ? 'green' : 'red'}
         glowClass={isProfit ? 'glow-success' : 'glow-danger'}
       />
-    </Grid>
+    </div>
   );
 });
 
@@ -106,7 +116,7 @@ export const GlobalStatsGrid = memo(function GlobalStatsGrid({
   avgWinRate?: number;
 }) {
   return (
-    <Grid columns={{ initial: '1', sm: '2', md: '4' }} gap="4">
+    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(1, 1fr)', gap: '16px' }} className="sm:grid-cols-2 md:grid-cols-4">
       <StatsCard
         icon={<Zap className="w-5 h-5 text-cyan-400" />}
         label="Total Games"
@@ -138,6 +148,6 @@ export const GlobalStatsGrid = memo(function GlobalStatsGrid({
         color="yellow"
         glowClass="glow-warning"
       />
-    </Grid>
+    </div>
   );
 });

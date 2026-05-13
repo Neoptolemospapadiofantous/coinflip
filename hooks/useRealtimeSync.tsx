@@ -119,7 +119,6 @@ export function useRealtimeSync() {
   useEffect(() => {
     // Skip Supabase subscriptions in decentralized mode
     if (!isLoggedInRef.current) {
-      devLog.log('📡 [RealtimeSync] Decentralized mode - skipping Supabase channel setup');
       return;
     }
 

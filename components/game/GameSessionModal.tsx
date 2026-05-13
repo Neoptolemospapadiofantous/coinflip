@@ -1,6 +1,6 @@
 'use client';
 
-import { Dialog, Flex, Heading, Text, Button, Card, Progress } from '@radix-ui/themes';
+import { Dialog, Progress } from '@radix-ui/themes';
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
@@ -459,12 +459,18 @@ export function GameSessionModal({ game, open, onClose, userAddress, modalType }
       <Dialog.Root open={open} onOpenChange={(_isOpen) => { /* Prevent auto-close on outside click/Escape - only close via explicit buttons */ }}>
       <Dialog.Content
         maxWidth="600px"
-        className="backdrop-blur-xl bg-slate-900/95 border-2 border-cyan-500/30 max-h-[90vh] overflow-y-auto fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-50 w-[calc(100vw-2rem)] sm:w-auto"
+        style={{
+          background: 'rgba(5,8,22,0.95)',
+          backdropFilter: 'blur(24px)',
+          border: '1px solid rgba(255,255,255,0.1)',
+          borderRadius: '20px',
+        }}
+        className="max-h-[90vh] overflow-y-auto fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-50 w-[calc(100vw-2rem)] sm:w-auto"
         aria-describedby={undefined}
       >
         <Dialog.Title>
-          <Flex direction="column" gap="2" align="center">
-            <Heading size={{ initial: '5', sm: '7' }} className="text-gradient-rainbow text-center">
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', alignItems: 'center' }}>
+            <h2 style={{ fontSize: 'clamp(18px,4vw,28px)', fontWeight: 700, textAlign: 'center' }} className="text-gradient-rainbow">
               {modalType === 'expired' && 'Game Expired'}
               {modalType !== 'expired' && game.status === 'matched' && !vrfTimedOut && 'Game Matched!'}
               {modalType !== 'expired' && game.status === 'matched' && vrfTimedOut && 'VRF Delayed'}
@@ -472,96 +478,108 @@ export function GameSessionModal({ game, open, onClose, userAddress, modalType }
               {modalType !== 'expired' && game.status === 'resolved' && validation.valid && !showResult && 'Flipping...'}
               {modalType !== 'expired' && game.status === 'resolved' && showResult && (isWinner ? 'You Won!' : 'Better Luck Next Time')}
               {modalType !== 'expired' && game.status === 'cancelled' && 'Game Cancelled'}
-            </Heading>
-            <Flex align="center" gap="2">
+            </h2>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
               <CopyableGameId gameId={game.id} size={{ initial: '1', sm: '2' }} />
               {/* Queue indicator - shows when more games are waiting */}
               {modalQueue.length > 0 && (
-                <Flex align="center" gap="2">
-                  <Flex
-                    align="center"
-                    gap="1"
-                    className="px-2 py-1 rounded-full bg-purple-500/20 border border-purple-500/40"
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <div
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '4px',
+                      padding: '4px 8px',
+                      borderRadius: '999px',
+                      background: 'rgba(168,85,247,0.2)',
+                      border: '1px solid rgba(168,85,247,0.4)',
+                    }}
                   >
-                    <Layers className="w-3 h-3 text-purple-400" />
-                    <Text size="1" className="text-purple-400" weight="medium">
+                    <Layers style={{ width: '12px', height: '12px', color: '#c4b5fd' }} />
+                    <span style={{ fontSize: '11px', color: '#c4b5fd', fontWeight: 500 }}>
                       +{modalQueue.length} more
-                    </Text>
-                  </Flex>
-                  <Button
-                    size="1"
-                    variant="soft"
-                    color="red"
+                    </span>
+                  </div>
+                  <button
                     onClick={handleSkipAll}
-                    className="cursor-pointer"
+                    style={{
+                      padding: '3px 10px',
+                      fontSize: '11px',
+                      fontWeight: 600,
+                      background: 'rgba(239,68,68,0.15)',
+                      border: '1px solid rgba(239,68,68,0.4)',
+                      borderRadius: '6px',
+                      color: '#fca5a5',
+                      cursor: 'pointer',
+                    }}
                   >
                     Skip All
-                  </Button>
-                </Flex>
+                  </button>
+                </div>
               )}
-            </Flex>
-          </Flex>
+            </div>
+          </div>
         </Dialog.Title>
 
-        <Flex direction="column" gap="6" mt="4">
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '24px', marginTop: '16px' }}>
           {/* Game Status: Matched - Waiting for VRF */}
           {game.status === 'matched' && (
-            <Flex direction="column" gap={{ initial: '4', sm: '5' }} align="center" py={{ initial: '4', sm: '6' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '20px', alignItems: 'center', paddingTop: '24px', paddingBottom: '24px' }}>
               {!vrfTimedOut ? (
                 <>
                   <Loader2 className="w-16 h-16 sm:w-20 sm:h-20 text-cyan-400 animate-spin glow-cyan" />
 
-                  <Flex direction="column" gap="2" align="center" className="px-2">
-                    <Heading size={{ initial: '4', sm: '5' }} className="text-gradient-cyan-purple text-center">
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', alignItems: 'center', padding: '0 8px' }}>
+                    <h3 style={{ fontSize: 'clamp(16px,3vw,20px)', fontWeight: 700, textAlign: 'center' }} className="text-gradient-cyan-purple">
                       {vrfElapsedSeconds < 5 && 'Sending VRF Request...'}
                       {vrfElapsedSeconds >= 5 && vrfElapsedSeconds < 15 && 'Awaiting Block Confirmations...'}
                       {vrfElapsedSeconds >= 15 && vrfElapsedSeconds < 25 && 'VRF Nodes Processing...'}
                       {vrfElapsedSeconds >= 25 && vrfElapsedSeconds < 45 && 'Generating Random Number...'}
                       {vrfElapsedSeconds >= 45 && vrfElapsedSeconds < 90 && 'Finalizing Result...'}
                       {vrfElapsedSeconds >= 90 && 'Network Congestion Detected'}
-                    </Heading>
-                    <Text size={{ initial: '2', sm: '3' }} color="gray" align="center">
+                    </h3>
+                    <p style={{ fontSize: 'clamp(12px,2vw,14px)', color: 'rgba(156,163,175,1)', textAlign: 'center' }}>
                       {vrfElapsedSeconds < 5 && 'Transaction submitted to Chainlink VRF'}
                       {vrfElapsedSeconds >= 5 && vrfElapsedSeconds < 15 && 'Waiting for 3 block confirmations'}
                       {vrfElapsedSeconds >= 15 && vrfElapsedSeconds < 25 && 'Decentralized oracle network at work'}
                       {vrfElapsedSeconds >= 25 && vrfElapsedSeconds < 45 && 'Cryptographically secure randomness'}
                       {vrfElapsedSeconds >= 45 && vrfElapsedSeconds < 90 && 'Almost there, please wait...'}
                       {vrfElapsedSeconds >= 90 && 'High network activity - result incoming'}
-                    </Text>
-                  </Flex>
+                    </p>
+                  </div>
 
                   {/* VRF Progress Steps */}
-                  <Flex direction="column" gap="3" className="w-full max-w-xs">
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', width: '100%', maxWidth: '320px' }}>
                     {/* Step indicators */}
-                    <Flex justify="between" align="center" className="px-1">
-                      <Flex direction="column" align="center" gap="1">
-                        <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${vrfElapsedSeconds >= 0 ? 'bg-cyan-500 text-white' : 'bg-gray-600 text-gray-400'}`}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0 4px' }}>
+                      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px' }}>
+                        <div style={{ width: '24px', height: '24px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '11px', fontWeight: 700, background: vrfElapsedSeconds >= 0 ? '#06b6d4' : '#4b5563', color: vrfElapsedSeconds >= 0 ? '#fff' : '#9ca3af' }}>
                           {vrfElapsedSeconds >= 5 ? '✓' : '1'}
                         </div>
-                        <Text size="1" color={vrfElapsedSeconds >= 0 ? 'cyan' : 'gray'}>Request</Text>
-                      </Flex>
-                      <div className={`flex-1 h-0.5 mx-1 ${vrfElapsedSeconds >= 5 ? 'bg-cyan-500' : 'bg-gray-600'}`} />
-                      <Flex direction="column" align="center" gap="1">
-                        <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${vrfElapsedSeconds >= 5 ? 'bg-cyan-500 text-white' : 'bg-gray-600 text-gray-400'}`}>
+                        <span style={{ fontSize: '10px', color: vrfElapsedSeconds >= 0 ? '#67e8f9' : 'rgba(156,163,175,1)' }}>Request</span>
+                      </div>
+                      <div style={{ flex: 1, height: '2px', margin: '0 4px', background: vrfElapsedSeconds >= 5 ? '#06b6d4' : '#4b5563' }} />
+                      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px' }}>
+                        <div style={{ width: '24px', height: '24px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '11px', fontWeight: 700, background: vrfElapsedSeconds >= 5 ? '#06b6d4' : '#4b5563', color: vrfElapsedSeconds >= 5 ? '#fff' : '#9ca3af' }}>
                           {vrfElapsedSeconds >= 15 ? '✓' : '2'}
                         </div>
-                        <Text size="1" color={vrfElapsedSeconds >= 5 ? 'cyan' : 'gray'}>Confirm</Text>
-                      </Flex>
-                      <div className={`flex-1 h-0.5 mx-1 ${vrfElapsedSeconds >= 15 ? 'bg-cyan-500' : 'bg-gray-600'}`} />
-                      <Flex direction="column" align="center" gap="1">
-                        <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${vrfElapsedSeconds >= 15 ? 'bg-cyan-500 text-white' : 'bg-gray-600 text-gray-400'}`}>
+                        <span style={{ fontSize: '10px', color: vrfElapsedSeconds >= 5 ? '#67e8f9' : 'rgba(156,163,175,1)' }}>Confirm</span>
+                      </div>
+                      <div style={{ flex: 1, height: '2px', margin: '0 4px', background: vrfElapsedSeconds >= 15 ? '#06b6d4' : '#4b5563' }} />
+                      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px' }}>
+                        <div style={{ width: '24px', height: '24px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '11px', fontWeight: 700, background: vrfElapsedSeconds >= 15 ? '#06b6d4' : '#4b5563', color: vrfElapsedSeconds >= 15 ? '#fff' : '#9ca3af' }}>
                           {vrfElapsedSeconds >= 25 ? '✓' : '3'}
                         </div>
-                        <Text size="1" color={vrfElapsedSeconds >= 15 ? 'cyan' : 'gray'}>Generate</Text>
-                      </Flex>
-                      <div className={`flex-1 h-0.5 mx-1 ${vrfElapsedSeconds >= 25 ? 'bg-cyan-500' : 'bg-gray-600'}`} />
-                      <Flex direction="column" align="center" gap="1">
-                        <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${vrfElapsedSeconds >= 25 ? 'bg-cyan-500 text-white animate-pulse' : 'bg-gray-600 text-gray-400'}`}>
+                        <span style={{ fontSize: '10px', color: vrfElapsedSeconds >= 15 ? '#67e8f9' : 'rgba(156,163,175,1)' }}>Generate</span>
+                      </div>
+                      <div style={{ flex: 1, height: '2px', margin: '0 4px', background: vrfElapsedSeconds >= 25 ? '#06b6d4' : '#4b5563' }} />
+                      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px' }}>
+                        <div style={{ width: '24px', height: '24px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '11px', fontWeight: 700, background: vrfElapsedSeconds >= 25 ? '#06b6d4' : '#4b5563', color: vrfElapsedSeconds >= 25 ? '#fff' : '#9ca3af' }} className={vrfElapsedSeconds >= 25 ? 'animate-pulse' : ''}>
                           4
                         </div>
-                        <Text size="1" color={vrfElapsedSeconds >= 25 ? 'cyan' : 'gray'}>Result</Text>
-                      </Flex>
-                    </Flex>
+                        <span style={{ fontSize: '10px', color: vrfElapsedSeconds >= 25 ? '#67e8f9' : 'rgba(156,163,175,1)' }}>Result</span>
+                      </div>
+                    </div>
 
                     {/* Progress bar */}
                     <Progress
@@ -570,193 +588,218 @@ export function GameSessionModal({ game, open, onClose, userAddress, modalType }
                       size="2"
                       color={vrfElapsedSeconds > typicalVrfSeconds * 1.5 ? 'amber' : 'cyan'}
                     />
-                    <Flex justify="between" align="center">
-                      <Flex align="center" gap="1" className="text-cyan-400">
-                        <Clock className="w-3 h-3" />
-                        <Text size="1" weight="bold">{formatTime(vrfElapsedSeconds)}</Text>
-                      </Flex>
-                      <Text size="1" color={vrfElapsedSeconds > typicalVrfSeconds ? 'amber' : 'gray'}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '4px', color: '#67e8f9' }}>
+                        <Clock style={{ width: '12px', height: '12px' }} />
+                        <span style={{ fontSize: '11px', fontWeight: 700 }}>{formatTime(vrfElapsedSeconds)}</span>
+                      </div>
+                      <span style={{ fontSize: '11px', color: vrfElapsedSeconds > typicalVrfSeconds ? '#fbbf24' : 'rgba(156,163,175,1)' }}>
                         {vrfElapsedSeconds <= typicalVrfSeconds
                           ? `Typical: ~${typicalVrfSeconds}s`
                           : `+${vrfElapsedSeconds - typicalVrfSeconds}s over typical`}
-                      </Text>
-                    </Flex>
-                  </Flex>
+                      </span>
+                    </div>
+                  </div>
                 </>
               ) : (
                 <>
                   <AlertTriangle className="w-20 h-20 text-yellow-400 animate-pulse" />
 
-                  <Flex direction="column" gap="2" align="center">
-                    <Heading size="5" className="text-yellow-400">
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', alignItems: 'center' }}>
+                    <h3 style={{ fontSize: '20px', fontWeight: 700, color: '#fbbf24' }}>
                       VRF Response Delayed
-                    </Heading>
-                    <Text size="3" color="gray" align="center">
+                    </h3>
+                    <p style={{ fontSize: '14px', color: 'rgba(156,163,175,1)', textAlign: 'center' }}>
                       The random number request is taking longer than expected.
                       This can happen during network congestion.
-                    </Text>
-                  </Flex>
+                    </p>
+                  </div>
 
-                  <Flex align="center" gap="2" className="text-yellow-400">
-                    <Clock className="w-4 h-4" />
-                    <Text size="2" weight="bold">{formatTime(vrfElapsedSeconds)}</Text>
-                  </Flex>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#fbbf24' }}>
+                    <Clock style={{ width: '16px', height: '16px' }} />
+                    <span style={{ fontSize: '12px', fontWeight: 700 }}>{formatTime(vrfElapsedSeconds)}</span>
+                  </div>
 
-                  <Card className="w-full bg-yellow-500/10 border border-yellow-500/30">
-                    <Flex direction="column" gap="2" p="3">
-                      <Text size="2" className="text-yellow-400">
+                  <div style={{
+                    width: '100%',
+                    background: 'rgba(234,179,8,0.1)',
+                    border: '1px solid rgba(234,179,8,0.3)',
+                    borderRadius: '12px',
+                  }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', padding: '12px' }}>
+                      <p style={{ fontSize: '12px', color: '#fbbf24' }}>
                         Please wait. The result will appear automatically when VRF responds.
                         You can safely close this modal - the game will complete on-chain.
-                      </Text>
-                    </Flex>
-                  </Card>
+                      </p>
+                    </div>
+                  </div>
 
                   {/* Manual refresh button */}
-                  <Button
-                    size="2"
-                    variant="soft"
+                  <button
                     onClick={() => refetchGame()}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '8px',
+                      padding: '8px 20px',
+                      background: 'rgba(255,255,255,0.05)',
+                      border: '1px solid rgba(255,255,255,0.1)',
+                      borderRadius: '10px',
+                      color: 'rgba(209,213,219,1)',
+                      cursor: 'pointer',
+                      fontSize: '14px',
+                    }}
                     className="touch-target"
                   >
-                    <Loader2 className="w-4 h-4" />
+                    <Loader2 style={{ width: '16px', height: '16px' }} className="animate-spin" />
                     Check Status
-                  </Button>
+                  </button>
                 </>
               )}
 
-              <Card className="card-simple w-full">
-                <Flex direction="column" gap="3" p="4">
-                  <Flex justify="between" align="center">
-                    <Flex align="center" gap="2">
-                      <Users className="w-4 h-4 text-cyan-400" />
-                      <Text size="2" weight="bold">Players</Text>
-                    </Flex>
-                  </Flex>
+              <div style={{
+                background: 'rgba(255,255,255,0.03)',
+                border: '1px solid rgba(255,255,255,0.07)',
+                borderRadius: '16px',
+                width: '100%',
+              }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', padding: '16px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <Users style={{ width: '16px', height: '16px', color: '#67e8f9' }} />
+                      <span style={{ fontSize: '12px', fontWeight: 700 }}>Players</span>
+                    </div>
+                  </div>
 
-                  <Flex direction="column" gap="2">
-                    <Flex justify="between">
-                      <Text size="2" color="gray">
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                      <span style={{ fontSize: '12px', color: 'rgba(156,163,175,1)' }}>
                         Creator: {game.creator_choice === true ? '🪙 Tails' : game.creator_choice === false ? '👑 Heads' : '...'}
-                      </Text>
-                      <Text size="1" className="font-mono text-gray-500">
+                      </span>
+                      <span style={{ fontSize: '11px', fontFamily: 'monospace', color: '#6b7280' }}>
                         {game.creator_address?.slice(0, 6)}...{game.creator_address?.slice(-4)}
                         {isCreator && ' (You)'}
-                      </Text>
-                    </Flex>
+                      </span>
+                    </div>
 
-                    <Flex justify="between">
-                      <Text size="2" color="gray">
+                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                      <span style={{ fontSize: '12px', color: 'rgba(156,163,175,1)' }}>
                         Joiner: {game.joiner_choice === true ? '🪙 Tails' : game.joiner_choice === false ? '👑 Heads' : '...'}
-                      </Text>
-                      <Text size="1" className="font-mono text-gray-500">
+                      </span>
+                      <span style={{ fontSize: '11px', fontFamily: 'monospace', color: '#6b7280' }}>
                         {game.joiner_address?.slice(0, 6)}...{game.joiner_address?.slice(-4)}
                         {isJoiner && ' (You)'}
-                      </Text>
-                    </Flex>
-                  </Flex>
+                      </span>
+                    </div>
+                  </div>
 
-                  <Flex justify="between" pt="2" className="border-t border-slate-700/50">
-                    <Text size="2" weight="bold">Total Pot:</Text>
-                    <Text size="2" weight="bold" className="text-green-400">
+                  <div style={{ display: 'flex', justifyContent: 'space-between', paddingTop: '8px', borderTop: '1px solid rgba(51,65,85,0.5)' }}>
+                    <span style={{ fontSize: '12px', fontWeight: 700 }}>Total Pot:</span>
+                    <span style={{ fontSize: '12px', fontWeight: 700, color: '#86efac' }}>
                       {formatCurrency(BigInt(game.amount) * 2n)}
-                    </Text>
-                  </Flex>
-                </Flex>
-              </Card>
+                    </span>
+                  </div>
+                </div>
+              </div>
 
               {!vrfTimedOut && (
-                <Text size="1" color="gray" align="center" style={{ maxWidth: '400px' }}>
+                <p style={{ fontSize: '11px', color: 'rgba(156,163,175,1)', textAlign: 'center', maxWidth: '400px' }}>
                   Typically completes within ~{typicalVrfSeconds} seconds. The result is cryptographically secure and cannot be manipulated.
-                </Text>
+                </p>
               )}
-            </Flex>
+            </div>
           )}
 
           {/* Game Status: Resolved but waiting for complete data - Show loading */}
           {game.status === 'resolved' && !validation.valid && !showResult && (
-            <Flex direction="column" gap="5" align="center" py="6">
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '20px', alignItems: 'center', paddingTop: '24px', paddingBottom: '24px' }}>
               {!dataRetryExhausted ? (
                 <>
                   <Loader2 className="w-20 h-20 text-green-400 animate-spin glow-cyan" />
 
-                  <Flex direction="column" gap="2" align="center">
-                    <Heading size="5" className="text-gradient-cyan-purple">
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', alignItems: 'center' }}>
+                    <h3 style={{ fontSize: '20px', fontWeight: 700 }} className="text-gradient-cyan-purple">
                       Finalizing Result...
-                    </Heading>
-                    <Text size="3" color="gray" align="center">
+                    </h3>
+                    <p style={{ fontSize: '14px', color: 'rgba(156,163,175,1)', textAlign: 'center' }}>
                       Syncing game data from blockchain
-                    </Text>
-                  </Flex>
+                    </p>
+                  </div>
 
                   {/* Retry progress indicator */}
-                  <Flex direction="column" gap="2" align="center" className="w-full max-w-xs">
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', alignItems: 'center', width: '100%', maxWidth: '320px' }}>
                     <Progress
                       value={currentRetryCount}
                       max={MAX_DATA_RETRIES}
                       size="1"
                       color="green"
                     />
-                    <Flex justify="between" className="w-full px-1">
-                      <Text size="1" color="gray">
+                    <div style={{ display: 'flex', justifyContent: 'space-between', width: '100%', padding: '0 4px' }}>
+                      <span style={{ fontSize: '11px', color: 'rgba(156,163,175,1)' }}>
                         {currentRetryCount > 0 ? `Syncing... attempt ${currentRetryCount}/${MAX_DATA_RETRIES}` : 'Starting sync...'}
-                      </Text>
-                      <Text size="1" color={currentRetryCount > 5 ? 'yellow' : 'gray'}>
+                      </span>
+                      <span style={{ fontSize: '11px', color: currentRetryCount > 5 ? '#fbbf24' : 'rgba(156,163,175,1)' }}>
                         {currentRetryCount <= 3 && 'Normal'}
                         {currentRetryCount > 3 && currentRetryCount <= 6 && 'Slower than usual'}
                         {currentRetryCount > 6 && 'Almost there...'}
-                      </Text>
-                    </Flex>
-                  </Flex>
+                      </span>
+                    </div>
+                  </div>
                 </>
               ) : (
                 <>
                   <AlertTriangle className="w-20 h-20 text-yellow-400" />
 
-                  <Flex direction="column" gap="2" align="center">
-                    <Heading size="5" className="text-yellow-400">
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', alignItems: 'center' }}>
+                    <h3 style={{ fontSize: '20px', fontWeight: 700, color: '#fbbf24' }}>
                       Data Sync Issue
-                    </Heading>
-                    <Text size="3" color="gray" align="center">
+                    </h3>
+                    <p style={{ fontSize: '14px', color: 'rgba(156,163,175,1)', textAlign: 'center' }}>
                       Unable to fetch complete game data. The game has resolved on-chain.
-                    </Text>
-                  </Flex>
+                    </p>
+                  </div>
 
-                  <Button
-                    size="3"
-                    variant="soft"
+                  <button
                     onClick={() => {
                       retryCountRef.current = 0;
                       setDataRetryExhausted(false);
                       refetchGame();
                     }}
+                    style={{
+                      padding: '10px 24px',
+                      fontSize: '14px',
+                      fontWeight: 600,
+                      background: 'rgba(255,255,255,0.05)',
+                      border: '1px solid rgba(255,255,255,0.1)',
+                      borderRadius: '10px',
+                      color: 'rgba(209,213,219,1)',
+                      cursor: 'pointer',
+                    }}
                     className="glow-cyan"
                   >
                     Retry
-                  </Button>
+                  </button>
                 </>
               )}
-            </Flex>
+            </div>
           )}
 
           {/* Game Status: Resolved - Show Animation */}
           {game.status === 'resolved' && validation.valid && !showResult && (
-            <Flex direction="column" gap="4">
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
               {/* Coin Animation */}
               <div className="relative">
                 {skipped ? (
-                  <Flex
-                    direction="column"
-                    align="center"
-                    justify="center"
-                    className="w-full h-64 sm:h-80 md:h-96 bg-gradient-to-b from-slate-900 to-slate-950 border border-cyan-500/20 rounded-lg"
+                  <div
+                    style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', width: '100%', height: '320px', background: 'linear-gradient(to bottom, rgba(15,23,42,1), rgba(2,6,23,1))', border: '1px solid rgba(6,182,212,0.2)', borderRadius: '8px' }}
                   >
-                    <div className="text-6xl sm:text-7xl md:text-8xl mb-4">
+                    <div style={{ fontSize: 'clamp(48px,8vw,64px)', marginBottom: '16px' }}>
                       {result ? '🪙' : '👑'}
                     </div>
-                    <Text size="4" className="sm:text-lg md:text-xl" weight="bold">
+                    <span style={{ fontSize: 'clamp(14px,3vw,18px)', fontWeight: 700 }}>
                       {result ? 'Tails' : 'Heads'}
-                    </Text>
-                  </Flex>
+                    </span>
+                  </div>
                 ) : (
                   <CoinFlip2D
                     isFlipping={isFlipping}
@@ -768,279 +811,412 @@ export function GameSessionModal({ game, open, onClose, userAddress, modalType }
 
               {/* Skip Button */}
               {!skipped && isFlipping && (
-                <Flex direction="column" gap="2" align="center">
-                  <Flex gap="2">
-                    <Button
-                      size="3"
-                      variant="soft"
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', alignItems: 'center' }}>
+                  <div style={{ display: 'flex', gap: '8px' }}>
+                    <button
                       onClick={() => handleSkip(false)}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '6px',
+                        padding: '10px 20px',
+                        fontSize: '14px',
+                        fontWeight: 600,
+                        background: 'rgba(255,255,255,0.05)',
+                        border: '1px solid rgba(255,255,255,0.1)',
+                        borderRadius: '10px',
+                        color: 'rgba(209,213,219,1)',
+                        cursor: 'pointer',
+                      }}
                       className="glow-cyan hover:scale-105 transition-transform"
                     >
-                      <Zap className="w-4 h-4" />
+                      <Zap style={{ width: '16px', height: '16px' }} />
                       Skip
-                    </Button>
-                    <Button
-                      size="3"
-                      variant="soft"
-                      color="purple"
+                    </button>
+                    <button
                       onClick={() => handleSkip(true)}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '6px',
+                        padding: '10px 20px',
+                        fontSize: '14px',
+                        fontWeight: 600,
+                        background: 'rgba(124,58,237,0.15)',
+                        border: '1px solid rgba(124,58,237,0.4)',
+                        borderRadius: '10px',
+                        color: '#c4b5fd',
+                        cursor: 'pointer',
+                      }}
                       className="hover:scale-105 transition-transform"
                     >
-                      <Zap className="w-4 h-4" />
+                      <Zap style={{ width: '16px', height: '16px' }} />
                       Always Skip
-                    </Button>
-                  </Flex>
-                  <Text size="1" color="gray">
+                    </button>
+                  </div>
+                  <span style={{ fontSize: '11px', color: 'rgba(156,163,175,1)' }}>
                     {alwaysSkipAnimation ? 'Animation will be skipped automatically' : 'Click "Always Skip" to remember'}
-                  </Text>
-                </Flex>
+                  </span>
+                </div>
               )}
-            </Flex>
+            </div>
           )}
 
           {/* Game Status: Resolved - Show Result */}
           {game.status === 'resolved' && showResult && (
-            <Flex direction="column" gap={{ initial: '4', sm: '5' }} align="center">
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '20px', alignItems: 'center' }}>
               {/* Result Display */}
-              <Flex
-                direction="column"
-                align="center"
-                justify="center"
-                gap={{ initial: '3', sm: '4' }}
-                className={`w-full py-6 sm:py-8 bg-gradient-to-b from-slate-900/50 to-slate-950/50 rounded-lg border ${
-                  isWinner ? 'border-green-500/40 animate-win-glow' : 'border-red-500/20'
-                } ${isWinner ? 'animate-win-entrance' : 'animate-lose-entrance'}`}
+              <div
+                style={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '16px',
+                  width: '100%',
+                  paddingTop: '24px',
+                  paddingBottom: '24px',
+                  background: 'linear-gradient(to bottom, rgba(15,23,42,0.5), rgba(2,6,23,0.5))',
+                  borderRadius: '8px',
+                  border: isWinner ? '1px solid rgba(34,197,94,0.4)' : '1px solid rgba(239,68,68,0.2)',
+                }}
+                className={isWinner ? 'animate-win-glow animate-win-entrance' : 'animate-lose-entrance'}
               >
-                <div className={`text-6xl sm:text-7xl md:text-8xl ${isWinner ? 'animate-result-emoji' : 'animate-defeat-fade'}`}>
+                <div style={{ fontSize: 'clamp(48px,8vw,64px)' }} className={isWinner ? 'animate-result-emoji' : 'animate-defeat-fade'}>
                   {result ? '🪙' : '👑'}
                 </div>
-                <Heading size={{ initial: '5', sm: '6' }} className={isWinner ? 'animate-victory-shimmer' : 'text-gray-400'}>
+                <h3 style={{ fontSize: 'clamp(18px,4vw,22px)', fontWeight: 700 }} className={isWinner ? 'animate-victory-shimmer' : 'text-gray-400'}>
                   Result: {result ? 'Tails' : 'Heads'}
-                </Heading>
-              </Flex>
+                </h3>
+              </div>
 
               {/* Winner Card */}
-              <Card className={`card-solid w-full ${isWinner ? 'border-green-500/60 animate-win-glow' : 'border-red-500/30 animate-lose-entrance'}`}>
-                <Flex direction="column" gap={{ initial: '3', sm: '4' }} p={{ initial: '3', sm: '5' }}>
-                  <Flex align="center" gap="2">
-                    <Trophy className={`w-5 h-5 ${isWinner ? 'text-green-400 animate-trophy-bounce' : 'text-gray-500'}`} />
-                    <Heading size="4" className={isWinner ? 'animate-victory-shimmer' : 'text-gray-400'}>
+              <div
+                style={{
+                  background: 'rgba(255,255,255,0.03)',
+                  border: isWinner ? '1px solid rgba(34,197,94,0.6)' : '1px solid rgba(239,68,68,0.3)',
+                  borderRadius: '16px',
+                  width: '100%',
+                }}
+                className={isWinner ? 'animate-win-glow' : 'animate-lose-entrance'}
+              >
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', padding: '20px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <Trophy style={{ width: '20px', height: '20px' }} className={isWinner ? 'text-green-400 animate-trophy-bounce' : 'text-gray-500'} />
+                    <h4 style={{ fontSize: '18px', fontWeight: 700 }} className={isWinner ? 'animate-victory-shimmer' : 'text-gray-400'}>
                       {isWinner ? 'Victory!' : 'Defeat'}
-                    </Heading>
-                  </Flex>
+                    </h4>
+                  </div>
 
-                  <Flex direction="column" gap="2">
-                    <Flex justify="between">
-                      <Text size="2" color="gray">Winner:</Text>
-                      <Text size="2" weight="bold" className="text-green-400">
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                      <span style={{ fontSize: '12px', color: 'rgba(156,163,175,1)' }}>Winner:</span>
+                      <span style={{ fontSize: '12px', fontWeight: 700, color: '#86efac' }}>
                         {game.winner_address?.slice(0, 6)}...{game.winner_address?.slice(-4)}
                         {isWinner && ' (You)'}
-                      </Text>
-                    </Flex>
+                      </span>
+                    </div>
 
-                    <Flex justify="between">
-                      <Text size="2" color="gray">Winning Choice:</Text>
-                      <Text size="2" weight="bold">
+                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                      <span style={{ fontSize: '12px', color: 'rgba(156,163,175,1)' }}>Winning Choice:</span>
+                      <span style={{ fontSize: '12px', fontWeight: 700 }}>
                         {result ? '🪙 Tails' : '👑 Heads'}
-                      </Text>
-                    </Flex>
+                      </span>
+                    </div>
 
-                    <Flex justify="between">
-                      <Text size="2" color="gray">Payout:</Text>
-                      <Text size="3" weight="bold" className="text-green-400">
+                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                      <span style={{ fontSize: '12px', color: 'rgba(156,163,175,1)' }}>Payout:</span>
+                      <span style={{ fontSize: '14px', fontWeight: 700, color: '#86efac' }}>
                         {formatCurrency(BigInt(game.payout || 0))}
-                      </Text>
-                    </Flex>
-                  </Flex>
+                      </span>
+                    </div>
+                  </div>
 
                   {isWinner && (
-                    <Flex
-                      className="bg-green-500/10 rounded-lg p-3 border border-green-500/30"
-                      align="center"
-                      gap="2"
-                    >
-                      <Text size="2" className="text-green-400">
+                    <div style={{
+                      background: 'rgba(34,197,94,0.1)',
+                      borderRadius: '8px',
+                      padding: '12px',
+                      border: '1px solid rgba(34,197,94,0.3)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '8px',
+                    }}>
+                      <span style={{ fontSize: '12px', color: '#86efac' }}>
                         Payout has been sent to your wallet
-                      </Text>
-                    </Flex>
+                      </span>
+                    </div>
                   )}
-                </Flex>
-              </Card>
+                </div>
+              </div>
 
               {/* Action Buttons */}
-              <Flex gap={{ initial: '2', sm: '3' }} className="w-full" direction={{ initial: 'column', sm: 'row' }}>
-                <Button
-                  size={{ initial: '2', sm: '3' }}
-                  variant="soft"
+              <div style={{ display: 'flex', gap: '12px', width: '100%', flexWrap: 'wrap' }}>
+                <button
                   onClick={handleClose}
-                  className="flex-1 touch-target"
+                  style={{
+                    flex: 1,
+                    padding: '10px 20px',
+                    fontSize: '14px',
+                    fontWeight: 600,
+                    background: 'rgba(255,255,255,0.05)',
+                    border: '1px solid rgba(255,255,255,0.1)',
+                    borderRadius: '10px',
+                    color: 'rgba(209,213,219,1)',
+                    cursor: 'pointer',
+                    minWidth: '120px',
+                  }}
+                  className="touch-target"
                 >
                   Close
-                </Button>
-                <Button
-                  size={{ initial: '2', sm: '3' }}
+                </button>
+                <button
                   onClick={handleQuickRebet}
-                  className={`flex-1 hover:scale-105 transition-transform touch-target ${isWinner ? 'glow-resolved bg-green-600 hover:bg-green-500' : 'glow-cyan'}`}
+                  style={{
+                    flex: 1,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '6px',
+                    padding: '10px 20px',
+                    fontSize: '14px',
+                    fontWeight: 600,
+                    background: 'linear-gradient(135deg, #06b6d4, #7c3aed)',
+                    border: 'none',
+                    borderRadius: '10px',
+                    color: '#fff',
+                    cursor: 'pointer',
+                    minWidth: '120px',
+                  }}
+                  className={`hover:scale-105 transition-transform touch-target ${isWinner ? 'glow-resolved' : 'glow-cyan'}`}
                 >
-                  <Zap className="w-4 h-4 mr-1" />
+                  <Zap style={{ width: '16px', height: '16px' }} />
                   {isWinner ? 'Play Again & Win More!' : 'Try Again - Same Bet'}
-                </Button>
-              </Flex>
+                </button>
+              </div>
 
               {/* Animation preference toggle */}
-              <Flex justify="center">
+              <div style={{ display: 'flex', justifyContent: 'center' }}>
                 <button
                   onClick={toggleSkipPreference}
-                  className="flex items-center gap-2 px-3 py-1.5 rounded-full text-xs transition-colors hover:bg-slate-700/50"
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px',
+                    padding: '6px 12px',
+                    borderRadius: '999px',
+                    fontSize: '11px',
+                    background: 'transparent',
+                    border: 'none',
+                    cursor: 'pointer',
+                    transition: 'background 0.2s',
+                  }}
+                  className="hover:bg-slate-700/50"
                 >
-                  <div className={`w-8 h-4 rounded-full transition-colors ${alwaysSkipAnimation ? 'bg-purple-500' : 'bg-slate-600'}`}>
-                    <div className={`w-3 h-3 rounded-full bg-white mt-0.5 transition-transform ${alwaysSkipAnimation ? 'translate-x-4.5 ml-0.5' : 'translate-x-0.5'}`} />
+                  <div style={{ width: '32px', height: '16px', borderRadius: '999px', background: alwaysSkipAnimation ? '#8b5cf6' : '#4b5563', transition: 'background 0.2s', position: 'relative' }}>
+                    <div style={{ width: '12px', height: '12px', borderRadius: '50%', background: '#fff', position: 'absolute', top: '2px', left: alwaysSkipAnimation ? '18px' : '2px', transition: 'left 0.2s' }} />
                   </div>
-                  <Text size="1" color="gray">
+                  <span style={{ fontSize: '11px', color: 'rgba(156,163,175,1)' }}>
                     {alwaysSkipAnimation ? 'Skip animation: ON' : 'Skip animation: OFF'}
-                  </Text>
+                  </span>
                 </button>
-              </Flex>
-            </Flex>
+              </div>
+            </div>
           )}
 
           {/* Game Expired - User needs to manually cancel for refund */}
           {modalType === 'expired' && game.status === 'pending' && (
-            <Flex direction="column" gap="5" align="center" py="6">
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '20px', alignItems: 'center', paddingTop: '24px', paddingBottom: '24px' }}>
               {cancelStatus === 'success' ? (
                 <>
                   <XCircle className="w-20 h-20 text-green-400" />
-                  <Flex direction="column" gap="2" align="center">
-                    <Heading size="5" className="text-green-400">
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', alignItems: 'center' }}>
+                    <h3 style={{ fontSize: '20px', fontWeight: 700, color: '#86efac' }}>
                       Game Cancelled
-                    </Heading>
-                    <Text size="3" color="gray" align="center">
+                    </h3>
+                    <p style={{ fontSize: '14px', color: 'rgba(156,163,175,1)', textAlign: 'center' }}>
                       Your bet of {formatCurrency(BigInt(game.amount))} has been refunded to your wallet.
-                    </Text>
-                  </Flex>
-                  <Button
-                    size="3"
+                    </p>
+                  </div>
+                  <button
                     onClick={handleClose}
-                    className="w-full glow-cyan hover:scale-105 transition-transform"
+                    style={{
+                      width: '100%',
+                      padding: '12px 24px',
+                      fontSize: '14px',
+                      fontWeight: 600,
+                      background: 'linear-gradient(135deg, #06b6d4, #7c3aed)',
+                      border: 'none',
+                      borderRadius: '10px',
+                      color: '#fff',
+                      cursor: 'pointer',
+                    }}
+                    className="glow-cyan hover:scale-105 transition-transform"
                   >
                     Close
-                  </Button>
+                  </button>
                 </>
               ) : (
                 <>
                   <Clock className="w-20 h-20 text-yellow-400 animate-pulse" />
 
-                  <Flex direction="column" gap="2" align="center">
-                    <Heading size="5" className="text-yellow-400">
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', alignItems: 'center' }}>
+                    <h3 style={{ fontSize: '20px', fontWeight: 700, color: '#fbbf24' }}>
                       No Opponent Found
-                    </Heading>
-                    <Text size="3" color="gray" align="center">
+                    </h3>
+                    <p style={{ fontSize: '14px', color: 'rgba(156,163,175,1)', textAlign: 'center' }}>
                       Your game has been waiting for {formatTime(expiredElapsedSeconds)} without being matched.
-                    </Text>
-                  </Flex>
+                    </p>
+                  </div>
 
                   {/* Elapsed time indicator */}
-                  <Card className="w-full max-w-xs bg-yellow-500/5 border border-yellow-500/20">
-                    <Flex direction="column" gap="2" p="3">
-                      <Flex justify="between" align="center">
-                        <Text size="1" color="gray">Time Waiting</Text>
-                        <Text size="2" weight="bold" className="text-yellow-400 font-mono">
+                  <div style={{
+                    width: '100%',
+                    maxWidth: '320px',
+                    background: 'rgba(234,179,8,0.05)',
+                    border: '1px solid rgba(234,179,8,0.2)',
+                    borderRadius: '16px',
+                  }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', padding: '12px' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <span style={{ fontSize: '11px', color: 'rgba(156,163,175,1)' }}>Time Waiting</span>
+                        <span style={{ fontSize: '12px', fontWeight: 700, color: '#fbbf24', fontFamily: 'monospace' }}>
                           {formatTime(expiredElapsedSeconds)}
-                        </Text>
-                      </Flex>
+                        </span>
+                      </div>
                       <Progress
                         value={Math.min(expiredElapsedSeconds, 600)}
                         max={600}
                         size="1"
                         color="yellow"
                       />
-                      <Flex justify="between" align="center">
-                        <Text size="1" color="gray">5m expiry</Text>
-                        <Text size="1" className={expiredElapsedSeconds > 300 ? 'text-yellow-400' : 'text-gray-500'}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <span style={{ fontSize: '11px', color: 'rgba(156,163,175,1)' }}>5m expiry</span>
+                        <span style={{ fontSize: '11px', color: expiredElapsedSeconds > 300 ? '#fbbf24' : '#6b7280' }}>
                           {expiredElapsedSeconds > 300 ? `+${formatTime(expiredElapsedSeconds - 300)} over` : 'Not yet'}
-                        </Text>
-                      </Flex>
-                    </Flex>
-                  </Card>
+                        </span>
+                      </div>
+                    </div>
+                  </div>
 
-                  <Card className="card-simple w-full">
-                    <Flex direction="column" gap="3" p="4">
-                      <Flex justify="between" align="center">
-                        <Text size="2" color="gray">Game ID:</Text>
+                  <div style={{
+                    background: 'rgba(255,255,255,0.03)',
+                    border: '1px solid rgba(255,255,255,0.07)',
+                    borderRadius: '16px',
+                    width: '100%',
+                  }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', padding: '16px' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <span style={{ fontSize: '12px', color: 'rgba(156,163,175,1)' }}>Game ID:</span>
                         <CopyableGameId gameId={game.id} size="2" showLabel={false} />
-                      </Flex>
+                      </div>
 
-                      <Flex justify="between" align="center">
-                        <Text size="2" color="gray">Your Bet:</Text>
-                        <Text size="2" weight="bold">{formatCurrency(BigInt(game.amount))}</Text>
-                      </Flex>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <span style={{ fontSize: '12px', color: 'rgba(156,163,175,1)' }}>Your Bet:</span>
+                        <span style={{ fontSize: '12px', fontWeight: 700 }}>{formatCurrency(BigInt(game.amount))}</span>
+                      </div>
 
                       {cancelStatus === 'error' && (
-                        <Flex
-                          className="bg-red-500/10 rounded-lg p-3 border border-red-500/30"
-                          direction="column"
-                          gap="2"
-                        >
-                          <Text size="2" className="text-red-400" weight="bold">
+                        <div style={{
+                          background: 'rgba(239,68,68,0.1)',
+                          borderRadius: '8px',
+                          padding: '12px',
+                          border: '1px solid rgba(239,68,68,0.3)',
+                          display: 'flex',
+                          flexDirection: 'column',
+                          gap: '8px',
+                        }}>
+                          <span style={{ fontSize: '12px', color: '#fca5a5', fontWeight: 700 }}>
                             Cancel Failed
-                          </Text>
-                          <Text size="2" className="text-red-200">
+                          </span>
+                          <span style={{ fontSize: '12px', color: '#fecaca' }}>
                             {cancelError?.message || 'Unable to cancel. Please try again.'}
-                          </Text>
-                        </Flex>
+                          </span>
+                        </div>
                       )}
 
                       {cancelStatus !== 'error' && (
-                        <Flex
-                          className="bg-green-500/10 rounded-lg p-3 border border-green-500/30"
-                          direction="column"
-                          gap="2"
-                        >
-                          <Text size="2" className="text-green-400" weight="bold">
+                        <div style={{
+                          background: 'rgba(34,197,94,0.1)',
+                          borderRadius: '8px',
+                          padding: '12px',
+                          border: '1px solid rgba(34,197,94,0.3)',
+                          display: 'flex',
+                          flexDirection: 'column',
+                          gap: '8px',
+                        }}>
+                          <span style={{ fontSize: '12px', color: '#86efac', fontWeight: 700 }}>
                             Get Your Instant Refund
-                          </Text>
-                          <Text size="2" className="text-green-200">
+                          </span>
+                          <span style={{ fontSize: '12px', color: '#bbf7d0' }}>
                             Cancel now to receive your {formatCurrency(BigInt(game.amount))} back immediately.
-                          </Text>
-                        </Flex>
+                          </span>
+                        </div>
                       )}
 
                       {/* Chainlink auto-cancel info */}
-                      <Flex
-                        className="bg-cyan-500/10 rounded-lg p-3 border border-cyan-500/20"
-                        direction="column"
-                        gap="1"
-                      >
-                        <Text size="1" className="text-cyan-400" weight="bold">
+                      <div style={{
+                        background: 'rgba(6,182,212,0.1)',
+                        borderRadius: '8px',
+                        padding: '12px',
+                        border: '1px solid rgba(6,182,212,0.2)',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: '4px',
+                      }}>
+                        <span style={{ fontSize: '11px', color: '#67e8f9', fontWeight: 700 }}>
                           Chainlink Automation Active
-                        </Text>
-                        <Text size="1" className="text-cyan-200">
+                        </span>
+                        <span style={{ fontSize: '11px', color: '#a5f3fc' }}>
                           If you don&apos;t cancel manually, Chainlink will auto-cancel and refund you. This may take a few more minutes depending on network activity.
-                        </Text>
-                      </Flex>
-                    </Flex>
-                  </Card>
+                        </span>
+                      </div>
+                    </div>
+                  </div>
 
-                  <Flex gap="3" style={{ width: '100%' }}>
-                    <Button
-                      size="3"
-                      variant="soft"
+                  <div style={{ display: 'flex', gap: '12px', width: '100%' }}>
+                    <button
                       onClick={handleClose}
-                      className="flex-1"
                       disabled={cancelStatus === 'cancelling'}
+                      style={{
+                        flex: 1,
+                        padding: '12px 20px',
+                        fontSize: '14px',
+                        fontWeight: 600,
+                        background: 'rgba(255,255,255,0.05)',
+                        border: '1px solid rgba(255,255,255,0.1)',
+                        borderRadius: '10px',
+                        color: 'rgba(209,213,219,1)',
+                        cursor: cancelStatus === 'cancelling' ? 'not-allowed' : 'pointer',
+                        opacity: cancelStatus === 'cancelling' ? 0.5 : 1,
+                      }}
                     >
                       Keep Waiting
-                    </Button>
-                    <Button
-                      size="3"
-                      color="green"
+                    </button>
+                    <button
                       onClick={handleCancelGame}
                       disabled={cancelStatus === 'cancelling'}
-                      className="flex-1 glow-cyan hover:scale-105 transition-transform"
+                      style={{
+                        flex: 1,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: '8px',
+                        padding: '12px 20px',
+                        fontSize: '14px',
+                        fontWeight: 600,
+                        background: 'linear-gradient(135deg, #06b6d4, #7c3aed)',
+                        border: 'none',
+                        borderRadius: '10px',
+                        color: '#fff',
+                        cursor: cancelStatus === 'cancelling' ? 'not-allowed' : 'pointer',
+                        opacity: cancelStatus === 'cancelling' ? 0.8 : 1,
+                      }}
+                      className="glow-cyan hover:scale-105 transition-transform"
                     >
                       {cancelStatus === 'cancelling' ? (
                         <>
-                          <Loader2 className="w-4 h-4 animate-spin mr-2" />
+                          <Loader2 style={{ width: '16px', height: '16px' }} className="animate-spin" />
                           Confirming...
                         </>
                       ) : cancelStatus === 'error' ? (
@@ -1048,66 +1224,85 @@ export function GameSessionModal({ game, open, onClose, userAddress, modalType }
                       ) : (
                         'Cancel & Get Refund'
                       )}
-                    </Button>
-                  </Flex>
+                    </button>
+                  </div>
 
-                  <Text size="1" color="gray" align="center">
+                  <p style={{ fontSize: '11px', color: 'rgba(156,163,175,1)', textAlign: 'center' }}>
                     Someone could still join your game. Cancel anytime for instant refund.
-                  </Text>
+                  </p>
                 </>
               )}
-            </Flex>
+            </div>
           )}
 
           {/* Game Status: Cancelled (already cancelled on-chain) */}
           {modalType !== 'expired' && game.status === 'cancelled' && (
-            <Flex direction="column" gap="5" align="center" py="6">
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '20px', alignItems: 'center', paddingTop: '24px', paddingBottom: '24px' }}>
               <XCircle className="w-20 h-20 text-green-400" />
 
-              <Flex direction="column" gap="2" align="center">
-                <Heading size="5" className="text-green-400">
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', alignItems: 'center' }}>
+                <h3 style={{ fontSize: '20px', fontWeight: 700, color: '#86efac' }}>
                   Game Cancelled
-                </Heading>
-                <Text size="3" color="gray" align="center">
+                </h3>
+                <p style={{ fontSize: '14px', color: 'rgba(156,163,175,1)', textAlign: 'center' }}>
                   Your bet has been refunded to your wallet.
-                </Text>
-              </Flex>
+                </p>
+              </div>
 
-              <Card className="card-simple w-full">
-                <Flex direction="column" gap="3" p="4">
-                  <Flex justify="between" align="center">
-                    <Text size="2" color="gray">Game ID:</Text>
+              <div style={{
+                background: 'rgba(255,255,255,0.03)',
+                border: '1px solid rgba(255,255,255,0.07)',
+                borderRadius: '16px',
+                width: '100%',
+              }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', padding: '16px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span style={{ fontSize: '12px', color: 'rgba(156,163,175,1)' }}>Game ID:</span>
                     <CopyableGameId gameId={game.id} size="2" showLabel={false} />
-                  </Flex>
+                  </div>
 
-                  <Flex justify="between" align="center">
-                    <Text size="2" color="gray">Refund Amount:</Text>
-                    <Text size="2" weight="bold" className="text-green-400">{formatCurrency(BigInt(game.amount))}</Text>
-                  </Flex>
-                </Flex>
-              </Card>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span style={{ fontSize: '12px', color: 'rgba(156,163,175,1)' }}>Refund Amount:</span>
+                    <span style={{ fontSize: '12px', fontWeight: 700, color: '#86efac' }}>{formatCurrency(BigInt(game.amount))}</span>
+                  </div>
+                </div>
+              </div>
 
-              <Button
-                size="3"
+              <button
                 onClick={handleClose}
-                className="w-full glow-cyan hover:scale-105 transition-transform"
+                style={{
+                  width: '100%',
+                  padding: '12px 24px',
+                  fontSize: '14px',
+                  fontWeight: 600,
+                  background: 'linear-gradient(135deg, #06b6d4, #7c3aed)',
+                  border: 'none',
+                  borderRadius: '10px',
+                  color: '#fff',
+                  cursor: 'pointer',
+                }}
+                className="glow-cyan hover:scale-105 transition-transform"
               >
                 Close
-              </Button>
-            </Flex>
+              </button>
+            </div>
           )}
 
           {/* Not a participant warning */}
           {!isParticipant && game.status !== 'cancelled' && (
-            <Card className="card-simple">
-              <Flex p="4" align="center" gap="2">
-                <Text size="2" color="gray">
+            <div style={{
+              background: 'rgba(255,255,255,0.03)',
+              border: '1px solid rgba(255,255,255,0.07)',
+              borderRadius: '16px',
+            }}>
+              <div style={{ display: 'flex', padding: '16px', alignItems: 'center', gap: '8px' }}>
+                <span style={{ fontSize: '12px', color: 'rgba(156,163,175,1)' }}>
                   You are viewing this game as a spectator
-                </Text>
-              </Flex>
-            </Card>
+                </span>
+              </div>
+            </div>
           )}
-        </Flex>
+        </div>
       </Dialog.Content>
     </Dialog.Root>
     </>

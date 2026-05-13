@@ -71,7 +71,6 @@ export function useNotificationState() {
   }), []);
 
   if (!isLoggedIn) {
-    devLog.log('[Notification] Decentralized mode - no database tracking');
     return noopReturn;
   }
 

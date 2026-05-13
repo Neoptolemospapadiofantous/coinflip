@@ -3,22 +3,10 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import {
-  Button,
-  Flex,
-  Card,
-  Text,
-  Heading,
-  Box,
-  TextField,
-  Separator,
-  Callout,
-} from '@radix-ui/themes';
 import { AuthLayout } from '@/components/layout/AuthLayout';
 import { Mail, Lock, Chrome, Loader2, AlertCircle, CheckCircle, User } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 
-// Microsoft icon component
 function MicrosoftIcon({ className }: { className?: string }) {
   return (
     <svg className={className} viewBox="0 0 24 24" fill="currentColor">
@@ -29,14 +17,7 @@ function MicrosoftIcon({ className }: { className?: string }) {
 
 export default function RegisterPage() {
   const router = useRouter();
-  const {
-    signInWithGoogle,
-    signInWithMicrosoft,
-    signUpWithEmail,
-    resendVerification,
-    isAuthenticated,
-    isLoading: authLoading,
-  } = useAuth();
+  const { signInWithGoogle, signInWithMicrosoft, signUpWithEmail, resendVerification, isAuthenticated, isLoading: authLoading } = useAuth();
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -47,19 +28,15 @@ export default function RegisterPage() {
   const [emailSent, setEmailSent] = useState(false);
   const [resending, setResending] = useState(false);
 
-  // Redirect if already logged in
   useEffect(() => {
-    if (!authLoading && isAuthenticated) {
-      router.replace('/dashboard');
-    }
+    if (!authLoading && isAuthenticated) router.replace('/dashboard');
   }, [authLoading, isAuthenticated, router]);
 
-  // Show loading while checking auth
   if (authLoading || isAuthenticated) {
     return (
-      <Flex align="center" justify="center" className="h-screen bg-slate-950">
+      <div className="h-screen flex items-center justify-center" style={{ background: '#020617' }}>
         <Loader2 className="w-8 h-8 text-cyan-400 animate-spin" />
-      </Flex>
+      </div>
     );
   }
 
@@ -67,35 +44,21 @@ export default function RegisterPage() {
     setLoadingProvider('google');
     setError(null);
     const result = await signInWithGoogle();
-    if (!result.success) {
-      setError(result.error || 'Failed to sign up with Google');
-      setLoadingProvider(null);
-    }
+    if (!result.success) { setError(result.error || 'Failed to sign up with Google'); setLoadingProvider(null); }
   };
 
   const handleMicrosoftSignUp = async () => {
     setLoadingProvider('microsoft');
     setError(null);
     const result = await signInWithMicrosoft();
-    if (!result.success) {
-      setError(result.error || 'Failed to sign up with Microsoft');
-      setLoadingProvider(null);
-    }
+    if (!result.success) { setError(result.error || 'Failed to sign up with Microsoft'); setLoadingProvider(null); }
   };
 
   const validatePassword = (pass: string): string | null => {
-    if (pass.length < 8) {
-      return 'Password must be at least 8 characters';
-    }
-    if (!/[A-Z]/.test(pass)) {
-      return 'Password must contain at least one uppercase letter';
-    }
-    if (!/[a-z]/.test(pass)) {
-      return 'Password must contain at least one lowercase letter';
-    }
-    if (!/[0-9]/.test(pass)) {
-      return 'Password must contain at least one number';
-    }
+    if (pass.length < 8) return 'Password must be at least 8 characters';
+    if (!/[A-Z]/.test(pass)) return 'Password must contain at least one uppercase letter';
+    if (!/[a-z]/.test(pass)) return 'Password must contain at least one lowercase letter';
+    if (!/[0-9]/.test(pass)) return 'Password must contain at least one number';
     return null;
   };
 
@@ -104,299 +67,195 @@ export default function RegisterPage() {
     setIsLoading(true);
     setError(null);
 
-    // Validate inputs
-    if (!email || !password || !confirmPassword) {
-      setError('Please fill in all fields');
-      setIsLoading(false);
-      return;
-    }
+    if (!email || !password || !confirmPassword) { setError('Please fill in all fields'); setIsLoading(false); return; }
 
-    // Validate email format
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(email)) {
-      setError('Please enter a valid email address');
-      setIsLoading(false);
-      return;
-    }
+    if (!emailRegex.test(email)) { setError('Please enter a valid email address'); setIsLoading(false); return; }
 
-    // Validate password
     const passwordError = validatePassword(password);
-    if (passwordError) {
-      setError(passwordError);
-      setIsLoading(false);
-      return;
-    }
+    if (passwordError) { setError(passwordError); setIsLoading(false); return; }
 
-    // Check password match
-    if (password !== confirmPassword) {
-      setError('Passwords do not match');
-      setIsLoading(false);
-      return;
-    }
+    if (password !== confirmPassword) { setError('Passwords do not match'); setIsLoading(false); return; }
 
     const result = await signUpWithEmail(email, password);
-
-    if (result.success) {
-      setEmailSent(true);
-    } else {
-      setError(result.error || 'Failed to create account');
-    }
-
+    if (result.success) { setEmailSent(true); } else { setError(result.error || 'Failed to create account'); }
     setIsLoading(false);
   };
 
   const handleResendEmail = async () => {
     setResending(true);
     const result = await resendVerification(email);
-    if (result.success) {
-      setError(null);
-    } else {
-      setError(result.error || 'Failed to resend verification email');
-    }
+    if (!result.success) setError(result.error || 'Failed to resend verification email');
+    else setError(null);
     setResending(false);
   };
 
-  // Email verification sent screen
   if (emailSent) {
     return (
       <AuthLayout>
-        <Card className="w-full max-w-sm">
-          <Flex direction="column" gap="5" p="6" align="center">
-            {/* Success Icon */}
-            <Box className="p-4 rounded-full bg-green-500/20">
-              <Mail className="w-8 h-8 text-green-400" />
-            </Box>
+        <div
+          className="w-full max-w-sm rounded-2xl p-8 flex flex-col items-center gap-6"
+          style={{
+            background: 'rgba(5,8,22,0.85)',
+            backdropFilter: 'blur(24px)',
+            border: '1px solid rgba(255,255,255,0.08)',
+            boxShadow: '0 25px 50px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.05)',
+          }}
+        >
+          <div className="p-4 rounded-full" style={{ background: 'rgba(34,197,94,0.15)', border: '1px solid rgba(34,197,94,0.25)' }}>
+            <Mail className="w-8 h-8 text-green-400" />
+          </div>
 
-            {/* Header */}
-            <Flex direction="column" align="center" gap="2">
-              <Heading size="5">Check Your Email</Heading>
-              <Text size="2" color="gray" align="center">
-                We've sent a verification link to
-              </Text>
-              <Text size="2" weight="medium" color="cyan">
-                {email}
-              </Text>
-            </Flex>
+          <div className="text-center">
+            <h1 className="text-xl font-bold text-white mb-2">Check Your Email</h1>
+            <p className="text-sm text-slate-400 mb-1">We've sent a verification link to</p>
+            <p className="text-sm font-semibold text-cyan-400">{email}</p>
+          </div>
 
-            {/* Instructions */}
-            <Callout.Root color="blue" size="1">
-              <Callout.Icon>
-                <CheckCircle className="w-4 h-4" />
-              </Callout.Icon>
-              <Callout.Text>
-                Click the link in the email to verify your account and complete registration.
-              </Callout.Text>
-            </Callout.Root>
+          <div className="w-full flex items-start gap-3 px-4 py-3 rounded-xl"
+            style={{ background: 'rgba(6,182,212,0.08)', border: '1px solid rgba(6,182,212,0.2)' }}>
+            <CheckCircle className="w-4 h-4 text-cyan-400 flex-shrink-0 mt-0.5" />
+            <p className="text-sm text-slate-300">Click the link in the email to verify your account and complete registration.</p>
+          </div>
 
-            {/* Error if resend failed */}
-            {error && (
-              <Flex
-                align="center"
-                gap="2"
-                className="p-3 rounded-lg bg-red-500/10 border border-red-500/30 w-full"
-              >
-                <AlertCircle className="w-4 h-4 text-red-400 flex-shrink-0" />
-                <Text size="2" color="red">
-                  {error}
-                </Text>
-              </Flex>
-            )}
+          {error && (
+            <div className="w-full flex items-center gap-2 px-4 py-3 rounded-xl"
+              style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.25)' }}>
+              <AlertCircle className="w-4 h-4 text-red-400 flex-shrink-0" />
+              <span className="text-sm text-red-300">{error}</span>
+            </div>
+          )}
 
-            {/* Resend Button */}
-            <Button
-              size="2"
-              variant="soft"
-              className="cursor-pointer"
-              onClick={handleResendEmail}
-              disabled={resending}
-            >
-              {resending ? (
-                <Loader2 className="w-4 h-4 animate-spin" />
-              ) : (
-                'Resend verification email'
-              )}
-            </Button>
+          <button
+            onClick={handleResendEmail}
+            disabled={resending}
+            className="px-5 py-2.5 rounded-xl text-sm font-medium text-slate-200 bg-white/[0.06] border border-white/10 hover:bg-white/[0.1] disabled:opacity-60 disabled:cursor-not-allowed transition-all duration-200 flex items-center gap-2 cursor-pointer"
+          >
+            {resending ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
+            Resend verification email
+          </button>
 
-            {/* Back to Login */}
-            <Link href="/login">
-              <Text size="2" color="cyan" className="cursor-pointer hover:underline">
-                Back to login
-              </Text>
-            </Link>
-          </Flex>
-        </Card>
+          <Link href="/login">
+            <span className="text-sm text-cyan-400 hover:text-cyan-300 cursor-pointer transition-colors">Back to login</span>
+          </Link>
+        </div>
       </AuthLayout>
     );
   }
 
   return (
     <AuthLayout>
-      <Flex direction="column" align="center" gap="6" className="w-full max-w-sm">
-        {/* Register Card */}
-        <Card className="w-full">
-          <Flex direction="column" gap="5" p="6">
-            {/* Header */}
-            <Flex direction="column" align="center" gap="2">
-              <Heading size="6">Create Account</Heading>
-              <Text size="2" color="gray">
-                Sign up to unlock premium features
-              </Text>
-            </Flex>
+      <div className="w-full max-w-sm flex flex-col gap-5">
+        <div
+          className="w-full rounded-2xl p-8 flex flex-col gap-6"
+          style={{
+            background: 'rgba(5,8,22,0.85)',
+            backdropFilter: 'blur(24px)',
+            border: '1px solid rgba(255,255,255,0.08)',
+            boxShadow: '0 25px 50px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.05)',
+          }}
+        >
+          <div className="text-center">
+            <h1 className="text-2xl font-bold text-white mb-1">Create Account</h1>
+            <p className="text-sm text-slate-400">Sign up to unlock premium features</p>
+          </div>
 
-            {/* Error Message */}
-            {error && (
-              <Flex
-                align="center"
-                gap="2"
-                className="p-3 rounded-lg bg-red-500/10 border border-red-500/30"
-              >
-                <AlertCircle className="w-4 h-4 text-red-400 flex-shrink-0" />
-                <Text size="2" color="red">
-                  {error}
-                </Text>
-              </Flex>
-            )}
+          {error && (
+            <div className="flex items-center gap-2 px-4 py-3 rounded-xl"
+              style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.25)' }}>
+              <AlertCircle className="w-4 h-4 text-red-400 flex-shrink-0" />
+              <span className="text-sm text-red-300">{error}</span>
+            </div>
+          )}
 
-            {/* OAuth Buttons */}
-            <Flex direction="column" gap="3">
-              <Button
-                size="3"
-                variant="surface"
-                className="cursor-pointer w-full"
-                onClick={handleGoogleSignUp}
-                disabled={!!loadingProvider}
-              >
-                {loadingProvider === 'google' ? (
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                ) : (
-                  <Chrome className="w-4 h-4" />
-                )}
-                Continue with Google
-              </Button>
+          <div className="flex flex-col gap-3">
+            <OAuthButton onClick={handleGoogleSignUp} disabled={!!loadingProvider}
+              loading={loadingProvider === 'google'} icon={<Chrome className="w-4 h-4" />} label="Continue with Google" />
+            <OAuthButton onClick={handleMicrosoftSignUp} disabled={!!loadingProvider}
+              loading={loadingProvider === 'microsoft'} icon={<MicrosoftIcon className="w-4 h-4" />} label="Continue with Microsoft" />
+          </div>
 
-              <Button
-                size="3"
-                variant="surface"
-                className="cursor-pointer w-full"
-                onClick={handleMicrosoftSignUp}
-                disabled={!!loadingProvider}
-              >
-                {loadingProvider === 'microsoft' ? (
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                ) : (
-                  <MicrosoftIcon className="w-4 h-4" />
-                )}
-                Continue with Microsoft
-              </Button>
-            </Flex>
+          <div className="flex items-center gap-3">
+            <div className="flex-1 h-px" style={{ background: 'rgba(255,255,255,0.07)' }} />
+            <span className="text-xs text-slate-500 whitespace-nowrap">or register with email</span>
+            <div className="flex-1 h-px" style={{ background: 'rgba(255,255,255,0.07)' }} />
+          </div>
 
-            {/* Divider */}
-            <Flex align="center" gap="3">
-              <Separator size="4" />
-              <Text size="1" color="gray" className="flex-shrink-0">
-                or register with email
-              </Text>
-              <Separator size="4" />
-            </Flex>
+          <form onSubmit={handleEmailSignUp} className="flex flex-col gap-4">
+            <InputField label="Email" type="email" placeholder="you@example.com"
+              value={email} onChange={setEmail} disabled={isLoading} icon={<Mail className="w-4 h-4" />} />
+            <div className="flex flex-col gap-1">
+              <InputField label="Password" type="password" placeholder="At least 8 characters"
+                value={password} onChange={setPassword} disabled={isLoading} icon={<Lock className="w-4 h-4" />} />
+              <p className="text-xs text-slate-600 mt-1">Must contain uppercase, lowercase, and number</p>
+            </div>
+            <InputField label="Confirm Password" type="password" placeholder="Confirm your password"
+              value={confirmPassword} onChange={setConfirmPassword} disabled={isLoading} icon={<Lock className="w-4 h-4" />} />
 
-            {/* Email Form */}
-            <form onSubmit={handleEmailSignUp}>
-              <Flex direction="column" gap="3">
-                <Box>
-                  <Text as="label" size="2" weight="medium" className="block mb-1">
-                    Email
-                  </Text>
-                  <TextField.Root
-                    size="3"
-                    placeholder="you@example.com"
-                    type="email"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    disabled={isLoading}
-                  >
-                    <TextField.Slot>
-                      <Mail className="w-4 h-4 text-gray-400" />
-                    </TextField.Slot>
-                  </TextField.Root>
-                </Box>
+            <button
+              type="submit"
+              disabled={isLoading}
+              className="w-full py-3 rounded-xl font-semibold text-sm text-white flex items-center justify-center gap-2 mt-1 transition-all duration-200 hover:opacity-90 active:scale-[0.98] disabled:opacity-60 disabled:cursor-not-allowed cursor-pointer"
+              style={{ background: 'linear-gradient(135deg, #06b6d4, #7c3aed)', boxShadow: '0 0 24px rgba(6,182,212,0.25)' }}
+            >
+              {isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <><User className="w-4 h-4" /> Create Account</>}
+            </button>
+          </form>
 
-                <Box>
-                  <Text as="label" size="2" weight="medium" className="block mb-1">
-                    Password
-                  </Text>
-                  <TextField.Root
-                    size="3"
-                    placeholder="At least 8 characters"
-                    type="password"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    disabled={isLoading}
-                  >
-                    <TextField.Slot>
-                      <Lock className="w-4 h-4 text-gray-400" />
-                    </TextField.Slot>
-                  </TextField.Root>
-                  <Text size="1" color="gray" className="mt-1">
-                    Must contain uppercase, lowercase, and number
-                  </Text>
-                </Box>
+          <p className="text-center text-sm text-slate-500">
+            Already have an account?{' '}
+            <Link href="/login">
+              <span className="text-cyan-400 hover:text-cyan-300 cursor-pointer transition-colors font-medium">Sign in</span>
+            </Link>
+          </p>
+        </div>
 
-                <Box>
-                  <Text as="label" size="2" weight="medium" className="block mb-1">
-                    Confirm Password
-                  </Text>
-                  <TextField.Root
-                    size="3"
-                    placeholder="Confirm your password"
-                    type="password"
-                    value={confirmPassword}
-                    onChange={(e) => setConfirmPassword(e.target.value)}
-                    disabled={isLoading}
-                  >
-                    <TextField.Slot>
-                      <Lock className="w-4 h-4 text-gray-400" />
-                    </TextField.Slot>
-                  </TextField.Root>
-                </Box>
-
-                <Button
-                  size="3"
-                  type="submit"
-                  className="cursor-pointer w-full mt-2"
-                  disabled={isLoading}
-                >
-                  {isLoading ? (
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                  ) : (
-                    <>
-                      <User className="w-4 h-4" />
-                      Create Account
-                    </>
-                  )}
-                </Button>
-              </Flex>
-            </form>
-
-            {/* Login Link */}
-            <Flex justify="center" gap="1">
-              <Text size="2" color="gray">
-                Already have an account?
-              </Text>
-              <Link href="/login">
-                <Text size="2" color="cyan" className="cursor-pointer hover:underline">
-                  Sign in
-                </Text>
-              </Link>
-            </Flex>
-          </Flex>
-        </Card>
-
-        {/* Info Text */}
-        <Text size="1" color="gray" align="center">
-          By creating an account, you agree to our Terms of Service and Privacy Policy.
-          Your wallet can be linked after registration.
-        </Text>
-      </Flex>
+        <p className="text-center text-xs text-slate-700">
+          By creating an account, you agree to our Terms of Service and Privacy Policy. Your wallet can be linked after registration.
+        </p>
+      </div>
     </AuthLayout>
+  );
+}
+
+function InputField({
+  label, type, placeholder, value, onChange, disabled, icon,
+}: {
+  label?: string; type: string; placeholder: string; value: string;
+  onChange: (v: string) => void; disabled: boolean; icon: React.ReactNode;
+}) {
+  return (
+    <div className="flex flex-col gap-1.5">
+      {label && <label className="text-sm font-medium text-slate-300">{label}</label>}
+      <div className="relative">
+        <div className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none">{icon}</div>
+        <input
+          type={type}
+          placeholder={placeholder}
+          value={value}
+          onChange={e => onChange(e.target.value)}
+          disabled={disabled}
+          className="w-full pl-10 pr-4 py-3 rounded-xl text-sm text-slate-200 placeholder-slate-500 outline-none bg-white/[0.04] border border-white/10 focus:border-cyan-500/50 focus:ring-2 focus:ring-cyan-500/[0.08] disabled:opacity-60 transition-all duration-200"
+        />
+      </div>
+    </div>
+  );
+}
+
+function OAuthButton({
+  onClick, disabled, loading, icon, label,
+}: {
+  onClick: () => void; disabled: boolean; loading: boolean; icon: React.ReactNode; label: string;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      className="w-full flex items-center justify-center gap-3 py-3 px-4 rounded-xl text-sm font-medium text-slate-300 bg-white/[0.04] border border-white/10 hover:bg-white/[0.08] hover:border-white/[0.18] hover:text-white disabled:opacity-60 disabled:cursor-not-allowed transition-all duration-200 cursor-pointer"
+    >
+      {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : icon}
+      {label}
+    </button>
   );
 }

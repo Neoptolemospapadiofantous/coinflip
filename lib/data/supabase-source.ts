@@ -368,6 +368,16 @@ export class SupabaseDataSource implements EnhancedDataSource {
     const lowerAddress = address.toLowerCase();
     const channelName = `player-${lowerAddress}`;
 
+    // Debounce to avoid rapid refetches on multiple quick updates
+    let debounceTimer: NodeJS.Timeout | null = null;
+    const debouncedFetch = async () => {
+      if (debounceTimer) clearTimeout(debounceTimer);
+      debounceTimer = setTimeout(async () => {
+        const games = await this.getPlayerActiveGames(address);
+        callback(games);
+      }, 100); // 100ms debounce
+    };
+
     const channel = this.getClient()
       .channel(channelName)
       .on(
@@ -382,9 +392,9 @@ export class SupabaseDataSource implements EnhancedDataSource {
           const creator = (game.creator_address as string)?.toLowerCase();
           const joiner = (game.joiner_address as string)?.toLowerCase();
 
+          // Only refetch if this change is relevant to the player
           if (creator === lowerAddress || joiner === lowerAddress) {
-            const games = await this.getPlayerActiveGames(address);
-            callback(games);
+            debouncedFetch();
           }
         }
       )
@@ -393,6 +403,7 @@ export class SupabaseDataSource implements EnhancedDataSource {
     this.channels.set(channelName, channel);
 
     return () => {
+      if (debounceTimer) clearTimeout(debounceTimer);
       channel.unsubscribe();
       this.channels.delete(channelName);
     };
@@ -400,6 +411,16 @@ export class SupabaseDataSource implements EnhancedDataSource {
 
   subscribeToAllGames(callback: (games: Game[]) => void): () => void {
     const channelName = 'all-games';
+
+    // Debounce to avoid rapid refetches on multiple quick updates
+    let debounceTimer: NodeJS.Timeout | null = null;
+    const debouncedFetch = async () => {
+      if (debounceTimer) clearTimeout(debounceTimer);
+      debounceTimer = setTimeout(async () => {
+        const games = await this.getActiveGames();
+        callback(games);
+      }, 100); // 100ms debounce
+    };
 
     const channel = this.getClient()
       .channel(channelName)
@@ -410,9 +431,8 @@ export class SupabaseDataSource implements EnhancedDataSource {
           schema: 'public',
           table: 'games',
         },
-        async () => {
-          const games = await this.getActiveGames();
-          callback(games);
+        () => {
+          debouncedFetch();
         }
       )
       .subscribe();
@@ -420,6 +440,7 @@ export class SupabaseDataSource implements EnhancedDataSource {
     this.channels.set(channelName, channel);
 
     return () => {
+      if (debounceTimer) clearTimeout(debounceTimer);
       channel.unsubscribe();
       this.channels.delete(channelName);
     };

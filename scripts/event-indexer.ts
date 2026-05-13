@@ -84,7 +84,7 @@ async function syncContractConfig(blockNumber: bigint) {
   console.log('📋 Syncing contract configuration...');
 
   try {
-    // Read contract constants and state (only what's available in ABI)
+    // Read contract state variables (V4 uses camelCase configurable params)
     const [
       feeBasisPoints,
       timeoutBlocks,
@@ -95,17 +95,17 @@ async function syncContractConfig(blockNumber: bigint) {
       publicClient.readContract({
         address: CONTRACT_ADDRESS,
         abi: COINFLIP_ABI,
-        functionName: 'FEE_BASIS_POINTS',
+        functionName: 'feeBasisPoints',
       }) as Promise<number>,
       publicClient.readContract({
         address: CONTRACT_ADDRESS,
         abi: COINFLIP_ABI,
-        functionName: 'TIMEOUT_BLOCKS',
+        functionName: 'timeoutBlocks',
       }) as Promise<bigint>,
       publicClient.readContract({
         address: CONTRACT_ADDRESS,
         abi: COINFLIP_ABI,
-        functionName: 'VRF_TIMEOUT_BLOCKS',
+        functionName: 'vrfTimeoutBlocks',
       }) as Promise<bigint>,
       publicClient.readContract({
         address: CONTRACT_ADDRESS,
@@ -147,7 +147,7 @@ async function syncContractConfig(blockNumber: bigint) {
       vrf_timeout_blocks: Number(vrfTimeoutBlocks),
       tier_amounts: tierAmounts,
       active_tier_count: Number(activeTierCount),
-      contract_version: 2, // V2 contract with 3% fee
+      contract_version: 4, // V4 contract with configurable params
       last_synced_block: blockNumber.toString(),
       last_synced_at: new Date().toISOString(),
     });
@@ -299,7 +299,7 @@ async function processGameCreated(log: GameCreatedLog) {
     status: 'pending',
     block_number: blockNumber.toString(),
     contract_address: CONTRACT_ADDRESS.toLowerCase(),
-    contract_version: 2,
+    contract_version: 4,
   }, { onConflict: 'id', ignoreDuplicates: true });
 
   if (error) {
@@ -880,7 +880,8 @@ async function main() {
   // Load last processed block
   const state = await loadState();
   // Start from contract deployment block on first run to index all historical games
-  const DEPLOYMENT_BLOCK = 9917720n; // V2 contract deployed around this block
+  // V4 contract deployed at 0xA8a83A6f13355CE4Da740d7894A7c91e48F20Dbe around block 9989650
+  const DEPLOYMENT_BLOCK = 9989650n;
   const fromBlock = state.lastProcessedBlock === 0n ? DEPLOYMENT_BLOCK : state.lastProcessedBlock + 1n;
 
   console.log(`⏮️  Last processed block: ${state.lastProcessedBlock}`);

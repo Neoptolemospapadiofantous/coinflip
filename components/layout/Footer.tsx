@@ -1,8 +1,8 @@
 'use client';
 
-import { Flex, Text, Box, Container, Separator } from '@radix-ui/themes';
-import { Github, Twitter, FileText, Shield, Coins, ExternalLink } from 'lucide-react';
+import { Github, Twitter, FileText, Shield, ExternalLink } from 'lucide-react';
 import Link from 'next/link';
+import { LogoIcon } from '@/components/ui/LogoIcon';
 
 interface FooterLink {
   href: string;
@@ -16,14 +16,8 @@ interface FooterSection {
   links: FooterLink[];
 }
 
-// Static footer links - defined outside component to avoid recreation on each render
 const FOOTER_LINKS: FooterSection[] = [
-  {
-    title: 'Resources',
-    links: [
-      { href: '/docs', label: 'Documentation', icon: FileText },
-    ],
-  },
+  { title: 'Resources', links: [{ href: '/docs', label: 'Documentation', icon: FileText }] },
   {
     title: 'Community',
     links: [
@@ -37,116 +31,85 @@ export function Footer() {
   const currentYear = new Date().getFullYear();
 
   return (
-    <Box className="card-solid border-t border-cyan-500/30 mt-auto">
-      <Container size="4">
-        <Flex direction="column" gap="6" py="8">
-          {/* Main Footer Content */}
-          <Flex
-            direction={{ initial: 'column', sm: 'row' }}
-            align={{ initial: 'start', sm: 'start' }}
-            justify="between"
-            gap="6"
-          >
-            {/* Brand Section */}
-            <Flex direction="column" gap="3" style={{ maxWidth: '300px' }}>
-              <Flex align="center" gap="2">
-                <Box className="p-2 rounded-lg bg-gradient-to-br from-cyan-500/20 to-purple-500/20 border border-cyan-500/50">
-                  <Coins className="w-5 h-5 text-cyan-300" />
-                </Box>
-                <Text size="4" weight="bold" className="text-gradient-primary">
-                  CoinFlip
-                </Text>
-              </Flex>
-              <Text size="2" color="gray" className="leading-relaxed">
-                Provably fair coin flip betting powered by Chainlink VRF. Built with Next.js, Wagmi, and Radix UI.
-              </Text>
-              <Flex gap="2" align="center">
-                <Shield className="w-4 h-4 text-green-400" />
-                <Text size="1" color="gray">
-                  Secured by Chainlink VRF
-                </Text>
-              </Flex>
-            </Flex>
+    <div
+      className="mt-auto relative"
+      style={{
+        background: 'rgba(5,8,22,0.9)',
+        backdropFilter: 'blur(20px)',
+        borderTop: '1px solid rgba(255,255,255,0.06)',
+      }}
+    >
+      <div className="max-w-7xl mx-auto px-6 py-10 flex flex-col gap-8">
+        {/* Main content */}
+        <div className="flex flex-col sm:flex-row justify-between gap-8">
+          {/* Brand */}
+          <div className="flex flex-col gap-3 max-w-xs">
+            <div className="flex items-center gap-2">
+              <LogoIcon size={28} />
+              <span
+                className="text-lg font-bold"
+                style={{ background: 'linear-gradient(to right, #67e8f9, #a78bfa)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}
+              >
+                CoinFlip
+              </span>
+            </div>
+            <p className="text-sm text-slate-500 leading-relaxed">
+              Provably fair coin flip betting powered by Chainlink VRF. Built with Next.js, Wagmi, and Radix UI.
+            </p>
+            <div className="flex items-center gap-2">
+              <Shield className="w-3.5 h-3.5 text-green-400" />
+              <span className="text-xs text-slate-600">Secured by Chainlink VRF</span>
+            </div>
+          </div>
 
-            {/* Links Sections */}
-            <Flex gap="8" className="flex-wrap">
-              {FOOTER_LINKS.map((section) => (
-                <Flex key={section.title} direction="column" gap="3">
-                  <Text size="2" weight="bold" className="text-cyan-400">
-                    {section.title}
-                  </Text>
-                  <Flex direction="column" gap="2">
-                    {section.links.map((link) => {
-                      const Icon = link.icon;
-                      return (
-                        <Link
-                          key={link.href}
-                          href={link.href}
-                          {...(link.external && {
-                            target: '_blank',
-                            rel: 'noopener noreferrer',
-                          })}
-                          className="no-underline group"
-                        >
-                          <Flex align="center" gap="2" className="hover:translate-x-1 transition-transform duration-200">
-                            <Icon className="w-3.5 h-3.5 text-gray-400 group-hover:text-cyan-400 transition-colors" />
-                            <Text
-                              size="2"
-                              color="gray"
-                              className="group-hover:text-cyan-400 transition-colors"
-                            >
-                              {link.label}
-                            </Text>
-                            {link.external && (
-                              <ExternalLink className="w-3 h-3 text-gray-500 group-hover:text-cyan-400 transition-colors" />
-                            )}
-                          </Flex>
-                        </Link>
-                      );
-                    })}
-                  </Flex>
-                </Flex>
-              ))}
-            </Flex>
-          </Flex>
+          {/* Links */}
+          <div className="flex gap-12 flex-wrap">
+            {FOOTER_LINKS.map((section) => (
+              <div key={section.title} className="flex flex-col gap-3">
+                <p className="text-xs font-semibold text-cyan-400 uppercase tracking-widest">{section.title}</p>
+                <div className="flex flex-col gap-2">
+                  {section.links.map((link) => {
+                    const Icon = link.icon;
+                    return (
+                      <Link
+                        key={link.href}
+                        href={link.href}
+                        {...(link.external && { target: '_blank', rel: 'noopener noreferrer' })}
+                        className="no-underline flex items-center gap-2 text-sm text-slate-500 hover:text-slate-200 group transition-colors"
+                      >
+                        <Icon className="w-3.5 h-3.5 group-hover:text-cyan-400 transition-colors" />
+                        {link.label}
+                        {link.external && <ExternalLink className="w-3 h-3 opacity-50" />}
+                      </Link>
+                    );
+                  })}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
 
-          <Separator className="bg-slate-700/50" />
+        {/* Divider */}
+        <div className="h-px" style={{ background: 'rgba(255,255,255,0.05)' }} />
 
-          {/* Bottom Bar */}
-          <Flex
-            direction={{ initial: 'column', sm: 'row' }}
-            align="center"
-            justify="between"
-            gap="3"
-          >
-            <Text size="1" color="gray" align="center">
-              © {currentYear} CoinFlip. All rights reserved. Play responsibly. 18+
-            </Text>
-            <Flex gap="4" align="center" className="text-xs">
-              <Link href="/terms" className="no-underline">
-                <Text size="1" color="gray" className="hover:text-cyan-400 transition-colors cursor-pointer">
-                  Terms
-                </Text>
-              </Link>
-              <Text size="1" color="gray">•</Text>
-              <Link href="/privacy" className="no-underline">
-                <Text size="1" color="gray" className="hover:text-cyan-400 transition-colors cursor-pointer">
-                  Privacy
-                </Text>
-              </Link>
-              <Text size="1" color="gray">•</Text>
-              <Link href="/responsible-gaming" className="no-underline">
-                <Text size="1" color="gray" className="hover:text-cyan-400 transition-colors cursor-pointer">
-                  Responsible Gaming
-                </Text>
-              </Link>
-            </Flex>
-          </Flex>
+        {/* Bottom bar */}
+        <div className="flex flex-col sm:flex-row items-center justify-between gap-3">
+          <p className="text-xs text-slate-700">© {currentYear} CoinFlip. All rights reserved. Play responsibly. 18+</p>
+          <div className="flex items-center gap-4 text-xs">
+            {['Terms', 'Privacy', 'Responsible Gaming'].map((label, i) => (
+              <span key={label} className="flex items-center gap-4">
+                {i > 0 && <span className="text-slate-800">•</span>}
+                <Link href={`/${label.toLowerCase().replace(' ', '-')}`} className="no-underline text-slate-600 hover:text-cyan-400 transition-colors">
+                  {label}
+                </Link>
+              </span>
+            ))}
+          </div>
+        </div>
+      </div>
 
-          {/* Decorative bottom glow */}
-          <div className="absolute bottom-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-cyan-500/50 to-transparent" />
-        </Flex>
-      </Container>
-    </Box>
+      {/* Bottom accent */}
+      <div className="absolute bottom-0 left-0 right-0 h-px" style={{ background: 'linear-gradient(to right, transparent, rgba(6,182,212,0.3), rgba(168,85,247,0.3), transparent)' }} />
+    </div>
   );
 }

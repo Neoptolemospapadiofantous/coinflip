@@ -1,7 +1,7 @@
 'use client';
 
 import { AppLayout } from '@/components/layout/AppLayout';
-import { Container, Section, Heading, Card, Flex, Text, Grid, Button, Skeleton, Select } from '@radix-ui/themes';
+import { Skeleton, Select } from '@radix-ui/themes';
 import { useAccount } from 'wagmi';
 import { usePlayerGames, usePlayerStats } from '@/hooks/useGames';
 import { useTiers } from '@/hooks/useTiers';
@@ -72,6 +72,12 @@ const ProfitTooltip = ({ active, payload, label }: { active?: boolean; payload?:
 };
 
 const ITEMS_PER_PAGE = 25;
+
+const glassCard: React.CSSProperties = {
+  background: 'rgba(255,255,255,0.03)',
+  border: '1px solid rgba(255,255,255,0.07)',
+  borderRadius: '16px',
+};
 
 export default function HistoryPage() {
   const { address } = useAccount();
@@ -210,139 +216,165 @@ export default function HistoryPage() {
   if (!address) {
     return (
       <AppLayout title="Game History" description="Connect your wallet to view history" requireAuth>
-        <Section size="3">
-          <Container size="2">
-            <Card className="card-simple text-center p-8">
-              <Heading size="6" mb="4">
+        <div style={{ padding: '48px 0' }}>
+          <div style={{ maxWidth: '480px', margin: '0 auto', padding: '0 16px' }}>
+            <div style={{ ...glassCard, padding: '48px 32px', textAlign: 'center' }}>
+              <h2 style={{ color: 'white', fontSize: '24px', fontWeight: 700, marginBottom: '16px' }}>
                 Connect Wallet to View History
-              </Heading>
-              <Text color="gray">Connect your wallet to see your game history and statistics.</Text>
-            </Card>
-          </Container>
-        </Section>
+              </h2>
+              <p style={{ color: '#94a3b8', fontSize: '15px' }}>
+                Connect your wallet to see your game history and statistics.
+              </p>
+            </div>
+          </div>
+        </div>
       </AppLayout>
     );
   }
 
   return (
     <AppLayout title="Game History" description="View your game history and statistics" requireAuth>
-      <Section size="3">
-        <Container size="4">
-          <Flex direction="column" gap="6">
+      <div style={{ padding: '48px 0' }}>
+        <div style={{ maxWidth: '1280px', margin: '0 auto', padding: '0 24px' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+
             {/* Header */}
-            <Flex align="center" justify="between" className="animate-fade-in">
-              <Heading size="8">Game History</Heading>
-              <Flex gap="3">
+            <div className="animate-fade-in" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '12px' }}>
+              <h1 style={{
+                fontSize: '36px',
+                fontWeight: 800,
+                background: 'linear-gradient(to right, #67e8f9, #a78bfa)',
+                WebkitBackgroundClip: 'text',
+                WebkitTextFillColor: 'transparent',
+                margin: 0,
+              }}>
+                Game History
+              </h1>
+              <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
                 <ExportButton
                   games={filteredGames}
                   userAddress={address}
                   filename="coinflip-history"
                 />
-                <Link href="/play">
-                  <Button size="3" className="cursor-pointer">
+                <Link href="/play" style={{ textDecoration: 'none' }}>
+                  <button
+                    style={{
+                      background: 'linear-gradient(135deg, #06b6d4, #7c3aed)',
+                      border: 'none',
+                      color: 'white',
+                      borderRadius: '10px',
+                      padding: '10px 20px',
+                      fontSize: '15px',
+                      fontWeight: 600,
+                      cursor: 'pointer',
+                    }}
+                  >
                     Play Now
-                  </Button>
+                  </button>
                 </Link>
-              </Flex>
-            </Flex>
+              </div>
+            </div>
 
             {/* Stats Overview */}
-            <Grid columns={{ initial: '1', sm: '2', md: '5' }} gap="4">
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '16px' }}>
               {isLoading ? (
                 <>
                   {[...Array(5)].map((_, i) => (
-                    <Card key={i} className="card-simple">
-                      <Flex direction="column" gap="2" p="4">
+                    <div key={i} style={glassCard}>
+                      <div style={{ padding: '16px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
                         <Skeleton className="h-4 w-24" />
                         <Skeleton className="h-8 w-20" />
-                      </Flex>
-                    </Card>
+                      </div>
+                    </div>
                   ))}
                 </>
               ) : (
                 <>
-                  <Card className="card-simple card-hover border-cyan-500/60 hover-lift animate-fade-in">
-                    <Flex direction="column" gap="2" p="4">
-                      <Flex align="center" gap="2">
-                        <Target className="w-5 h-5 text-cyan-400" />
-                        <Text size="2" color="gray">Games Played</Text>
-                      </Flex>
-                      <Heading size="7">{stats.wins + stats.losses}</Heading>
-                      <Text size="1" color="gray">
-                        {stats.totalGames - stats.wins - stats.losses > 0 && `+${stats.totalGames - stats.wins - stats.losses} cancelled`}
-                      </Text>
-                    </Flex>
-                  </Card>
+                  {/* Games Played */}
+                  <div className="animate-fade-in" style={{ ...glassCard, borderTop: '2px solid rgba(6,182,212,0.6)', padding: '16px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
+                      <Target className="w-5 h-5 text-cyan-400" />
+                      <span style={{ color: '#94a3b8', fontSize: '13px' }}>Games Played</span>
+                    </div>
+                    <div style={{ color: 'white', fontSize: '30px', fontWeight: 700 }}>
+                      {stats.wins + stats.losses}
+                    </div>
+                    {stats.totalGames - stats.wins - stats.losses > 0 && (
+                      <div style={{ color: '#64748b', fontSize: '12px', marginTop: '4px' }}>
+                        +{stats.totalGames - stats.wins - stats.losses} cancelled
+                      </div>
+                    )}
+                  </div>
 
-                  <Card className="card-simple card-hover border-green-500/60 hover-lift animate-fade-in">
-                    <Flex direction="column" gap="2" p="4">
-                      <Flex align="center" gap="2">
-                        <Trophy className="w-5 h-5 text-green-400" />
-                        <Text size="2" color="gray">Win Rate</Text>
-                      </Flex>
-                      <Heading size="7" className="text-green-400">
-                        {winRate.toFixed(1)}%
-                      </Heading>
-                    </Flex>
-                  </Card>
+                  {/* Win Rate */}
+                  <div className="animate-fade-in" style={{ ...glassCard, borderTop: '2px solid rgba(34,197,94,0.6)', padding: '16px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
+                      <Trophy className="w-5 h-5 text-green-400" />
+                      <span style={{ color: '#94a3b8', fontSize: '13px' }}>Win Rate</span>
+                    </div>
+                    <div style={{ color: '#4ade80', fontSize: '30px', fontWeight: 700 }}>
+                      {winRate.toFixed(1)}%
+                    </div>
+                  </div>
 
-                  <Card className="card-simple card-hover border-purple-500/60 hover-lift animate-fade-in">
-                    <Flex direction="column" gap="2" p="4">
-                      <Flex align="center" gap="2">
-                        <DollarSign className="w-5 h-5 text-purple-400" />
-                        <Text size="2" color="gray">Total Wagered</Text>
-                      </Flex>
-                      <Heading size="7" className="text-purple-400">
-                        {formatCurrency(stats.totalWagered)}
-                      </Heading>
-                    </Flex>
-                  </Card>
+                  {/* Total Wagered */}
+                  <div className="animate-fade-in" style={{ ...glassCard, borderTop: '2px solid rgba(168,85,247,0.6)', padding: '16px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
+                      <DollarSign className="w-5 h-5 text-purple-400" />
+                      <span style={{ color: '#94a3b8', fontSize: '13px' }}>Total Wagered</span>
+                    </div>
+                    <div style={{ color: '#c084fc', fontSize: '30px', fontWeight: 700 }}>
+                      {formatCurrency(stats.totalWagered)}
+                    </div>
+                  </div>
 
-                  <Card className={`card-simple card-hover ${isProfit ? 'border-green-500/60' : 'border-red-500/60'} hover-lift animate-fade-in`}>
-                    <Flex direction="column" gap="2" p="4">
-                      <Flex align="center" gap="2">
-                        {isProfit ? (
-                          <TrendingUp className="w-5 h-5 text-green-400" />
-                        ) : (
-                          <TrendingDown className="w-5 h-5 text-red-400" />
-                        )}
-                        <Text size="2" color="gray">Profit/Loss</Text>
-                      </Flex>
-                      <Heading size="7" className={isProfit ? 'text-green-400' : 'text-red-400'}>
-                        {isProfit ? '+' : ''}{formatCurrency(profitLoss)}
-                      </Heading>
-                    </Flex>
-                  </Card>
+                  {/* Profit/Loss */}
+                  <div className="animate-fade-in" style={{ ...glassCard, borderTop: isProfit ? '2px solid rgba(34,197,94,0.6)' : '2px solid rgba(239,68,68,0.6)', padding: '16px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
+                      {isProfit ? (
+                        <TrendingUp className="w-5 h-5 text-green-400" />
+                      ) : (
+                        <TrendingDown className="w-5 h-5 text-red-400" />
+                      )}
+                      <span style={{ color: '#94a3b8', fontSize: '13px' }}>Profit/Loss</span>
+                    </div>
+                    <div style={{ color: isProfit ? '#4ade80' : '#f87171', fontSize: '30px', fontWeight: 700 }}>
+                      {isProfit ? '+' : ''}{formatCurrency(profitLoss)}
+                    </div>
+                  </div>
 
-                  <Card className="card-simple card-hover border-orange-500/60 hover-lift animate-fade-in">
-                    <Flex direction="column" gap="2" p="4">
-                      <Flex align="center" gap="2">
-                        <Percent className="w-5 h-5 text-orange-400" />
-                        <Text size="2" color="gray">Fees Paid</Text>
-                      </Flex>
-                      <Heading size="7" className="text-orange-400">
-                        {formatCurrency(stats.totalFees)}
-                      </Heading>
-                      <Text size="1" color="gray">{PLATFORM_FEE_PERCENT}% platform fee</Text>
-                    </Flex>
-                  </Card>
+                  {/* Fees Paid */}
+                  <div className="animate-fade-in" style={{ ...glassCard, borderTop: '2px solid rgba(249,115,22,0.6)', padding: '16px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
+                      <Percent className="w-5 h-5 text-orange-400" />
+                      <span style={{ color: '#94a3b8', fontSize: '13px' }}>Fees Paid</span>
+                    </div>
+                    <div style={{ color: '#fb923c', fontSize: '30px', fontWeight: 700 }}>
+                      {formatCurrency(stats.totalFees)}
+                    </div>
+                    <div style={{ color: '#64748b', fontSize: '12px', marginTop: '4px' }}>
+                      {PLATFORM_FEE_PERCENT}% platform fee
+                    </div>
+                  </div>
                 </>
               )}
-            </Grid>
+            </div>
 
             {/* Charts */}
-            <Grid columns={{ initial: '1', md: '2' }} gap="4">
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '16px' }}>
               {/* Win/Loss Pie Chart */}
-              <Card className="card-simple p-6 animate-fade-in">
-                <Heading size="5" mb="4">Win Distribution</Heading>
+              <div className="animate-fade-in" style={{ ...glassCard, padding: '24px' }}>
+                <h2 style={{ color: 'white', fontSize: '18px', fontWeight: 700, marginBottom: '16px', marginTop: 0 }}>
+                  Win Distribution
+                </h2>
                 {isLoading ? (
-                  <Flex align="center" justify="center" style={{ height: 300 }}>
+                  <div style={{ height: 300, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                     <Skeleton className="h-32 w-32 rounded-full" />
-                  </Flex>
+                  </div>
                 ) : winLossData.length === 0 ? (
-                  <Flex align="center" justify="center" style={{ height: 300 }}>
-                    <Text color="gray" size="3">No resolved games yet</Text>
-                  </Flex>
+                  <div style={{ height: 300, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <span style={{ color: '#64748b', fontSize: '15px' }}>No resolved games yet</span>
+                  </div>
                 ) : (
                   <ResponsiveContainer width="100%" height={300}>
                     <PieChart>
@@ -386,17 +418,19 @@ export default function HistoryPage() {
                     </PieChart>
                   </ResponsiveContainer>
                 )}
-              </Card>
+              </div>
 
               {/* Games by Tier */}
-              <Card className="card-simple p-6 animate-fade-in">
-                <Heading size="5" mb="4">Games by Tier</Heading>
+              <div className="animate-fade-in" style={{ ...glassCard, padding: '24px' }}>
+                <h2 style={{ color: 'white', fontSize: '18px', fontWeight: 700, marginBottom: '16px', marginTop: 0 }}>
+                  Games by Tier
+                </h2>
                 {isLoading ? (
-                  <Flex align="end" justify="center" gap="4" style={{ height: 300 }} className="pb-8">
+                  <div style={{ height: 300, display: 'flex', alignItems: 'flex-end', justifyContent: 'center', gap: '16px', paddingBottom: '32px' }}>
                     {[80, 120, 60, 100, 40].map((h, i) => (
                       <Skeleton key={i} className="w-12" style={{ height: h }} />
                     ))}
-                  </Flex>
+                  </div>
                 ) : (
                   <ResponsiveContainer width="100%" height={300}>
                     <BarChart data={gamesByTier} margin={{ top: 10, right: 20, left: 10, bottom: 10 }}>
@@ -415,24 +449,28 @@ export default function HistoryPage() {
                     </BarChart>
                   </ResponsiveContainer>
                 )}
-              </Card>
-            </Grid>
+              </div>
+            </div>
 
             {/* Profit Timeline */}
             {recentGames.length > 0 && (
-              <Card className="card-simple p-6 animate-fade-in">
-                <Flex justify="between" align="center" mb="4">
-                  <Heading size="5">Cumulative Profit</Heading>
-                  <Select.Root value={chartFilter} onValueChange={setChartFilter}>
-                    <Select.Trigger placeholder="Filter" />
-                    <Select.Content>
-                      <Select.Item value="10">Last 10 Games</Select.Item>
-                      <Select.Item value="25">Last 25 Games</Select.Item>
-                      <Select.Item value="50">Last 50 Games</Select.Item>
-                      <Select.Item value="all">All Games</Select.Item>
-                    </Select.Content>
-                  </Select.Root>
-                </Flex>
+              <div className="animate-fade-in" style={{ ...glassCard, padding: '24px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px', flexWrap: 'wrap', gap: '12px' }}>
+                  <h2 style={{ color: 'white', fontSize: '18px', fontWeight: 700, margin: 0 }}>
+                    Cumulative Profit
+                  </h2>
+                  <div style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '8px', overflow: 'hidden' }}>
+                    <Select.Root value={chartFilter} onValueChange={setChartFilter}>
+                      <Select.Trigger placeholder="Filter" />
+                      <Select.Content>
+                        <Select.Item value="10">Last 10 Games</Select.Item>
+                        <Select.Item value="25">Last 25 Games</Select.Item>
+                        <Select.Item value="50">Last 50 Games</Select.Item>
+                        <Select.Item value="all">All Games</Select.Item>
+                      </Select.Content>
+                    </Select.Root>
+                  </div>
+                </div>
                 <ResponsiveContainer width="100%" height={400}>
                   <AreaChart data={recentGames} margin={{ top: 20, right: 30, left: 30, bottom: 30 }}>
                     <defs>
@@ -458,14 +496,16 @@ export default function HistoryPage() {
                     />
                   </AreaChart>
                 </ResponsiveContainer>
-              </Card>
+              </div>
             )}
 
             {/* Games Table with Filters */}
-            <Card className="card-simple animate-fade-in">
-              <Flex direction="column" gap="4" p="6">
-                <Flex justify="between" align="center" wrap="wrap" gap="3">
-                  <Heading size="5">Game History</Heading>
+            <div className="animate-fade-in" style={glassCard}>
+              <div style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '12px' }}>
+                  <h2 style={{ color: 'white', fontSize: '18px', fontWeight: 700, margin: 0 }}>
+                    Game History
+                  </h2>
                   <FilterControls
                     tierFilter={tierFilter}
                     onTierChange={setTierFilter}
@@ -481,13 +521,13 @@ export default function HistoryPage() {
                     onSortChange={setSortOption}
                     showSortFilter
                   />
-                </Flex>
+                </div>
 
                 {/* Results count */}
-                <Text size="2" color="gray">
+                <p style={{ color: '#94a3b8', fontSize: '13px', margin: 0 }}>
                   Showing {paginatedGames.length} of {filteredGames.length} games
                   {filteredGames.length !== games.length && ` (filtered from ${games.length} total)`}
-                </Text>
+                </p>
 
                 <RecentGamesTable
                   games={paginatedGames}
@@ -500,19 +540,30 @@ export default function HistoryPage() {
 
                 {/* Pagination */}
                 {totalPages > 1 && (
-                  <Flex justify="between" align="center" pt="4">
-                    <Button
-                      variant="soft"
-                      size="2"
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingTop: '16px' }}>
+                    <button
                       disabled={currentPage === 1}
                       onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
-                      className="cursor-pointer"
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '6px',
+                        background: 'rgba(255,255,255,0.06)',
+                        border: '1px solid rgba(255,255,255,0.1)',
+                        color: currentPage === 1 ? '#475569' : '#94a3b8',
+                        borderRadius: '8px',
+                        padding: '8px 14px',
+                        fontSize: '14px',
+                        fontWeight: 500,
+                        cursor: currentPage === 1 ? 'not-allowed' : 'pointer',
+                        opacity: currentPage === 1 ? 0.5 : 1,
+                      }}
                     >
                       <ChevronLeft className="w-4 h-4" />
                       Previous
-                    </Button>
+                    </button>
 
-                    <Flex gap="2" align="center">
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                       {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
                         let page: number;
                         if (totalPages <= 5) {
@@ -525,50 +576,87 @@ export default function HistoryPage() {
                           page = currentPage - 2 + i;
                         }
 
+                        const isActive = currentPage === page;
                         return (
-                          <Button
+                          <button
                             key={page}
-                            variant={currentPage === page ? 'solid' : 'soft'}
-                            size="1"
                             onClick={() => setCurrentPage(page)}
-                            className="cursor-pointer w-8"
+                            style={{
+                              width: '32px',
+                              height: '32px',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              background: isActive
+                                ? 'linear-gradient(135deg, #06b6d4, #7c3aed)'
+                                : 'rgba(255,255,255,0.06)',
+                              border: isActive ? 'none' : '1px solid rgba(255,255,255,0.1)',
+                              color: isActive ? 'white' : '#94a3b8',
+                              borderRadius: '8px',
+                              fontSize: '13px',
+                              fontWeight: isActive ? 700 : 500,
+                              cursor: 'pointer',
+                            }}
                           >
                             {page}
-                          </Button>
+                          </button>
                         );
                       })}
                       {totalPages > 5 && currentPage < totalPages - 2 && (
                         <>
-                          <Text color="gray">...</Text>
-                          <Button
-                            variant="soft"
-                            size="1"
+                          <span style={{ color: '#64748b' }}>...</span>
+                          <button
                             onClick={() => setCurrentPage(totalPages)}
-                            className="cursor-pointer w-8"
+                            style={{
+                              width: '32px',
+                              height: '32px',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              background: 'rgba(255,255,255,0.06)',
+                              border: '1px solid rgba(255,255,255,0.1)',
+                              color: '#94a3b8',
+                              borderRadius: '8px',
+                              fontSize: '13px',
+                              fontWeight: 500,
+                              cursor: 'pointer',
+                            }}
                           >
                             {totalPages}
-                          </Button>
+                          </button>
                         </>
                       )}
-                    </Flex>
+                    </div>
 
-                    <Button
-                      variant="soft"
-                      size="2"
+                    <button
                       disabled={currentPage === totalPages}
                       onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
-                      className="cursor-pointer"
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '6px',
+                        background: 'rgba(255,255,255,0.06)',
+                        border: '1px solid rgba(255,255,255,0.1)',
+                        color: currentPage === totalPages ? '#475569' : '#94a3b8',
+                        borderRadius: '8px',
+                        padding: '8px 14px',
+                        fontSize: '14px',
+                        fontWeight: 500,
+                        cursor: currentPage === totalPages ? 'not-allowed' : 'pointer',
+                        opacity: currentPage === totalPages ? 0.5 : 1,
+                      }}
                     >
                       Next
                       <ChevronRight className="w-4 h-4" />
-                    </Button>
-                  </Flex>
+                    </button>
+                  </div>
                 )}
-              </Flex>
-            </Card>
-          </Flex>
-        </Container>
-      </Section>
+              </div>
+            </div>
+
+          </div>
+        </div>
+      </div>
     </AppLayout>
   );
 }

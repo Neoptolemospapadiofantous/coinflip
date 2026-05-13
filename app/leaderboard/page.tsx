@@ -1,20 +1,7 @@
 'use client';
 
 import { AppLayout } from '@/components/layout/AppLayout';
-import {
-  Container,
-  Section,
-  Heading,
-  Card,
-  Flex,
-  Text,
-  Grid,
-  Badge,
-  Table,
-  Tabs,
-  Skeleton,
-  TextField,
-} from '@radix-ui/themes';
+import { Table, Skeleton } from '@radix-ui/themes';
 import { Trophy, TrendingUp, Zap, Crown, Users, Search, Medal, Target } from 'lucide-react';
 import { formatAddress, formatCurrency } from '@/lib/utils';
 import { createAvatar } from '@dicebear/core';
@@ -57,19 +44,19 @@ const PlayerAvatar = memo(function PlayerAvatar({
 });
 
 function RankBadge({ rank }: { rank: number }) {
-  const colors = {
-    1: 'bg-gradient-to-br from-yellow-300 to-yellow-500',
-    2: 'bg-gradient-to-br from-cyan-400 to-cyan-600',
-    3: 'bg-gradient-to-br from-purple-400 to-purple-600',
+  const gradients: Record<number, string> = {
+    1: 'linear-gradient(135deg, #fde047, #eab308)',
+    2: 'linear-gradient(135deg, #22d3ee, #0891b2)',
+    3: 'linear-gradient(135deg, #c084fc, #9333ea)',
   };
 
-  const glowColors = {
-    1: 'glow-warning',
-    2: 'glow-primary',
-    3: 'glow-accent',
+  const glowShadows: Record<number, string> = {
+    1: '0 0 12px rgba(234,179,8,0.5)',
+    2: '0 0 12px rgba(6,182,212,0.5)',
+    3: '0 0 12px rgba(147,51,234,0.5)',
   };
 
-  const icons = {
+  const icons: Record<number, React.ReactNode> = {
     1: <Crown className="w-4 h-4" />,
     2: <Trophy className="w-4 h-4" />,
     3: <Medal className="w-4 h-4" />,
@@ -78,19 +65,69 @@ function RankBadge({ rank }: { rank: number }) {
   if (rank <= 3) {
     return (
       <div
-        className={`w-10 h-10 rounded-full flex items-center justify-center ${
-          colors[rank as keyof typeof colors]
-        } ${glowColors[rank as keyof typeof glowColors]} text-white font-bold`}
+        style={{
+          width: 40,
+          height: 40,
+          borderRadius: '50%',
+          background: gradients[rank],
+          boxShadow: glowShadows[rank],
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          color: '#fff',
+          fontWeight: 700,
+        }}
       >
-        {icons[rank as keyof typeof icons]}
+        {icons[rank]}
       </div>
     );
   }
 
   return (
-    <div className="w-10 h-10 rounded-full bg-slate-700 flex items-center justify-center text-gray-400 font-bold">
+    <div
+      style={{
+        width: 40,
+        height: 40,
+        borderRadius: '50%',
+        background: 'rgba(255,255,255,0.06)',
+        border: '1px solid rgba(255,255,255,0.1)',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        color: '#94a3b8',
+        fontWeight: 700,
+        fontSize: 14,
+      }}
+    >
       {rank}
     </div>
+  );
+}
+
+// Win-rate badge
+function WinRateBadge({ rate }: { rate: number }) {
+  const color =
+    rate >= 60
+      ? { bg: 'rgba(34,197,94,0.15)', border: 'rgba(34,197,94,0.3)', text: '#4ade80' }
+      : rate >= 50
+      ? { bg: 'rgba(234,179,8,0.15)', border: 'rgba(234,179,8,0.3)', text: '#facc15' }
+      : { bg: 'rgba(239,68,68,0.15)', border: 'rgba(239,68,68,0.3)', text: '#f87171' };
+
+  return (
+    <span
+      style={{
+        display: 'inline-block',
+        padding: '2px 10px',
+        borderRadius: 9999,
+        background: color.bg,
+        border: `1px solid ${color.border}`,
+        color: color.text,
+        fontSize: 12,
+        fontWeight: 600,
+      }}
+    >
+      {rate.toFixed(1)}%
+    </span>
   );
 }
 
@@ -98,88 +135,209 @@ function RankBadge({ rank }: { rank: number }) {
 function Podium({ leaders, isLoading }: { leaders: LeaderboardEntry[]; isLoading: boolean }) {
   if (isLoading) {
     return (
-      <Card className="card-simple p-8">
-        <Grid columns="3" gap="6" className="max-w-4xl mx-auto">
+      <div
+        style={{
+          background: 'rgba(255,255,255,0.03)',
+          border: '1px solid rgba(255,255,255,0.07)',
+          borderRadius: 16,
+          padding: 32,
+        }}
+      >
+        <div
+          style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(3, 1fr)',
+            gap: 24,
+            maxWidth: 896,
+            margin: '0 auto',
+          }}
+        >
           {[8, 0, 12].map((mt, i) => (
-            <Flex key={i} direction="column" align="center" gap="3" style={{ marginTop: mt * 4 }}>
+            <div
+              key={i}
+              style={{
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                gap: 12,
+                marginTop: mt * 4,
+              }}
+            >
               <Skeleton className="w-10 h-10 rounded-full" />
               <Skeleton className="h-4 w-24" />
               <Skeleton className="h-24 w-full rounded-lg" />
-            </Flex>
+            </div>
           ))}
-        </Grid>
-      </Card>
+        </div>
+      </div>
     );
   }
 
   if (leaders.length < 3) {
     return (
-      <Card className="card-simple p-8">
-        <Flex direction="column" align="center" gap="4" py="8">
-          <Trophy className="w-12 h-12 text-gray-500" />
-          <Text color="gray">Not enough players yet. Be among the first!</Text>
-        </Flex>
-      </Card>
+      <div
+        style={{
+          background: 'rgba(255,255,255,0.03)',
+          border: '1px solid rgba(255,255,255,0.07)',
+          borderRadius: 16,
+          padding: 32,
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          gap: 16,
+        }}
+      >
+        <Trophy className="w-12 h-12 text-gray-500" />
+        <p style={{ color: '#94a3b8', margin: 0 }}>Not enough players yet. Be among the first!</p>
+      </div>
     );
   }
 
-  const positions = [
-    { index: 1, mt: 8, color: 'gray-400', border: 'border-gray-400/40', badge: '2nd' },
-    { index: 0, mt: 0, color: 'yellow-400', border: 'border-yellow-400/60', badge: null },
-    { index: 2, mt: 12, color: 'purple-400', border: 'border-purple-400/40', badge: '3rd' },
+  const podiumConfig = [
+    {
+      index: 1,
+      mt: 8,
+      textColor: '#94a3b8',
+      borderColor: 'rgba(148,163,184,0.4)',
+      glowColor: 'rgba(148,163,184,0.15)',
+      labelColor: '#cbd5e1',
+    },
+    {
+      index: 0,
+      mt: 0,
+      textColor: '#facc15',
+      borderColor: 'rgba(250,204,21,0.6)',
+      glowColor: 'rgba(250,204,21,0.2)',
+      labelColor: '#fde047',
+    },
+    {
+      index: 2,
+      mt: 12,
+      textColor: '#c084fc',
+      borderColor: 'rgba(192,132,252,0.4)',
+      glowColor: 'rgba(192,132,252,0.15)',
+      labelColor: '#d8b4fe',
+    },
   ];
 
   return (
-    <Card className="card-simple p-8">
-      <Grid columns="3" gap="6" className="max-w-4xl mx-auto">
-        {positions.map(({ index, mt, color, border, badge }) => {
+    <div
+      style={{
+        background: 'rgba(255,255,255,0.03)',
+        border: '1px solid rgba(255,255,255,0.07)',
+        borderRadius: 16,
+        padding: 32,
+      }}
+    >
+      <div
+        style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(3, 1fr)',
+          gap: 24,
+          maxWidth: 896,
+          margin: '0 auto',
+        }}
+      >
+        {podiumConfig.map(({ index, mt, textColor, borderColor, glowColor, labelColor }) => {
           const player = leaders[index];
           if (!player) return null;
 
           return (
-            <Flex
+            <div
               key={player.player_address}
-              direction="column"
-              align="center"
-              gap="3"
-              style={{ marginTop: mt * 4 }}
+              style={{
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                gap: 12,
+                marginTop: mt * 4,
+              }}
             >
-              <div className="relative">
+              {/* Avatar with badge */}
+              <div style={{ position: 'relative' }}>
                 {index === 0 && (
-                  <div className="absolute inset-0 bg-yellow-400/20 rounded-full blur-xl animate-pulse-slow" />
+                  <div
+                    style={{
+                      position: 'absolute',
+                      inset: 0,
+                      background: 'rgba(250,204,21,0.2)',
+                      borderRadius: '50%',
+                      filter: 'blur(16px)',
+                    }}
+                  />
                 )}
                 <PlayerAvatar address={player.player_address} />
-                {badge ? (
-                  <div className="absolute -top-2 -right-2">
-                    <Badge color={index === 1 ? 'gray' : 'purple'} size="1">
-                      {badge}
-                    </Badge>
-                  </div>
-                ) : (
-                  <div className="absolute -top-2 -right-2">
-                    <Crown className="w-6 h-6 text-yellow-400" />
-                  </div>
-                )}
+                <div style={{ position: 'absolute', top: -8, right: -8 }}>
+                  {index === 0 ? (
+                    <Crown className="w-6 h-6" style={{ color: '#facc15' }} />
+                  ) : (
+                    <span
+                      style={{
+                        display: 'inline-block',
+                        padding: '1px 6px',
+                        borderRadius: 9999,
+                        background: index === 1 ? 'rgba(148,163,184,0.2)' : 'rgba(192,132,252,0.2)',
+                        border: `1px solid ${index === 1 ? 'rgba(148,163,184,0.4)' : 'rgba(192,132,252,0.4)'}`,
+                        color: textColor,
+                        fontSize: 10,
+                        fontWeight: 700,
+                      }}
+                    >
+                      {index === 1 ? '2nd' : '3rd'}
+                    </span>
+                  )}
+                </div>
               </div>
-              <Text size={index === 0 ? '3' : '2'} weight="bold" className={`text-${color}`}>
+
+              {/* Address */}
+              <p
+                style={{
+                  color: labelColor,
+                  fontWeight: index === 0 ? 700 : 600,
+                  fontSize: index === 0 ? 15 : 13,
+                  margin: 0,
+                  textAlign: 'center',
+                }}
+              >
                 {formatAddress(player.player_address)}
-              </Text>
-              <Card className={`w-full card-solid p-4 border-2 ${border}`}>
-                <Flex direction="column" gap="2" align="center">
-                  <Text size="1" color="gray">Wins</Text>
-                  <Heading size={index === 0 ? '7' : '6'} className={`text-${color}`}>
-                    {player.wins}
-                  </Heading>
-                  <Text size="1" color="gray">
-                    {player.win_rate.toFixed(1)}% WR
-                  </Text>
-                </Flex>
-              </Card>
-            </Flex>
+              </p>
+
+              {/* Stats card */}
+              <div
+                style={{
+                  width: '100%',
+                  background: 'rgba(255,255,255,0.04)',
+                  border: `2px solid ${borderColor}`,
+                  boxShadow: `0 0 16px ${glowColor}`,
+                  borderRadius: 12,
+                  padding: 16,
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  gap: 8,
+                }}
+              >
+                <p style={{ color: '#64748b', fontSize: 12, margin: 0 }}>Wins</p>
+                <p
+                  style={{
+                    color: textColor,
+                    fontSize: index === 0 ? 32 : 26,
+                    fontWeight: 800,
+                    lineHeight: 1,
+                    margin: 0,
+                  }}
+                >
+                  {player.wins}
+                </p>
+                <p style={{ color: '#64748b', fontSize: 12, margin: 0 }}>
+                  {player.win_rate.toFixed(1)}% WR
+                </p>
+              </div>
+            </div>
           );
         })}
-      </Grid>
-    </Card>
+      </div>
+    </div>
   );
 }
 
@@ -192,86 +350,150 @@ function YourPosition() {
 
   if (isLoading) {
     return (
-      <Card className="card-solid border-cyan-500/50 p-6 animate-fade-in">
-        <Flex direction="column" gap="4">
-          <Flex align="center" gap="2">
-            <Target className="w-5 h-5 text-cyan-400" />
-            <Text weight="medium">Your Position</Text>
-          </Flex>
-          <Grid columns="4" gap="4">
-            {[...Array(4)].map((_, i) => (
-              <Skeleton key={i} className="h-16 rounded-lg" />
-            ))}
-          </Grid>
-        </Flex>
-      </Card>
+      <div
+        style={{
+          background: 'rgba(6,182,212,0.05)',
+          border: '1px solid rgba(6,182,212,0.25)',
+          borderRadius: 16,
+          padding: 24,
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16 }}>
+          <Target className="w-5 h-5 text-cyan-400" />
+          <span style={{ color: '#e2e8f0', fontWeight: 500 }}>Your Position</span>
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16 }}>
+          {[...Array(4)].map((_, i) => (
+            <Skeleton key={i} className="h-16 rounded-lg" />
+          ))}
+        </div>
+      </div>
     );
   }
 
   if (!rank || rank.player_total_games === 0) {
     return (
-      <Card className="card-solid border-cyan-500/50 p-6 animate-fade-in">
-        <Flex direction="column" gap="3" align="center">
-          <Target className="w-8 h-8 text-cyan-400" />
-          <Text color="gray">Play some games to appear on the leaderboard!</Text>
-        </Flex>
-      </Card>
+      <div
+        style={{
+          background: 'rgba(6,182,212,0.05)',
+          border: '1px solid rgba(6,182,212,0.25)',
+          borderRadius: 16,
+          padding: 24,
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          gap: 12,
+        }}
+      >
+        <Target className="w-8 h-8 text-cyan-400" />
+        <p style={{ color: '#94a3b8', margin: 0 }}>Play some games to appear on the leaderboard!</p>
+      </div>
     );
   }
 
   const rankItems = [
-    { label: 'By Wins', rank: rank.rank_by_wins, icon: Trophy, color: 'green' },
-    { label: 'By Profit', rank: rank.rank_by_profit, icon: TrendingUp, color: 'cyan' },
-    { label: 'By Win Rate', rank: rank.rank_by_winrate, icon: Zap, color: 'yellow' },
-    { label: 'By Volume', rank: rank.rank_by_volume, icon: Users, color: 'purple' },
+    { label: 'By Wins', rank: rank.rank_by_wins, icon: Trophy, color: '#4ade80' },
+    { label: 'By Profit', rank: rank.rank_by_profit, icon: TrendingUp, color: '#22d3ee' },
+    { label: 'By Win Rate', rank: rank.rank_by_winrate, icon: Zap, color: '#facc15' },
+    { label: 'By Volume', rank: rank.rank_by_volume, icon: Users, color: '#c084fc' },
   ];
 
   return (
-    <Card className="card-solid border-cyan-500/50 p-6 animate-fade-in">
-      <Flex direction="column" gap="4">
-        <Flex align="center" justify="between">
-          <Flex align="center" gap="2">
-            <Target className="w-5 h-5 text-cyan-400" />
-            <Text weight="medium">Your Position</Text>
-          </Flex>
-          <Badge color="cyan" variant="soft">
-            {rank.player_total_games} games played
-          </Badge>
-        </Flex>
+    <div
+      style={{
+        background: 'rgba(6,182,212,0.05)',
+        border: '1px solid rgba(6,182,212,0.25)',
+        borderRadius: 16,
+        padding: 24,
+      }}
+    >
+      {/* Header row */}
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          marginBottom: 16,
+          flexWrap: 'wrap',
+          gap: 8,
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <Target className="w-5 h-5 text-cyan-400" />
+          <span style={{ color: '#e2e8f0', fontWeight: 500 }}>Your Position</span>
+        </div>
+        <span
+          style={{
+            display: 'inline-block',
+            padding: '3px 10px',
+            borderRadius: 9999,
+            background: 'rgba(6,182,212,0.15)',
+            border: '1px solid rgba(6,182,212,0.3)',
+            color: '#22d3ee',
+            fontSize: 12,
+            fontWeight: 600,
+          }}
+        >
+          {rank.player_total_games} games played
+        </span>
+      </div>
 
-        <Grid columns={{ initial: '2', md: '4' }} gap="4">
-          {rankItems.map(({ label, rank: position, icon: Icon, color }) => (
-            <Card key={label} className="card-simple p-4">
-              <Flex direction="column" gap="2" align="center">
-                <Icon className={`w-4 h-4 text-${color}-400`} />
-                <Text size="1" color="gray">{label}</Text>
-                <Heading size="5">
-                  #{position}
-                  <Text size="1" color="gray"> / {rank.total_players}</Text>
-                </Heading>
-              </Flex>
-            </Card>
-          ))}
-        </Grid>
+      {/* Rank grid */}
+      <div
+        style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))',
+          gap: 12,
+          marginBottom: 16,
+        }}
+      >
+        {rankItems.map(({ label, rank: position, icon: Icon, color }) => (
+          <div
+            key={label}
+            style={{
+              background: 'rgba(255,255,255,0.03)',
+              border: '1px solid rgba(255,255,255,0.07)',
+              borderRadius: 12,
+              padding: 16,
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              gap: 6,
+            }}
+          >
+            <Icon style={{ width: 16, height: 16, color }} />
+            <p style={{ color: '#64748b', fontSize: 11, margin: 0 }}>{label}</p>
+            <p style={{ color: '#e2e8f0', fontSize: 20, fontWeight: 800, margin: 0, lineHeight: 1 }}>
+              #{position}
+              <span style={{ color: '#64748b', fontSize: 11, fontWeight: 400 }}> / {rank.total_players}</span>
+            </p>
+          </div>
+        ))}
+      </div>
 
-        <Flex gap="4" justify="center" className="pt-2">
-          <Text size="2">
-            <span className="text-gray-400">Wins:</span>{' '}
-            <span className="text-green-400 font-medium">{rank.player_wins}</span>
-          </Text>
-          <Text size="2">
-            <span className="text-gray-400">Win Rate:</span>{' '}
-            <span className="text-yellow-400 font-medium">{rank.player_win_rate.toFixed(1)}%</span>
-          </Text>
-          <Text size="2">
-            <span className="text-gray-400">Profit:</span>{' '}
-            <span className={`font-medium ${BigInt(rank.player_total_profit) >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-              {formatCurrency(rank.player_total_profit)}
-            </span>
-          </Text>
-        </Flex>
-      </Flex>
-    </Card>
+      {/* Summary stats */}
+      <div style={{ display: 'flex', gap: 24, justifyContent: 'center', flexWrap: 'wrap' }}>
+        <span style={{ fontSize: 13 }}>
+          <span style={{ color: '#94a3b8' }}>Wins: </span>
+          <span style={{ color: '#4ade80', fontWeight: 600 }}>{rank.player_wins}</span>
+        </span>
+        <span style={{ fontSize: 13 }}>
+          <span style={{ color: '#94a3b8' }}>Win Rate: </span>
+          <span style={{ color: '#facc15', fontWeight: 600 }}>{rank.player_win_rate.toFixed(1)}%</span>
+        </span>
+        <span style={{ fontSize: 13 }}>
+          <span style={{ color: '#94a3b8' }}>Profit: </span>
+          <span
+            style={{
+              color: BigInt(rank.player_total_profit) >= 0 ? '#4ade80' : '#f87171',
+              fontWeight: 600,
+            }}
+          >
+            {formatCurrency(rank.player_total_profit)}
+          </span>
+        </span>
+      </div>
+    </div>
   );
 }
 
@@ -310,10 +532,10 @@ function LeaderboardTable({
             <Table.Row key={i}>
               <Table.Cell><Skeleton className="w-10 h-10 rounded-full" /></Table.Cell>
               <Table.Cell>
-                <Flex gap="3" align="center">
+                <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
                   <Skeleton className="w-10 h-10 rounded-full" />
                   <Skeleton className="h-4 w-24" />
-                </Flex>
+                </div>
               </Table.Cell>
               <Table.Cell><Skeleton className="h-4 w-12" /></Table.Cell>
               <Table.Cell><Skeleton className="h-4 w-12" /></Table.Cell>
@@ -328,19 +550,27 @@ function LeaderboardTable({
 
   if (filteredEntries.length === 0) {
     return (
-      <Flex direction="column" align="center" gap="4" py="8">
+      <div
+        style={{
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          gap: 16,
+          padding: '48px 0',
+        }}
+      >
         {searchQuery ? (
           <>
             <Search className="w-12 h-12 text-gray-500" />
-            <Text color="gray">No players found matching "{searchQuery}"</Text>
+            <p style={{ color: '#94a3b8', margin: 0 }}>No players found matching "{searchQuery}"</p>
           </>
         ) : (
           <>
             <Users className="w-12 h-12 text-gray-500" />
-            <Text color="gray">No players on the leaderboard yet. Be the first!</Text>
+            <p style={{ color: '#94a3b8', margin: 0 }}>No players on the leaderboard yet. Be the first!</p>
           </>
         )}
-      </Flex>
+      </div>
     );
   }
 
@@ -366,48 +596,71 @@ function LeaderboardTable({
             return (
               <Table.Row
                 key={player.player_address}
-                className={isCurrentUser ? 'bg-cyan-500/10' : 'hover:bg-white/5'}
+                style={
+                  isCurrentUser
+                    ? {
+                        background: 'rgba(6,182,212,0.08)',
+                        outline: '1px solid rgba(6,182,212,0.2)',
+                        outlineOffset: '-1px',
+                      }
+                    : undefined
+                }
+                className={isCurrentUser ? '' : 'hover:bg-white/[0.03]'}
               >
                 <Table.Cell>
                   <RankBadge rank={player.rank} />
                 </Table.Cell>
                 <Table.Cell>
-                  <Flex gap="3" align="center">
+                  <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
                     <PlayerAvatar address={player.player_address} />
-                    <Flex direction="column">
-                      <Text weight="medium">
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                      <span style={{ color: '#e2e8f0', fontWeight: 500, fontSize: 14 }}>
                         {formatAddress(player.player_address)}
-                      </Text>
+                      </span>
                       {isCurrentUser && (
-                        <Badge color="cyan" size="1" variant="soft">You</Badge>
+                        <span
+                          style={{
+                            display: 'inline-block',
+                            padding: '1px 8px',
+                            borderRadius: 9999,
+                            background: 'rgba(6,182,212,0.15)',
+                            border: '1px solid rgba(6,182,212,0.3)',
+                            color: '#22d3ee',
+                            fontSize: 11,
+                            fontWeight: 600,
+                            alignSelf: 'flex-start',
+                          }}
+                        >
+                          You
+                        </span>
                       )}
-                    </Flex>
-                  </Flex>
+                    </div>
+                  </div>
                 </Table.Cell>
                 <Table.Cell>
-                  <Text weight="bold" className="text-green-400">
-                    {player.wins}
-                  </Text>
+                  <span style={{ color: '#4ade80', fontWeight: 700 }}>{player.wins}</span>
                 </Table.Cell>
-                <Table.Cell>{player.total_games}</Table.Cell>
                 <Table.Cell>
-                  <Badge
-                    color={
-                      player.win_rate >= 60
-                        ? 'green'
-                        : player.win_rate >= 50
-                        ? 'yellow'
-                        : 'red'
-                    }
+                  <span style={{ color: '#94a3b8' }}>{player.total_games}</span>
+                </Table.Cell>
+                <Table.Cell>
+                  <WinRateBadge rate={player.win_rate} />
+                </Table.Cell>
+                <Table.Cell>
+                  <span
+                    style={{
+                      color:
+                        type === 'volume'
+                          ? '#c084fc'
+                          : profitNum >= 0
+                          ? '#22d3ee'
+                          : '#f87171',
+                      fontWeight: 500,
+                    }}
                   >
-                    {player.win_rate.toFixed(1)}%
-                  </Badge>
-                </Table.Cell>
-                <Table.Cell>
-                  <Text className={type === 'volume' ? 'text-purple-400' : profitNum >= 0 ? 'text-cyan-400' : 'text-red-400'}>
                     {type !== 'volume' && profitNum >= 0 && '+'}
                     {formatCurrency(profitValue)}
-                  </Text>
+                  </span>
                 </Table.Cell>
               </Table.Row>
             );
@@ -424,57 +677,138 @@ function StatsCards() {
 
   if (isLoading) {
     return (
-      <Grid columns={{ initial: '1', md: '3' }} gap="4">
+      <div
+        style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+          gap: 16,
+        }}
+      >
         {[...Array(3)].map((_, i) => (
-          <Card key={i} className="card-simple p-6">
-            <Flex direction="column" gap="3">
-              <Skeleton className="h-5 w-32" />
-              <Skeleton className="h-10 w-24" />
-            </Flex>
-          </Card>
+          <div
+            key={i}
+            style={{
+              background: 'rgba(255,255,255,0.03)',
+              border: '1px solid rgba(255,255,255,0.07)',
+              borderRadius: 16,
+              padding: 24,
+            }}
+          >
+            <Skeleton className="h-5 w-32 mb-3" />
+            <Skeleton className="h-10 w-24" />
+          </div>
         ))}
-      </Grid>
+      </div>
     );
   }
 
+  const cards = [
+    {
+      icon: Users,
+      iconColor: '#22d3ee',
+      borderColor: 'rgba(6,182,212,0.3)',
+      glowColor: 'rgba(6,182,212,0.08)',
+      label: 'Total Players',
+      value: formatLeaderboardValue(stats?.total_players ?? 0, 'number'),
+      valueColor: '#22d3ee',
+    },
+    {
+      icon: Zap,
+      iconColor: '#c084fc',
+      borderColor: 'rgba(147,51,234,0.3)',
+      glowColor: 'rgba(147,51,234,0.08)',
+      label: 'Total Volume',
+      value: formatCurrency(stats?.total_volume ?? '0'),
+      valueColor: '#c084fc',
+    },
+    {
+      icon: TrendingUp,
+      iconColor: '#4ade80',
+      borderColor: 'rgba(34,197,94,0.3)',
+      glowColor: 'rgba(34,197,94,0.08)',
+      label: 'Avg Win Rate',
+      value: `${(stats?.avg_win_rate ?? 50).toFixed(1)}%`,
+      valueColor: '#4ade80',
+    },
+  ];
+
   return (
-    <Grid columns={{ initial: '1', md: '3' }} gap="4">
-      <Card className="card-simple border-cyan-500/60 p-6 hover-lift">
-        <Flex direction="column" gap="3">
-          <Flex align="center" gap="2">
-            <Users className="w-5 h-5 text-cyan-400" />
-            <Text size="2" color="gray">Total Players</Text>
-          </Flex>
-          <Heading size="7" className="text-cyan-400">
-            {formatLeaderboardValue(stats?.total_players ?? 0, 'number')}
-          </Heading>
-        </Flex>
-      </Card>
+    <div
+      style={{
+        display: 'grid',
+        gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+        gap: 16,
+      }}
+    >
+      {cards.map(({ icon: Icon, iconColor, borderColor, glowColor, label, value, valueColor }) => (
+        <div
+          key={label}
+          style={{
+            background: `linear-gradient(135deg, ${glowColor}, rgba(255,255,255,0.02))`,
+            border: `1px solid ${borderColor}`,
+            borderRadius: 16,
+            padding: 24,
+            transition: 'transform 0.2s ease, box-shadow 0.2s ease',
+            cursor: 'default',
+          }}
+          onMouseEnter={(e) => {
+            (e.currentTarget as HTMLDivElement).style.transform = 'translateY(-2px)';
+            (e.currentTarget as HTMLDivElement).style.boxShadow = `0 8px 24px ${glowColor}`;
+          }}
+          onMouseLeave={(e) => {
+            (e.currentTarget as HTMLDivElement).style.transform = 'translateY(0)';
+            (e.currentTarget as HTMLDivElement).style.boxShadow = 'none';
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+            <Icon style={{ width: 20, height: 20, color: iconColor }} />
+            <span style={{ color: '#94a3b8', fontSize: 13 }}>{label}</span>
+          </div>
+          <p style={{ color: valueColor, fontSize: 30, fontWeight: 800, margin: 0, lineHeight: 1 }}>
+            {value}
+          </p>
+        </div>
+      ))}
+    </div>
+  );
+}
 
-      <Card className="card-simple border-purple-500/60 p-6 hover-lift">
-        <Flex direction="column" gap="3">
-          <Flex align="center" gap="2">
-            <Zap className="w-5 h-5 text-purple-400" />
-            <Text size="2" color="gray">Total Volume</Text>
-          </Flex>
-          <Heading size="7" className="text-purple-400">
-            {formatCurrency(stats?.total_volume ?? '0')}
-          </Heading>
-        </Flex>
-      </Card>
-
-      <Card className="card-simple border-green-500/60 p-6 hover-lift">
-        <Flex direction="column" gap="3">
-          <Flex align="center" gap="2">
-            <TrendingUp className="w-5 h-5 text-green-400" />
-            <Text size="2" color="gray">Avg Win Rate</Text>
-          </Flex>
-          <Heading size="7" className="text-green-400">
-            {(stats?.avg_win_rate ?? 50).toFixed(1)}%
-          </Heading>
-        </Flex>
-      </Card>
-    </Grid>
+// Tab trigger pill button
+function TabTrigger({
+  value,
+  active,
+  onClick,
+  icon: Icon,
+  label,
+}: {
+  value: string;
+  active: boolean;
+  onClick: () => void;
+  icon: React.ElementType;
+  label: string;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: 6,
+        padding: '6px 14px',
+        borderRadius: 9999,
+        background: active ? 'rgba(6,182,212,0.15)' : 'transparent',
+        border: active ? '1px solid rgba(6,182,212,0.3)' : '1px solid rgba(255,255,255,0.08)',
+        color: active ? '#22d3ee' : '#94a3b8',
+        fontSize: 13,
+        fontWeight: active ? 600 : 400,
+        cursor: 'pointer',
+        transition: 'all 0.2s ease',
+        whiteSpace: 'nowrap',
+      }}
+    >
+      <Icon style={{ width: 14, height: 14 }} />
+      {label}
+    </button>
   );
 }
 
@@ -483,21 +817,55 @@ export default function LeaderboardPage() {
   const [activeTab, setActiveTab] = useState<LeaderboardType>('wins');
   const { data: winsLeaders = [], isLoading: winsLoading } = useLeaderboard('wins', { limit: 3 });
 
+  const tabs: { value: LeaderboardType; icon: React.ElementType; label: string }[] = [
+    { value: 'wins', icon: Trophy, label: 'Most Wins' },
+    { value: 'profit', icon: TrendingUp, label: 'Most Profit' },
+    { value: 'winrate', icon: Zap, label: 'Win Rate' },
+    { value: 'volume', icon: Users, label: 'Volume' },
+  ];
+
   return (
     <AppLayout title="Leaderboard" description="Top players ranked by performance" requireAuth>
-      <Section size="3">
-        <Container size="4">
-          <Flex direction="column" gap="6">
+      <div style={{ padding: '48px 0' }}>
+        <div style={{ maxWidth: 1200, margin: '0 auto', padding: '0 24px' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
+
             {/* Header */}
-            <Flex direction="column" align="center" gap="4" className="text-center animate-fade-in">
-              <Trophy className="w-16 h-16 text-yellow-400 glow-warning" />
-              <Heading size="8" className="text-gradient-rainbow">
+            <div
+              style={{
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                gap: 16,
+                textAlign: 'center',
+              }}
+              className="animate-fade-in"
+            >
+              <Trophy
+                style={{
+                  width: 64,
+                  height: 64,
+                  color: '#facc15',
+                  filter: 'drop-shadow(0 0 16px rgba(234,179,8,0.6))',
+                }}
+              />
+              <h1
+                style={{
+                  margin: 0,
+                  fontSize: 'clamp(2rem, 5vw, 3rem)',
+                  fontWeight: 800,
+                  background: 'linear-gradient(135deg, #f59e0b, #ec4899, #8b5cf6)',
+                  WebkitBackgroundClip: 'text',
+                  WebkitTextFillColor: 'transparent',
+                  backgroundClip: 'text',
+                }}
+              >
                 Leaderboard
-              </Heading>
-              <Text size="4" color="gray">
+              </h1>
+              <p style={{ color: '#64748b', fontSize: 16, margin: 0 }}>
                 Top players ranked by wins, profit, and win rate
-              </Text>
-            </Flex>
+              </p>
+            </div>
 
             {/* Your Position */}
             <YourPosition />
@@ -506,79 +874,90 @@ export default function LeaderboardPage() {
             <Podium leaders={winsLeaders} isLoading={winsLoading} />
 
             {/* Full Leaderboard */}
-            <Card className="card-simple">
-              <Tabs.Root
-                value={activeTab}
-                onValueChange={(v) => setActiveTab(v as LeaderboardType)}
+            <div
+              style={{
+                background: 'rgba(255,255,255,0.03)',
+                border: '1px solid rgba(255,255,255,0.07)',
+                borderRadius: 16,
+                overflow: 'hidden',
+              }}
+            >
+              {/* Tab bar + search */}
+              <div
+                style={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  padding: '16px 20px',
+                  borderBottom: '1px solid rgba(255,255,255,0.07)',
+                  flexWrap: 'wrap',
+                  gap: 12,
+                }}
               >
-                <Flex justify="between" align="center" p="4" className="border-b border-slate-700/50">
-                  <Tabs.List>
-                    <Tabs.Trigger value="wins">
-                      <Flex align="center" gap="1">
-                        <Trophy className="w-4 h-4" />
-                        Most Wins
-                      </Flex>
-                    </Tabs.Trigger>
-                    <Tabs.Trigger value="profit">
-                      <Flex align="center" gap="1">
-                        <TrendingUp className="w-4 h-4" />
-                        Most Profit
-                      </Flex>
-                    </Tabs.Trigger>
-                    <Tabs.Trigger value="winrate">
-                      <Flex align="center" gap="1">
-                        <Zap className="w-4 h-4" />
-                        Win Rate
-                      </Flex>
-                    </Tabs.Trigger>
-                    <Tabs.Trigger value="volume">
-                      <Flex align="center" gap="1">
-                        <Users className="w-4 h-4" />
-                        Volume
-                      </Flex>
-                    </Tabs.Trigger>
-                  </Tabs.List>
+                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                  {tabs.map(({ value, icon, label }) => (
+                    <TabTrigger
+                      key={value}
+                      value={value}
+                      active={activeTab === value}
+                      onClick={() => setActiveTab(value)}
+                      icon={icon}
+                      label={label}
+                    />
+                  ))}
+                </div>
 
-                  {/* Search */}
-                  <TextField.Root
+                {/* Search field */}
+                <div style={{ position: 'relative' }}>
+                  <Search
+                    style={{
+                      position: 'absolute',
+                      left: 12,
+                      top: '50%',
+                      transform: 'translateY(-50%)',
+                      width: 14,
+                      height: 14,
+                      color: '#64748b',
+                      pointerEvents: 'none',
+                    }}
+                  />
+                  <input
                     placeholder="Search player..."
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
-                    size="2"
-                    className="w-48"
-                  >
-                    <TextField.Slot>
-                      <Search className="w-3 h-3" />
-                    </TextField.Slot>
-                  </TextField.Root>
-                </Flex>
+                    className="w-full px-4 py-2.5 rounded-xl text-sm bg-white/[0.05] border border-white/10 text-slate-200 placeholder:text-slate-600 outline-none focus:border-cyan-500/50 transition-all"
+                    style={{ paddingLeft: 34, width: 192 }}
+                  />
+                </div>
+              </div>
 
-                <Tabs.Content value="wins" className="p-4">
+              {/* Tab content panels */}
+              <div style={{ padding: 16 }}>
+                {activeTab === 'wins' && (
                   <LeaderboardTable type="wins" searchQuery={searchQuery} />
-                </Tabs.Content>
-
-                <Tabs.Content value="profit" className="p-4">
+                )}
+                {activeTab === 'profit' && (
                   <LeaderboardTable type="profit" searchQuery={searchQuery} />
-                </Tabs.Content>
-
-                <Tabs.Content value="winrate" className="p-4">
-                  <Text size="2" color="gray" className="mb-4">
-                    Minimum 10 games required for win rate ranking
-                  </Text>
-                  <LeaderboardTable type="winrate" searchQuery={searchQuery} />
-                </Tabs.Content>
-
-                <Tabs.Content value="volume" className="p-4">
+                )}
+                {activeTab === 'winrate' && (
+                  <>
+                    <p style={{ color: '#64748b', fontSize: 13, margin: '0 0 16px 0' }}>
+                      Minimum 10 games required for win rate ranking
+                    </p>
+                    <LeaderboardTable type="winrate" searchQuery={searchQuery} />
+                  </>
+                )}
+                {activeTab === 'volume' && (
                   <LeaderboardTable type="volume" searchQuery={searchQuery} />
-                </Tabs.Content>
-              </Tabs.Root>
-            </Card>
+                )}
+              </div>
+            </div>
 
             {/* Stats Cards */}
             <StatsCards />
-          </Flex>
-        </Container>
-      </Section>
+          </div>
+        </div>
+      </div>
     </AppLayout>
   );
 }

@@ -100,7 +100,7 @@ export function useAuth(): AuthState {
   useEffect(() => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
-        devLog.log('[useAuth] Auth state changed:', event);
+        if (event !== 'INITIAL_SESSION') devLog.log('[useAuth] Auth state changed:', event);
         setSession(session);
 
         if (session) {

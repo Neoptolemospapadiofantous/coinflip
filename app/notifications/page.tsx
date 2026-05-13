@@ -1,7 +1,6 @@
 'use client';
 
 import { useState } from 'react';
-import { Flex, Card, Text, Heading, Box, Button, Badge } from '@radix-ui/themes';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import {
   Bell,
@@ -101,7 +100,22 @@ export default function NotificationsPage() {
       case 'game_created':
         return <Clock className="w-5 h-5 text-cyan-400" />;
       default:
-        return <Bell className="w-5 h-5 text-gray-400" />;
+        return <Bell className="w-5 h-5 text-slate-400" />;
+    }
+  };
+
+  const getIconBg = (type: Notification['type']) => {
+    switch (type) {
+      case 'game_won':
+        return 'rgba(34,197,94,0.15)';
+      case 'game_lost':
+        return 'rgba(239,68,68,0.15)';
+      case 'game_matched':
+        return 'rgba(168,85,247,0.15)';
+      case 'game_created':
+        return 'rgba(6,182,212,0.15)';
+      default:
+        return 'rgba(255,255,255,0.06)';
     }
   };
 
@@ -117,160 +131,180 @@ export default function NotificationsPage() {
     return `${days}d ago`;
   };
 
+  const glassCard: React.CSSProperties = {
+    background: 'rgba(255,255,255,0.03)',
+    border: '1px solid rgba(255,255,255,0.07)',
+    borderRadius: '16px',
+  };
+
+  const ghostButton: React.CSSProperties = {
+    background: 'rgba(255,255,255,0.06)',
+    border: '1px solid rgba(255,255,255,0.1)',
+  };
+
   return (
     <DashboardLayout title="Notifications" description="Stay updated on your game activity.">
-      <Flex direction="column" gap="6">
+      <div className="flex flex-col gap-6">
         {/* Header Actions */}
-        <Card className="card-simple">
-          <Flex align="center" justify="between" p="4">
-            <Flex align="center" gap="3">
+        <div style={glassCard} className="p-4">
+          <div className="flex items-center justify-between flex-wrap gap-3">
+            <div className="flex items-center gap-3">
               <Bell className="w-5 h-5 text-cyan-400" />
-              <Text size="3" weight="medium">
+              <span className="text-sm font-medium text-white">
                 {unreadCount > 0 ? `${unreadCount} unread notifications` : 'All caught up!'}
-              </Text>
-            </Flex>
-            <Flex align="center" gap="3">
-              {/* Filter Toggle */}
-              <Flex className="p-1 rounded-lg bg-slate-800/50">
-                <Button
-                  variant={filter === 'all' ? 'solid' : 'ghost'}
-                  size="1"
+              </span>
+            </div>
+
+            <div className="flex items-center gap-3 flex-wrap">
+              {/* Filter pill toggle */}
+              <div
+                className="flex p-1 rounded-lg gap-1"
+                style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.07)' }}
+              >
+                <button
                   onClick={() => setFilter('all')}
-                  className="cursor-pointer"
+                  className="px-3 py-1 rounded-md text-xs font-medium transition-all duration-200 cursor-pointer"
+                  style={
+                    filter === 'all'
+                      ? { background: 'linear-gradient(135deg, #06b6d4, #7c3aed)', border: 'none', color: '#fff' }
+                      : { background: 'transparent', border: 'none', color: '#94a3b8' }
+                  }
                 >
                   All
-                </Button>
-                <Button
-                  variant={filter === 'unread' ? 'solid' : 'ghost'}
-                  size="1"
+                </button>
+                <button
                   onClick={() => setFilter('unread')}
-                  className="cursor-pointer"
+                  className="px-3 py-1 rounded-md text-xs font-medium transition-all duration-200 cursor-pointer flex items-center gap-1.5"
+                  style={
+                    filter === 'unread'
+                      ? { background: 'linear-gradient(135deg, #06b6d4, #7c3aed)', border: 'none', color: '#fff' }
+                      : { background: 'transparent', border: 'none', color: '#94a3b8' }
+                  }
                 >
                   Unread
                   {unreadCount > 0 && (
-                    <Badge size="1" color="cyan" className="ml-1">
+                    <span
+                      className="inline-flex items-center justify-center w-4 h-4 rounded-full text-[10px] font-bold"
+                      style={{ background: 'rgba(6,182,212,0.25)', color: '#67e8f9' }}
+                    >
                       {unreadCount}
-                    </Badge>
+                    </span>
                   )}
-                </Button>
-              </Flex>
+                </button>
+              </div>
 
               {unreadCount > 0 && (
-                <Button
-                  variant="soft"
-                  size="2"
+                <button
                   onClick={markAllAsRead}
-                  className="cursor-pointer"
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-slate-300 hover:text-white transition-all duration-200 cursor-pointer"
+                  style={ghostButton}
                 >
-                  <CheckCheck className="w-4 h-4" />
+                  <CheckCheck className="w-3.5 h-3.5" />
                   Mark all read
-                </Button>
+                </button>
               )}
 
               {notifications.length > 0 && (
-                <Button
-                  variant="soft"
-                  color="red"
-                  size="2"
+                <button
                   onClick={clearAll}
-                  className="cursor-pointer"
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-200 cursor-pointer"
+                  style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.2)', color: '#f87171' }}
                 >
-                  <Trash2 className="w-4 h-4" />
+                  <Trash2 className="w-3.5 h-3.5" />
                   Clear all
-                </Button>
+                </button>
               )}
-            </Flex>
-          </Flex>
-        </Card>
+            </div>
+          </div>
+        </div>
 
         {/* Notifications List */}
         {filteredNotifications.length > 0 ? (
-          <Flex direction="column" gap="3">
+          <div className="flex flex-col gap-3">
             {filteredNotifications.map((notification) => (
-              <Card
+              <div
                 key={notification.id}
-                className={`card-interactive transition-all ${
-                  !notification.read ? 'border-l-4 border-l-cyan-500' : ''
-                }`}
+                style={{
+                  background: 'rgba(255,255,255,0.03)',
+                  border: notification.read
+                    ? '1px solid rgba(255,255,255,0.07)'
+                    : '1px solid rgba(6,182,212,0.25)',
+                  borderRadius: '16px',
+                  borderLeft: notification.read
+                    ? '1px solid rgba(255,255,255,0.07)'
+                    : '3px solid rgba(6,182,212,0.6)',
+                }}
+                className="transition-all duration-200"
               >
-                <Flex align="start" justify="between" p="4" gap="4">
-                  <Flex align="start" gap="4">
-                    <Box
-                      className={`p-2 rounded-lg ${
-                        notification.type === 'game_won'
-                          ? 'bg-green-500/20'
-                          : notification.type === 'game_lost'
-                          ? 'bg-red-500/20'
-                          : notification.type === 'game_matched'
-                          ? 'bg-purple-500/20'
-                          : 'bg-cyan-500/20'
-                      }`}
+                <div className="flex items-start justify-between p-4 gap-4">
+                  <div className="flex items-start gap-4">
+                    {/* Icon container */}
+                    <div
+                      className="p-2 rounded-lg flex-shrink-0"
+                      style={{ background: getIconBg(notification.type) }}
                     >
                       {getNotificationIcon(notification.type)}
-                    </Box>
-                    <Flex direction="column" gap="1">
-                      <Flex align="center" gap="2">
-                        <Text size="2" weight="medium">
-                          {notification.title}
-                        </Text>
-                        {!notification.read && (
-                          <Box className="w-2 h-2 rounded-full bg-cyan-400" />
-                        )}
-                      </Flex>
-                      <Text size="2" color="gray">
-                        {notification.message}
-                      </Text>
-                      <Text size="1" color="gray">
-                        {formatTimestamp(notification.timestamp)}
-                      </Text>
-                    </Flex>
-                  </Flex>
+                    </div>
 
-                  <Flex align="center" gap="2">
+                    <div className="flex flex-col gap-1">
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm font-medium text-white">{notification.title}</span>
+                        {!notification.read && (
+                          <span
+                            className="w-2 h-2 rounded-full flex-shrink-0"
+                            style={{ background: '#67e8f9' }}
+                          />
+                        )}
+                      </div>
+                      <p className="text-sm text-slate-300">{notification.message}</p>
+                      <p className="text-xs text-slate-500">{formatTimestamp(notification.timestamp)}</p>
+                    </div>
+                  </div>
+
+                  {/* Action buttons */}
+                  <div className="flex items-center gap-2 flex-shrink-0">
                     {!notification.read && (
-                      <Button
-                        variant="ghost"
-                        size="1"
+                      <button
                         onClick={() => markAsRead(notification.id)}
-                        className="cursor-pointer"
+                        className="p-1.5 rounded-lg text-slate-400 hover:text-cyan-400 transition-all duration-200 cursor-pointer"
+                        style={ghostButton}
+                        title="Mark as read"
                       >
                         <CheckCheck className="w-4 h-4" />
-                      </Button>
+                      </button>
                     )}
-                    <Button
-                      variant="ghost"
-                      size="1"
-                      color="red"
+                    <button
                       onClick={() => deleteNotification(notification.id)}
-                      className="cursor-pointer"
+                      className="p-1.5 rounded-lg text-slate-400 hover:text-red-400 transition-all duration-200 cursor-pointer"
+                      style={ghostButton}
+                      title="Delete notification"
                     >
                       <Trash2 className="w-4 h-4" />
-                    </Button>
-                  </Flex>
-                </Flex>
-              </Card>
+                    </button>
+                  </div>
+                </div>
+              </div>
             ))}
-          </Flex>
+          </div>
         ) : (
-          <Card className="card-simple">
-            <Flex direction="column" align="center" gap="4" p="8">
-              <Box className="p-4 rounded-full bg-slate-800/50">
-                <Bell className="w-8 h-8 text-slate-500" />
-              </Box>
-              <Flex direction="column" align="center" gap="2">
-                <Heading size="4" color="gray">
-                  No notifications
-                </Heading>
-                <Text size="2" color="gray" align="center">
-                  {filter === 'unread'
-                    ? "You've read all your notifications!"
-                    : 'You have no notifications yet. Start playing to get updates!'}
-                </Text>
-              </Flex>
-            </Flex>
-          </Card>
+          <div style={glassCard} className="py-16 flex flex-col items-center gap-4">
+            <div
+              className="p-4 rounded-full"
+              style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.07)' }}
+            >
+              <Bell className="w-8 h-8 text-slate-500" />
+            </div>
+            <div className="flex flex-col items-center gap-2 text-center">
+              <h3 className="text-base font-semibold text-slate-400">No notifications</h3>
+              <p className="text-sm text-slate-500 max-w-xs">
+                {filter === 'unread'
+                  ? "You've read all your notifications!"
+                  : 'You have no notifications yet. Start playing to get updates!'}
+              </p>
+            </div>
+          </div>
         )}
-      </Flex>
+      </div>
     </DashboardLayout>
   );
 }

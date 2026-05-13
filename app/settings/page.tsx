@@ -1,7 +1,6 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Flex, Card, Text, Heading, Box, Grid, Button, Switch, TextField, Separator } from '@radix-ui/themes';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import {
   User,
@@ -25,6 +24,72 @@ import { useUserPreferences } from '@/hooks/useUserPreferences';
 import { soundManager } from '@/lib/sounds';
 import { musicManager } from '@/lib/music';
 import { useUIStore } from '@/store/uiStore';
+
+// ─── Design tokens ─────────────────────────────────────────────────────────
+const glass = {
+  card: {
+    background: 'rgba(255,255,255,0.03)',
+    border: '1px solid rgba(255,255,255,0.07)',
+    borderRadius: '16px',
+    padding: '20px',
+  } as React.CSSProperties,
+  row: {
+    background: 'rgba(255,255,255,0.04)',
+    borderRadius: '12px',
+    padding: '12px 16px',
+  } as React.CSSProperties,
+  divider: {
+    height: '1px',
+    background: 'rgba(255,255,255,0.06)',
+  } as React.CSSProperties,
+};
+
+// ─── Native toggle switch ──────────────────────────────────────────────────
+function Toggle({
+  checked,
+  onChange,
+  disabled = false,
+}: {
+  checked: boolean;
+  onChange: (val: boolean) => void;
+  disabled?: boolean;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={() => !disabled && onChange(!checked)}
+      disabled={disabled}
+      style={{
+        position: 'relative',
+        width: '44px',
+        height: '24px',
+        borderRadius: '999px',
+        border: 'none',
+        cursor: disabled ? 'not-allowed' : 'pointer',
+        padding: '3px',
+        flexShrink: 0,
+        background: checked ? 'rgba(6,182,212,0.3)' : 'rgba(255,255,255,0.06)',
+        transition: 'background 0.2s',
+        outline: 'none',
+        opacity: disabled ? 0.5 : 1,
+      }}
+      aria-checked={checked}
+      role="switch"
+    >
+      <span
+        style={{
+          display: 'block',
+          width: '18px',
+          height: '18px',
+          borderRadius: '50%',
+          background: checked ? '#06b6d4' : 'rgba(255,255,255,0.3)',
+          transform: checked ? 'translateX(20px)' : 'translateX(0px)',
+          transition: 'transform 0.2s, background 0.2s',
+        }}
+      />
+    </button>
+  );
+}
 
 export default function SettingsPage() {
   const { user, linkCurrentWallet, unlinkWallet, isWalletLinked } = useAuth();
@@ -96,285 +161,346 @@ export default function SettingsPage() {
 
   return (
     <DashboardLayout title="Settings" description="Manage your account and preferences.">
-      <Flex direction="column" gap="6">
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+
         {/* Status Message */}
         {message && (
-          <Flex
-            align="center"
-            gap="2"
-            className={`p-4 rounded-lg ${
-              message.type === 'success'
-                ? 'bg-green-500/10 border border-green-500/30'
-                : 'bg-red-500/10 border border-red-500/30'
-            }`}
-          >
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
+            padding: '16px',
+            borderRadius: '12px',
+            background: message.type === 'success' ? 'rgba(74,222,128,0.08)' : 'rgba(248,113,113,0.08)',
+            border: `1px solid ${message.type === 'success' ? 'rgba(74,222,128,0.3)' : 'rgba(248,113,113,0.3)'}`,
+          }}>
             {message.type === 'success' ? (
-              <CheckCircle className="w-5 h-5 text-green-400" />
+              <CheckCircle style={{ width: '20px', height: '20px', color: '#4ade80', flexShrink: 0 }} />
             ) : (
-              <AlertCircle className="w-5 h-5 text-red-400" />
+              <AlertCircle style={{ width: '20px', height: '20px', color: '#f87171', flexShrink: 0 }} />
             )}
-            <Text size="2" color={message.type === 'success' ? 'green' : 'red'}>
+            <span style={{ fontSize: '14px', color: message.type === 'success' ? '#4ade80' : '#f87171' }}>
               {message.text}
-            </Text>
-          </Flex>
+            </span>
+          </div>
         )}
 
         {/* Account Settings */}
-        <Card className="card-simple">
-          <Flex direction="column" gap="4" p="5">
-            <Flex align="center" gap="2">
-              <User className="w-5 h-5 text-cyan-400" />
-              <Heading size="4">Account</Heading>
-            </Flex>
-            <Separator size="4" />
-            <Grid columns={{ initial: '1', md: '2' }} gap="4">
-              <Box>
-                <Text as="label" size="2" weight="medium" className="block mb-2">
-                  Email Address
-                </Text>
-                <TextField.Root
-                  size="3"
-                  value={user?.email || ''}
-                  disabled
-                >
-                  <TextField.Slot>
-                    <Mail className="w-4 h-4 text-gray-400" />
-                  </TextField.Slot>
-                </TextField.Root>
-                <Text size="1" color="gray" className="mt-1">
-                  Email cannot be changed
-                </Text>
-              </Box>
-              <Box>
-                <Text as="label" size="2" weight="medium" className="block mb-2">
-                  Account Created
-                </Text>
-                <TextField.Root
-                  size="3"
+        <div style={glass.card}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <User style={{ width: '20px', height: '20px', color: '#22d3ee' }} />
+              <h2 style={{ fontSize: '18px', fontWeight: 600, color: '#f1f5f9', margin: 0 }}>Account</h2>
+            </div>
+            <div style={glass.divider} />
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '16px' }} className="md:grid-cols-2">
+              {/* Email */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                <label style={{ fontSize: '13px', fontWeight: 500, color: '#cbd5e1' }}>Email Address</label>
+                <div style={{ position: 'relative' }}>
+                  <Mail style={{ position: 'absolute', left: '14px', top: '50%', transform: 'translateY(-50%)', width: '16px', height: '16px', color: '#64748b' }} />
+                  <input
+                    className="w-full px-4 py-3 rounded-xl text-sm bg-white/[0.05] border border-white/10 text-slate-200 outline-none focus:border-cyan-500/50 transition-all"
+                    style={{ paddingLeft: '40px' }}
+                    value={user?.email || ''}
+                    disabled
+                    readOnly
+                  />
+                </div>
+                <span style={{ fontSize: '11px', color: '#64748b' }}>Email cannot be changed</span>
+              </div>
+              {/* Account Created */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                <label style={{ fontSize: '13px', fontWeight: 500, color: '#cbd5e1' }}>Account Created</label>
+                <input
+                  className="w-full px-4 py-3 rounded-xl text-sm bg-white/[0.05] border border-white/10 text-slate-200 outline-none focus:border-cyan-500/50 transition-all"
                   value={user?.createdAt ? new Date(user.createdAt).toLocaleDateString() : 'N/A'}
                   disabled
+                  readOnly
                 />
-              </Box>
-            </Grid>
-          </Flex>
-        </Card>
+              </div>
+            </div>
+          </div>
+        </div>
 
         {/* Wallet Settings */}
-        <Card className="card-simple">
-          <Flex direction="column" gap="4" p="5">
-            <Flex align="center" gap="2">
-              <Wallet className="w-5 h-5 text-purple-400" />
-              <Heading size="4">Wallet</Heading>
-            </Flex>
-            <Separator size="4" />
-            <Flex direction="column" gap="4">
+        <div style={glass.card}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <Wallet style={{ width: '20px', height: '20px', color: '#a78bfa' }} />
+              <h2 style={{ fontSize: '18px', fontWeight: 600, color: '#f1f5f9', margin: 0 }}>Wallet</h2>
+            </div>
+            <div style={glass.divider} />
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
               {isConnected ? (
                 <>
-                  <Flex align="center" justify="between" className="p-4 rounded-lg bg-slate-800/50">
-                    <Flex direction="column" gap="1">
-                      <Text size="2" weight="medium">Connected Wallet</Text>
-                      <Text size="2" color="cyan" className="font-mono">
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', ...glass.row }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                      <span style={{ fontSize: '14px', fontWeight: 500, color: '#e2e8f0' }}>Connected Wallet</span>
+                      <span style={{ fontSize: '13px', color: '#22d3ee', fontFamily: 'monospace', wordBreak: 'break-all' }}>
                         {address}
-                      </Text>
-                    </Flex>
-                    <Flex align="center" gap="2">
-                      <Box className="w-2 h-2 rounded-full bg-green-400" />
-                      <Text size="2" color="green">Connected</Text>
-                    </Flex>
-                  </Flex>
+                      </span>
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexShrink: 0, marginLeft: '16px' }}>
+                      <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#4ade80' }} />
+                      <span style={{ fontSize: '13px', color: '#4ade80' }}>Connected</span>
+                    </div>
+                  </div>
 
                   {isWalletLinked ? (
-                    <Button
-                      variant="soft"
-                      color="red"
+                    <button
                       onClick={handleUnlinkWallet}
                       disabled={linkingWallet}
-                      className="cursor-pointer"
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '8px',
+                        padding: '10px 20px',
+                        borderRadius: '10px',
+                        border: '1px solid rgba(248,113,113,0.3)',
+                        background: 'rgba(248,113,113,0.1)',
+                        color: '#f87171',
+                        fontSize: '14px',
+                        fontWeight: 500,
+                        cursor: linkingWallet ? 'not-allowed' : 'pointer',
+                        opacity: linkingWallet ? 0.7 : 1,
+                        transition: 'background 0.2s',
+                        alignSelf: 'flex-start',
+                      }}
                     >
                       {linkingWallet ? (
-                        <Loader2 className="w-4 h-4 animate-spin" />
+                        <Loader2 style={{ width: '16px', height: '16px' }} className="animate-spin" />
                       ) : (
-                        <Unlink className="w-4 h-4" />
+                        <Unlink style={{ width: '16px', height: '16px' }} />
                       )}
                       Unlink Wallet from Account
-                    </Button>
+                    </button>
                   ) : (
-                    <Button
+                    <button
                       onClick={handleLinkWallet}
                       disabled={linkingWallet}
-                      className="cursor-pointer"
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '8px',
+                        padding: '10px 20px',
+                        borderRadius: '10px',
+                        border: 'none',
+                        background: 'linear-gradient(135deg, #06b6d4, #7c3aed)',
+                        color: '#fff',
+                        fontSize: '14px',
+                        fontWeight: 600,
+                        cursor: linkingWallet ? 'not-allowed' : 'pointer',
+                        opacity: linkingWallet ? 0.7 : 1,
+                        transition: 'opacity 0.2s',
+                        alignSelf: 'flex-start',
+                      }}
                     >
                       {linkingWallet ? (
-                        <Loader2 className="w-4 h-4 animate-spin" />
+                        <Loader2 style={{ width: '16px', height: '16px' }} className="animate-spin" />
                       ) : (
-                        <LinkIcon className="w-4 h-4" />
+                        <LinkIcon style={{ width: '16px', height: '16px' }} />
                       )}
                       Link Wallet to Account
-                    </Button>
+                    </button>
                   )}
                 </>
               ) : (
-                <Flex direction="column" gap="4" align="center" className="p-6">
-                  <Text size="2" color="gray" align="center">
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '16px', padding: '24px' }}>
+                  <p style={{ fontSize: '14px', color: '#64748b', textAlign: 'center', margin: 0 }}>
                     Connect your wallet to link it to your account for a seamless experience.
-                  </Text>
-                  <ConnectButton />
-                </Flex>
+                  </p>
+                  <div style={{ background: 'rgba(255,255,255,0.03)', borderRadius: '12px', padding: '4px' }}>
+                    <ConnectButton />
+                  </div>
+                </div>
               )}
-            </Flex>
-          </Flex>
-        </Card>
+            </div>
+          </div>
+        </div>
 
         {/* Audio & Animation Settings */}
-        <Card className="card-simple">
-          <Flex direction="column" gap="4" p="5">
-            <Flex align="center" gap="2">
-              <Volume2 className="w-5 h-5 text-cyan-400" />
-              <Heading size="4">Audio & Animation</Heading>
-            </Flex>
-            <Separator size="4" />
-            <Flex direction="column" gap="4">
-              <Flex align="center" justify="between" className="p-3 rounded-lg bg-slate-800/30">
-                <Flex direction="column" gap="1">
-                  <Flex align="center" gap="2">
-                    <Volume2 className="w-4 h-4 text-cyan-400" />
-                    <Text size="2" weight="medium">Sound Effects</Text>
-                  </Flex>
-                  <Text size="1" color="gray">Play sounds for game events (win, loss, match)</Text>
-                </Flex>
-                <Switch
-                  checked={soundEnabled}
-                  onCheckedChange={setSoundEnabled}
-                />
-              </Flex>
+        <div style={glass.card}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <Volume2 style={{ width: '20px', height: '20px', color: '#22d3ee' }} />
+              <h2 style={{ fontSize: '18px', fontWeight: 600, color: '#f1f5f9', margin: 0 }}>Audio &amp; Animation</h2>
+            </div>
+            <div style={glass.divider} />
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
 
-              <Flex align="center" justify="between" className="p-3 rounded-lg bg-slate-800/30">
-                <Flex direction="column" gap="1">
-                  <Flex align="center" gap="2">
-                    <Music className="w-4 h-4 text-purple-400" />
-                    <Text size="2" weight="medium">Background Music</Text>
-                  </Flex>
-                  <Text size="1" color="gray">Play ambient synthwave music while playing</Text>
-                </Flex>
-                <Switch
-                  checked={musicEnabled}
-                  onCheckedChange={toggleMusic}
-                />
-              </Flex>
+              {/* Sound Effects */}
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', ...glass.row }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <Volume2 style={{ width: '16px', height: '16px', color: '#22d3ee' }} />
+                    <span style={{ fontSize: '14px', fontWeight: 500, color: '#e2e8f0' }}>Sound Effects</span>
+                  </div>
+                  <span style={{ fontSize: '12px', color: '#64748b' }}>Play sounds for game events (win, loss, match)</span>
+                </div>
+                <Toggle checked={soundEnabled} onChange={setSoundEnabled} />
+              </div>
 
-              <Flex align="center" justify="between" className="p-3 rounded-lg bg-slate-800/30">
-                <Flex direction="column" gap="1">
-                  <Flex align="center" gap="2">
-                    <Zap className="w-4 h-4 text-yellow-400" />
-                    <Text size="2" weight="medium">Skip Animations</Text>
-                  </Flex>
-                  <Text size="1" color="gray">Skip coin flip animations for faster results</Text>
-                </Flex>
-                <Switch
-                  checked={skipAnimation}
-                  onCheckedChange={setSkipAnimation}
-                />
-              </Flex>
-            </Flex>
-          </Flex>
-        </Card>
+              {/* Background Music */}
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', ...glass.row }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <Music style={{ width: '16px', height: '16px', color: '#a78bfa' }} />
+                    <span style={{ fontSize: '14px', fontWeight: 500, color: '#e2e8f0' }}>Background Music</span>
+                  </div>
+                  <span style={{ fontSize: '12px', color: '#64748b' }}>Play ambient synthwave music while playing</span>
+                </div>
+                <Toggle checked={musicEnabled} onChange={toggleMusic} />
+              </div>
+
+              {/* Skip Animations */}
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', ...glass.row }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <Zap style={{ width: '16px', height: '16px', color: '#facc15' }} />
+                    <span style={{ fontSize: '14px', fontWeight: 500, color: '#e2e8f0' }}>Skip Animations</span>
+                  </div>
+                  <span style={{ fontSize: '12px', color: '#64748b' }}>Skip coin flip animations for faster results</span>
+                </div>
+                <Toggle checked={skipAnimation} onChange={setSkipAnimation} />
+              </div>
+
+            </div>
+          </div>
+        </div>
 
         {/* Email Notification Settings */}
-        <Card className="card-simple">
-          <Flex direction="column" gap="4" p="5">
-            <Flex align="center" gap="2">
-              <Mail className="w-5 h-5 text-yellow-400" />
-              <Heading size="4">Email Notifications</Heading>
-            </Flex>
-            <Separator size="4" />
-            <Flex direction="column" gap="4">
-              <Flex align="center" justify="between" className="p-3 rounded-lg bg-slate-800/30">
-                <Flex direction="column" gap="1">
-                  <Text size="2" weight="medium">Enable Email Notifications</Text>
-                  <Text size="1" color="gray">Receive email updates about your games</Text>
-                </Flex>
-                <Switch
-                  checked={emailNotificationsEnabled}
-                  onCheckedChange={setEmailNotificationsEnabled}
-                />
-              </Flex>
+        <div style={glass.card}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <Mail style={{ width: '20px', height: '20px', color: '#facc15' }} />
+              <h2 style={{ fontSize: '18px', fontWeight: 600, color: '#f1f5f9', margin: 0 }}>Email Notifications</h2>
+            </div>
+            <div style={glass.divider} />
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
 
-              <Flex align="center" justify="between" className={`p-3 rounded-lg bg-slate-800/30 ${!emailNotificationsEnabled ? 'opacity-50' : ''}`}>
-                <Flex direction="column" gap="1">
-                  <Text size="2" weight="medium">Game Matched</Text>
-                  <Text size="1" color="gray">Email when someone joins your game</Text>
-                </Flex>
-                <Switch
-                  checked={emailOnGameMatched}
-                  onCheckedChange={setEmailOnGameMatched}
-                  disabled={!emailNotificationsEnabled}
-                />
-              </Flex>
+              {/* Enable Email Notifications */}
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', ...glass.row }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                  <span style={{ fontSize: '14px', fontWeight: 500, color: '#e2e8f0' }}>Enable Email Notifications</span>
+                  <span style={{ fontSize: '12px', color: '#64748b' }}>Receive email updates about your games</span>
+                </div>
+                <Toggle checked={emailNotificationsEnabled} onChange={setEmailNotificationsEnabled} />
+              </div>
 
-              <Flex align="center" justify="between" className={`p-3 rounded-lg bg-slate-800/30 ${!emailNotificationsEnabled ? 'opacity-50' : ''}`}>
-                <Flex direction="column" gap="1">
-                  <Text size="2" weight="medium">Game Resolved</Text>
-                  <Text size="1" color="gray">Email when a game is completed with results</Text>
-                </Flex>
-                <Switch
-                  checked={emailOnGameResolved}
-                  onCheckedChange={setEmailOnGameResolved}
-                  disabled={!emailNotificationsEnabled}
-                />
-              </Flex>
-            </Flex>
-          </Flex>
-        </Card>
+              {/* Game Matched */}
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', ...glass.row, opacity: emailNotificationsEnabled ? 1 : 0.5, transition: 'opacity 0.2s' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                  <span style={{ fontSize: '14px', fontWeight: 500, color: '#e2e8f0' }}>Game Matched</span>
+                  <span style={{ fontSize: '12px', color: '#64748b' }}>Email when someone joins your game</span>
+                </div>
+                <Toggle checked={emailOnGameMatched} onChange={setEmailOnGameMatched} disabled={!emailNotificationsEnabled} />
+              </div>
+
+              {/* Game Resolved */}
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', ...glass.row, opacity: emailNotificationsEnabled ? 1 : 0.5, transition: 'opacity 0.2s' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                  <span style={{ fontSize: '14px', fontWeight: 500, color: '#e2e8f0' }}>Game Resolved</span>
+                  <span style={{ fontSize: '12px', color: '#64748b' }}>Email when a game is completed with results</span>
+                </div>
+                <Toggle checked={emailOnGameResolved} onChange={setEmailOnGameResolved} disabled={!emailNotificationsEnabled} />
+              </div>
+
+            </div>
+          </div>
+        </div>
 
         {/* Security Settings */}
-        <Card className="card-simple">
-          <Flex direction="column" gap="4" p="5">
-            <Flex align="center" gap="2">
-              <Shield className="w-5 h-5 text-green-400" />
-              <Heading size="4">Security</Heading>
-            </Flex>
-            <Separator size="4" />
-            <Flex direction="column" gap="4">
-              <Flex align="center" justify="between" className="p-4 rounded-lg bg-slate-800/50">
-                <Flex direction="column" gap="1">
-                  <Text size="2" weight="medium">Change Password</Text>
-                  <Text size="1" color="gray">Update your account password</Text>
-                </Flex>
-                <Button variant="soft" size="2" className="cursor-pointer">
-                  Change
-                </Button>
-              </Flex>
+        <div style={glass.card}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <Shield style={{ width: '20px', height: '20px', color: '#4ade80' }} />
+              <h2 style={{ fontSize: '18px', fontWeight: 600, color: '#f1f5f9', margin: 0 }}>Security</h2>
+            </div>
+            <div style={glass.divider} />
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
 
-              <Flex align="center" justify="between" className="p-4 rounded-lg bg-slate-800/50">
-                <Flex direction="column" gap="1">
-                  <Text size="2" weight="medium">Two-Factor Authentication</Text>
-                  <Text size="1" color="gray">Add an extra layer of security</Text>
-                </Flex>
-                <Button variant="soft" size="2" className="cursor-pointer" disabled>
+              {/* Change Password */}
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', ...glass.row }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                  <span style={{ fontSize: '14px', fontWeight: 500, color: '#e2e8f0' }}>Change Password</span>
+                  <span style={{ fontSize: '12px', color: '#64748b' }}>Update your account password</span>
+                </div>
+                <button
+                  style={{
+                    padding: '8px 16px',
+                    borderRadius: '8px',
+                    border: '1px solid rgba(255,255,255,0.1)',
+                    background: 'rgba(255,255,255,0.06)',
+                    color: '#cbd5e1',
+                    fontSize: '13px',
+                    fontWeight: 500,
+                    cursor: 'pointer',
+                    transition: 'background 0.2s',
+                  }}
+                >
+                  Change
+                </button>
+              </div>
+
+              {/* 2FA */}
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', ...glass.row }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                  <span style={{ fontSize: '14px', fontWeight: 500, color: '#e2e8f0' }}>Two-Factor Authentication</span>
+                  <span style={{ fontSize: '12px', color: '#64748b' }}>Add an extra layer of security</span>
+                </div>
+                <button
+                  disabled
+                  style={{
+                    padding: '8px 16px',
+                    borderRadius: '8px',
+                    border: '1px solid rgba(255,255,255,0.06)',
+                    background: 'rgba(255,255,255,0.03)',
+                    color: '#475569',
+                    fontSize: '13px',
+                    fontWeight: 500,
+                    cursor: 'not-allowed',
+                  }}
+                >
                   Coming Soon
-                </Button>
-              </Flex>
-            </Flex>
-          </Flex>
-        </Card>
+                </button>
+              </div>
+
+            </div>
+          </div>
+        </div>
 
         {/* Save Button */}
-        <Flex justify="end">
-          <Button
-            size="3"
+        <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+          <button
             onClick={handleSavePreferences}
             disabled={saving}
-            className="cursor-pointer"
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+              padding: '12px 28px',
+              borderRadius: '12px',
+              border: 'none',
+              background: 'linear-gradient(135deg, #06b6d4, #7c3aed)',
+              color: '#fff',
+              fontSize: '15px',
+              fontWeight: 600,
+              cursor: saving ? 'not-allowed' : 'pointer',
+              opacity: saving ? 0.7 : 1,
+              transition: 'opacity 0.2s',
+            }}
           >
             {saving ? (
-              <Loader2 className="w-4 h-4 animate-spin" />
+              <Loader2 style={{ width: '16px', height: '16px' }} className="animate-spin" />
             ) : (
-              <Save className="w-4 h-4" />
+              <Save style={{ width: '16px', height: '16px' }} />
             )}
             Save Preferences
-          </Button>
-        </Flex>
-      </Flex>
+          </button>
+        </div>
+
+      </div>
     </DashboardLayout>
   );
 }

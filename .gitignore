@@ -124,6 +124,7 @@ secrets/
 *.key
 *.secret
 private-keys.txt
+pass.txt
 .env.production
 .env.production.local
 .env.*.production
@@ -150,3 +151,4 @@ image*.png
 
 # Claude Code
 .claude/
+wallets.json

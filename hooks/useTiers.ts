@@ -29,19 +29,11 @@ export function useTiers() {
 
       // ALWAYS use mock tiers for testnets to ensure correct amounts
       if (isTestnet(chainId)) {
-        devLog.log('🧪 TESTNET DETECTED - Using testnet tier amounts (100x smaller)');
-        devLog.log('📊 Testnet Tiers:', mockTiers.map(t => ({
-          id: t.id,
-          amountUsd: t.amountUsd,
-          amountWei: t.amount,
-          amountEth: (Number(BigInt(t.amount)) / 1e18).toFixed(8)
-        })));
         return mockTiers;
       }
 
       // Wallet-only users: fetch from blockchain
       if (!isLoggedIn) {
-        devLog.log('[useTiers] Using blockchain data source');
         try {
           const blockchainSource = getBlockchainDataSource();
           const tiers = await blockchainSource.getTiers();

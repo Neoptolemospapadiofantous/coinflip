@@ -51,8 +51,8 @@ contract CoinFlip is ReentrancyGuard, Pausable, Ownable, AutomationCompatibleInt
     /// @notice Blocks before LOCKED game can be refunded if VRF fails (default ~40 min on Sepolia)
     uint256 public vrfTimeoutBlocks = 200;
 
-    /// @notice VRF callback gas limit
-    uint32 public constant VRF_CALLBACK_GAS_LIMIT = 100000;
+    /// @notice VRF callback gas limit (configurable — increase if stats writes + transfer exceed 100k)
+    uint32 public vrfCallbackGasLimit = 200000;
 
     /// @notice VRF request confirmations
     uint16 public constant VRF_REQUEST_CONFIRMATIONS = 3;
@@ -113,11 +113,18 @@ contract CoinFlip is ReentrancyGuard, Pausable, Ownable, AutomationCompatibleInt
     /// @notice Mapping to track stuck funds from failed refunds (gameId => amount)
     mapping(uint256 => uint256) public stuckFunds;
 
+    /// @notice Pull-payment withdrawable balances (address => amount)
+    mapping(address => uint256) public withdrawable;
+
     /// @notice Mapping to track active games per player (address => count)
     mapping(address => uint8) public activeGameCount;
 
     /// @notice Mapping to track player statistics
     mapping(address => PlayerStats) public playerStats;
+
+    /// @notice Chainlink Automation forwarder address (set after upkeep registration)
+    /// @dev If zero, performUpkeep is callable by anyone (backwards-compatible default)
+    address public automationForwarder;
 
     // =============================================================
     //                      ENUMS
@@ -273,6 +280,21 @@ contract CoinFlip is ReentrancyGuard, Pausable, Ownable, AutomationCompatibleInt
         uint256 totalWon
     );
 
+    event Withdrawn(
+        address indexed player,
+        uint256 amount
+    );
+
+    event AutomationForwarderUpdated(
+        address indexed oldForwarder,
+        address indexed newForwarder
+    );
+
+    event VrfCallbackGasLimitUpdated(
+        uint32 oldLimit,
+        uint32 newLimit
+    );
+
     // =============================================================
     //                        ERRORS
     // =============================================================
@@ -297,6 +319,10 @@ contract CoinFlip is ReentrancyGuard, Pausable, Ownable, AutomationCompatibleInt
     error InvalidFeeAmount();
     error InvalidTimeoutValue();
     error InvalidMaxGames();
+    error NoFundsToWithdraw();
+    error NotVrfCoordinator();
+    error InvalidCoordinator();
+    error NotAuthorized();
 
     // =============================================================
     //                      CONSTRUCTOR
@@ -316,7 +342,7 @@ contract CoinFlip is ReentrancyGuard, Pausable, Ownable, AutomationCompatibleInt
         address _feeRecipient
     ) Ownable(msg.sender) {
         if (_feeRecipient == address(0)) revert InvalidFeeRecipient();
-        if (vrfCoordinator == address(0)) revert InvalidFeeRecipient(); // Reuse error for simplicity
+        if (vrfCoordinator == address(0)) revert InvalidCoordinator();
 
         i_vrfCoordinator = IVRFCoordinatorV2Plus(vrfCoordinator);
         i_vrfSubscriptionId = subscriptionId;
@@ -419,7 +445,7 @@ contract CoinFlip is ReentrancyGuard, Pausable, Ownable, AutomationCompatibleInt
             keyHash: i_vrfKeyHash,
             subId: i_vrfSubscriptionId,
             requestConfirmations: VRF_REQUEST_CONFIRMATIONS,
-            callbackGasLimit: VRF_CALLBACK_GAS_LIMIT,
+            callbackGasLimit: vrfCallbackGasLimit,
             numWords: VRF_NUM_WORDS,
             extraArgs: VRFV2PlusClient._argsToBytes(
                 VRFV2PlusClient.ExtraArgsV1({nativePayment: false})
@@ -509,6 +535,11 @@ contract CoinFlip is ReentrancyGuard, Pausable, Ownable, AutomationCompatibleInt
         // Update state
         game.state = GameState.CANCELLED;
 
+        // Clean up VRF request mapping to free storage
+        if (game.vrfRequestId != 0) {
+            delete vrfRequests[game.vrfRequestId];
+        }
+
         // Decrement active game counts for both players
         if (activeGameCount[game.playerA] > 0) {
             activeGameCount[game.playerA]--;
@@ -517,14 +548,11 @@ contract CoinFlip is ReentrancyGuard, Pausable, Ownable, AutomationCompatibleInt
             activeGameCount[game.playerB]--;
         }
 
-        // Refund both players
+        // Pull-payment: credit each player's withdrawable balance.
+        // This prevents a malicious playerB contract from griefing playerA's refund.
         uint256 refundAmount = tiers[game.tier].amount;
-
-        (bool successA, ) = game.playerA.call{value: refundAmount}("");
-        if (!successA) revert TransferFailed();
-
-        (bool successB, ) = game.playerB.call{value: refundAmount}("");
-        if (!successB) revert TransferFailed();
+        withdrawable[game.playerA] += refundAmount;
+        withdrawable[game.playerB] += refundAmount;
 
         emit VrfTimeoutClaimed(gameId, game.playerA, game.playerB, refundAmount);
     }
@@ -685,10 +713,14 @@ contract CoinFlip is ReentrancyGuard, Pausable, Ownable, AutomationCompatibleInt
         }
 
         uint256 refundAmount = tiers[game.tier].amount;
-        uint256 totalRefund = 0;
 
-        // Update state first (prevent reentrancy)
+        // Update state first (CEI pattern)
         game.state = GameState.CANCELLED;
+
+        // Clean up VRF request mapping if game was LOCKED
+        if (game.vrfRequestId != 0) {
+            delete vrfRequests[game.vrfRequestId];
+        }
 
         // Decrement active game counts
         if (game.playerA != address(0) && activeGameCount[game.playerA] > 0) {
@@ -698,16 +730,16 @@ contract CoinFlip is ReentrancyGuard, Pausable, Ownable, AutomationCompatibleInt
             activeGameCount[game.playerB]--;
         }
 
-        // Refund player A
+        // Pull-payment: credit withdrawable balances so a reverting recipient cannot
+        // block the other player from recovering their funds.
+        uint256 totalRefund = 0;
         if (game.playerA != address(0)) {
-            (bool successA, ) = game.playerA.call{value: refundAmount}("");
-            if (successA) totalRefund += refundAmount;
+            withdrawable[game.playerA] += refundAmount;
+            totalRefund += refundAmount;
         }
-
-        // Refund player B (only if game was LOCKED)
         if (game.playerB != address(0)) {
-            (bool successB, ) = game.playerB.call{value: refundAmount}("");
-            if (successB) totalRefund += refundAmount;
+            withdrawable[game.playerB] += refundAmount;
+            totalRefund += refundAmount;
         }
 
         emit EmergencyRefund(gameId, game.playerA, game.playerB, totalRefund);
@@ -745,6 +777,23 @@ contract CoinFlip is ReentrancyGuard, Pausable, Ownable, AutomationCompatibleInt
     }
 
     /**
+     * @notice Withdraw funds credited via pull-payment (VRF timeout or emergency refund)
+     * @dev Pull-payment pattern: players claim their own refunds, preventing DoS attacks
+     *      from malicious contract wallets that revert on receive().
+     */
+    function withdraw() external nonReentrant {
+        uint256 amount = withdrawable[msg.sender];
+        if (amount == 0) revert NoFundsToWithdraw();
+
+        withdrawable[msg.sender] = 0;
+
+        (bool ok, ) = msg.sender.call{value: amount}("");
+        if (!ok) revert TransferFailed();
+
+        emit Withdrawn(msg.sender, amount);
+    }
+
+    /**
      * @notice Pause the contract (emergency)
      */
     function pause() external onlyOwner {
@@ -756,6 +805,29 @@ contract CoinFlip is ReentrancyGuard, Pausable, Ownable, AutomationCompatibleInt
      */
     function unpause() external onlyOwner {
         _unpause();
+    }
+
+    /**
+     * @notice Set the Chainlink Automation forwarder address
+     * @dev Call this after registering the upkeep to restrict performUpkeep access.
+     *      Set to address(0) to allow any caller (backwards-compatible default).
+     * @param newForwarder The forwarder address assigned by Chainlink Automation
+     */
+    function setAutomationForwarder(address newForwarder) external onlyOwner {
+        address old = automationForwarder;
+        automationForwarder = newForwarder;
+        emit AutomationForwarderUpdated(old, newForwarder);
+    }
+
+    /**
+     * @notice Update VRF callback gas limit
+     * @param newLimit New gas limit (must be >= 100000)
+     */
+    function setVrfCallbackGasLimit(uint32 newLimit) external onlyOwner {
+        if (newLimit < 100000) revert InvalidTimeoutValue();
+        uint32 old = vrfCallbackGasLimit;
+        vrfCallbackGasLimit = newLimit;
+        emit VrfCallbackGasLimitUpdated(old, newLimit);
     }
 
     // =============================================================
@@ -808,6 +880,14 @@ contract CoinFlip is ReentrancyGuard, Pausable, Ownable, AutomationCompatibleInt
      * @param performData Encoded array of game IDs to cancel
      */
     function performUpkeep(bytes calldata performData) external override {
+        // If a forwarder is configured, only it (or the owner) may call.
+        // Prevents arbitrary callers from manipulating the cancellation batch.
+        if (automationForwarder != address(0) &&
+            msg.sender != automationForwarder &&
+            msg.sender != owner()) {
+            revert NotAuthorized();
+        }
+
         uint256[] memory gameIdsToCancel = abi.decode(performData, (uint256[]));
 
         for (uint256 i = 0; i < gameIdsToCancel.length; i++) {
@@ -1043,7 +1123,7 @@ contract CoinFlip is ReentrancyGuard, Pausable, Ownable, AutomationCompatibleInt
         uint256[] calldata randomWords
     ) external {
         if (msg.sender != address(i_vrfCoordinator)) {
-            revert InvalidGameState(); // Reuse error for simplicity
+            revert NotVrfCoordinator();
         }
         fulfillRandomWords(requestId, randomWords);
     }

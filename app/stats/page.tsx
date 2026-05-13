@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useMemo } from 'react';
-import { Flex, Card, Text, Heading, Box, Grid, Badge, Select, Skeleton } from '@radix-ui/themes';
+import { Skeleton } from '@radix-ui/themes';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import {
   Dices,
@@ -33,6 +33,37 @@ import {
 } from 'recharts';
 import { getDateRangeStart, type DateRangeFilter } from '@/components/shared';
 import { theme } from '@/lib/theme';
+
+// ─── Glass design tokens ───────────────────────────────────────────────────
+const glass = {
+  card: {
+    background: 'rgba(255,255,255,0.03)',
+    border: '1px solid rgba(255,255,255,0.07)',
+    borderRadius: '16px',
+  } as React.CSSProperties,
+  row: {
+    background: 'rgba(255,255,255,0.04)',
+    borderRadius: '12px',
+    padding: '16px',
+  } as React.CSSProperties,
+  rowSm: {
+    background: 'rgba(255,255,255,0.04)',
+    borderRadius: '10px',
+    padding: '12px 16px',
+  } as React.CSSProperties,
+  divider: {
+    height: '1px',
+    background: 'rgba(255,255,255,0.06)',
+  } as React.CSSProperties,
+};
+
+const colorMap = {
+  cyan:   { text: '#22d3ee', glow: 'rgba(6,182,212,0.15)',   border: 'rgba(6,182,212,0.25)'   },
+  purple: { text: '#a78bfa', glow: 'rgba(124,58,237,0.15)',  border: 'rgba(124,58,237,0.25)'  },
+  green:  { text: '#4ade80', glow: 'rgba(74,222,128,0.15)',  border: 'rgba(74,222,128,0.25)'  },
+  red:    { text: '#f87171', glow: 'rgba(248,113,113,0.15)', border: 'rgba(248,113,113,0.25)' },
+  yellow: { text: '#facc15', glow: 'rgba(250,204,21,0.15)',  border: 'rgba(250,204,21,0.25)'  },
+};
 
 export default function StatsPage() {
   const { address } = useAccount();
@@ -233,40 +264,59 @@ export default function StatsPage() {
     }).sort((a, b) => a.tier - b.tier);
   }, [filteredGames, address, tiers]);
 
+  const dateLabel: Record<DateRangeFilter, string> = {
+    all: 'All Time',
+    today: 'Today',
+    '7d': 'Last 7 Days',
+    '30d': 'Last 30 Days',
+    '90d': 'Last 90 Days',
+  };
+
   return (
     <DashboardLayout title="Statistics" description="Your detailed gaming statistics and analytics.">
-      <Flex direction="column" gap="6">
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+
         {/* Time Period Filter */}
-        <Flex justify="between" align="center" className="animate-fade-in">
-          <Heading size="6">Your Statistics</Heading>
-          <Select.Root value={dateRange} onValueChange={(v) => setDateRange(v as DateRangeFilter)}>
-            <Select.Trigger>
-              <Flex align="center" gap="2">
-                <Calendar className="w-4 h-4" />
-                {dateRange === 'all' ? 'All Time' : dateRange === 'today' ? 'Today' : dateRange === '7d' ? 'Last 7 Days' : dateRange === '30d' ? 'Last 30 Days' : 'Last 90 Days'}
-              </Flex>
-            </Select.Trigger>
-            <Select.Content>
-              <Select.Item value="all">All Time</Select.Item>
-              <Select.Item value="today">Today</Select.Item>
-              <Select.Item value="7d">Last 7 Days</Select.Item>
-              <Select.Item value="30d">Last 30 Days</Select.Item>
-              <Select.Item value="90d">Last 90 Days</Select.Item>
-            </Select.Content>
-          </Select.Root>
-        </Flex>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }} className="animate-fade-in">
+          <h1 style={{ fontSize: '22px', fontWeight: 700, color: '#f1f5f9', margin: 0 }}>Your Statistics</h1>
+          <div style={{ position: 'relative' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', ...glass.card, padding: '10px 16px', cursor: 'pointer' }}>
+              <Calendar style={{ width: '16px', height: '16px', color: '#94a3b8' }} />
+              <select
+                value={dateRange}
+                onChange={(e) => setDateRange(e.target.value as DateRangeFilter)}
+                style={{
+                  background: 'transparent',
+                  border: 'none',
+                  color: '#cbd5e1',
+                  fontSize: '14px',
+                  cursor: 'pointer',
+                  outline: 'none',
+                  appearance: 'none',
+                  paddingRight: '8px',
+                }}
+              >
+                <option value="all" style={{ background: '#1e293b' }}>All Time</option>
+                <option value="today" style={{ background: '#1e293b' }}>Today</option>
+                <option value="7d" style={{ background: '#1e293b' }}>Last 7 Days</option>
+                <option value="30d" style={{ background: '#1e293b' }}>Last 30 Days</option>
+                <option value="90d" style={{ background: '#1e293b' }}>Last 90 Days</option>
+              </select>
+            </div>
+          </div>
+        </div>
 
         {/* Overview Stats */}
-        <Grid columns={{ initial: '2', md: '4' }} gap="4">
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '16px' }} className="md:grid-cols-4">
           {isLoading ? (
             <>
               {[...Array(4)].map((_, i) => (
-                <Card key={i} className="card-simple">
-                  <Flex direction="column" gap="3" p="4">
+                <div key={i} style={{ ...glass.card, padding: '16px' }}>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
                     <Skeleton className="h-4 w-20" />
                     <Skeleton className="h-10 w-16" />
-                  </Flex>
-                </Card>
+                  </div>
+                </div>
               ))}
             </>
           ) : (
@@ -274,59 +324,59 @@ export default function StatsPage() {
               <StatCard
                 label="Total Games"
                 value={displayStats.totalGames}
-                icon={<Dices className="w-5 h-5" />}
+                icon={<Dices style={{ width: '20px', height: '20px' }} />}
                 color="cyan"
               />
               <StatCard
                 label="Win Rate"
                 value={`${displayStats.winRate.toFixed(1)}%`}
-                icon={<Target className="w-5 h-5" />}
+                icon={<Target style={{ width: '20px', height: '20px' }} />}
                 color="purple"
                 comparison="Platform: ~50%"
               />
               <StatCard
                 label="Wins"
                 value={displayStats.wins}
-                icon={<Trophy className="w-5 h-5" />}
+                icon={<Trophy style={{ width: '20px', height: '20px' }} />}
                 color="green"
               />
               <StatCard
                 label="Losses"
                 value={displayStats.losses}
-                icon={<TrendingDown className="w-5 h-5" />}
+                icon={<TrendingDown style={{ width: '20px', height: '20px' }} />}
                 color="red"
               />
             </>
           )}
-        </Grid>
+        </div>
 
         {/* Rankings (if available) */}
         {playerRank && playerRank.player_total_games > 0 && (
-          <Card className="card-solid border-cyan-500/50 animate-fade-in">
-            <Flex direction="column" gap="4" p="5">
-              <Flex align="center" gap="2">
-                <Award className="w-5 h-5 text-cyan-400" />
-                <Heading size="4">Your Rankings</Heading>
-              </Flex>
-              <Grid columns={{ initial: '2', md: '4' }} gap="4">
+          <div style={{ ...glass.card, padding: '20px', borderColor: 'rgba(6,182,212,0.3)' }} className="animate-fade-in">
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <Award style={{ width: '20px', height: '20px', color: '#22d3ee' }} />
+                <h2 style={{ fontSize: '18px', fontWeight: 600, color: '#f1f5f9', margin: 0 }}>Your Rankings</h2>
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '16px' }} className="md:grid-cols-4">
                 <RankCard label="By Wins" rank={playerRank.rank_by_wins} total={playerRank.total_players} color="green" />
                 <RankCard label="By Profit" rank={playerRank.rank_by_profit} total={playerRank.total_players} color="cyan" />
                 <RankCard label="By Win Rate" rank={playerRank.rank_by_winrate} total={playerRank.total_players} color="yellow" />
                 <RankCard label="By Volume" rank={playerRank.rank_by_volume} total={playerRank.total_players} color="purple" />
-              </Grid>
-            </Flex>
-          </Card>
+              </div>
+            </div>
+          </div>
         )}
 
         {/* Charts Row */}
-        <Grid columns={{ initial: '1', md: '2' }} gap="4">
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '16px' }} className="md:grid-cols-2">
           {/* Win Rate Trend */}
-          <Card className="card-simple p-6 animate-fade-in">
-            <Flex direction="column" gap="4">
-              <Flex align="center" gap="2">
-                <TrendingUp className="w-5 h-5 text-green-400" />
-                <Heading size="4">Win Rate Trend</Heading>
-              </Flex>
+          <div style={{ ...glass.card, padding: '24px' }} className="animate-fade-in">
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <TrendingUp style={{ width: '20px', height: '20px', color: '#4ade80' }} />
+                <h2 style={{ fontSize: '18px', fontWeight: 600, color: '#f1f5f9', margin: 0 }}>Win Rate Trend</h2>
+              </div>
               {winRateTrend.length > 0 ? (
                 <ResponsiveContainer width="100%" height={250}>
                   <LineChart data={winRateTrend}>
@@ -347,20 +397,20 @@ export default function StatsPage() {
                   </LineChart>
                 </ResponsiveContainer>
               ) : (
-                <Flex align="center" justify="center" style={{ height: 250 }}>
-                  <Text color="gray">Play at least 5 games to see trends</Text>
-                </Flex>
+                <div style={{ height: 250, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <span style={{ color: '#64748b', fontSize: '14px' }}>Play at least 5 games to see trends</span>
+                </div>
               )}
-            </Flex>
-          </Card>
+            </div>
+          </div>
 
           {/* Profit Timeline */}
-          <Card className="card-simple p-6 animate-fade-in">
-            <Flex direction="column" gap="4">
-              <Flex align="center" gap="2">
-                <BarChart3 className="w-5 h-5 text-cyan-400" />
-                <Heading size="4">Profit Timeline</Heading>
-              </Flex>
+          <div style={{ ...glass.card, padding: '24px' }} className="animate-fade-in">
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <BarChart3 style={{ width: '20px', height: '20px', color: '#22d3ee' }} />
+                <h2 style={{ fontSize: '18px', fontWeight: 600, color: '#f1f5f9', margin: 0 }}>Profit Timeline</h2>
+              </div>
               {profitTimeline.length > 0 ? (
                 <ResponsiveContainer width="100%" height={250}>
                   <AreaChart data={profitTimeline}>
@@ -388,220 +438,245 @@ export default function StatsPage() {
                   </AreaChart>
                 </ResponsiveContainer>
               ) : (
-                <Flex align="center" justify="center" style={{ height: 250 }}>
-                  <Text color="gray">No resolved games yet</Text>
-                </Flex>
+                <div style={{ height: 250, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <span style={{ color: '#64748b', fontSize: '14px' }}>No resolved games yet</span>
+                </div>
               )}
-            </Flex>
-          </Card>
-        </Grid>
+            </div>
+          </div>
+        </div>
 
         {/* Streaks & Best/Worst Days */}
-        <Grid columns={{ initial: '1', md: '2' }} gap="4">
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '16px' }} className="md:grid-cols-2">
           {/* Streaks */}
-          <Card className="card-simple animate-fade-in">
-            <Flex direction="column" gap="4" p="5">
-              <Flex align="center" gap="2">
-                <Flame className="w-5 h-5 text-orange-400" />
-                <Heading size="4">Streaks</Heading>
-              </Flex>
-              <Grid columns="3" gap="4">
-                <Box className="p-4 rounded-lg bg-slate-800/50 hover-lift">
-                  <Flex direction="column" gap="2">
-                    <Text size="2" color="gray">Current Streak</Text>
-                    <Flex align="center" gap="2">
-                      <Text size="6" weight="bold" className={streaks.currentStreak >= 0 ? 'text-green-400' : 'text-red-400'}>
+          <div style={{ ...glass.card, padding: '20px' }} className="animate-fade-in">
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <Flame style={{ width: '20px', height: '20px', color: '#fb923c' }} />
+                <h2 style={{ fontSize: '18px', fontWeight: 600, color: '#f1f5f9', margin: 0 }}>Streaks</h2>
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px' }}>
+                {/* Current Streak */}
+                <div style={{ ...glass.row, padding: '16px' }}>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                    <span style={{ fontSize: '12px', color: '#64748b' }}>Current Streak</span>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <span style={{ fontSize: '28px', fontWeight: 700, color: streaks.currentStreak >= 0 ? '#4ade80' : '#f87171' }}>
                         {Math.abs(streaks.currentStreak)}
-                      </Text>
-                      <Badge color={streaks.currentStreak >= 0 ? 'green' : 'red'} variant="soft">
+                      </span>
+                      <span style={{
+                        fontSize: '11px',
+                        fontWeight: 600,
+                        padding: '2px 8px',
+                        borderRadius: '20px',
+                        background: streaks.currentStreak >= 0 ? 'rgba(74,222,128,0.15)' : 'rgba(248,113,113,0.15)',
+                        color: streaks.currentStreak >= 0 ? '#4ade80' : '#f87171',
+                      }}>
                         {streaks.currentStreak >= 0 ? 'Wins' : 'Losses'}
-                      </Badge>
-                    </Flex>
-                  </Flex>
-                </Box>
-                <Box className="p-4 rounded-lg bg-slate-800/50 hover-lift">
-                  <Flex direction="column" gap="2">
-                    <Text size="2" color="gray">Longest Win</Text>
-                    <Flex align="center" gap="2">
-                      <Text size="6" weight="bold" className="text-green-400">
+                      </span>
+                    </div>
+                  </div>
+                </div>
+                {/* Longest Win */}
+                <div style={{ ...glass.row, padding: '16px' }}>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                    <span style={{ fontSize: '12px', color: '#64748b' }}>Longest Win</span>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <span style={{ fontSize: '28px', fontWeight: 700, color: '#4ade80' }}>
                         {streaks.longestWinStreak}
-                      </Text>
-                      <Badge color="green" variant="soft">Wins</Badge>
-                    </Flex>
-                  </Flex>
-                </Box>
-                <Box className="p-4 rounded-lg bg-slate-800/50 hover-lift">
-                  <Flex direction="column" gap="2">
-                    <Text size="2" color="gray">Longest Loss</Text>
-                    <Flex align="center" gap="2">
-                      <Text size="6" weight="bold" className="text-red-400">
+                      </span>
+                      <span style={{ fontSize: '11px', fontWeight: 600, padding: '2px 8px', borderRadius: '20px', background: 'rgba(74,222,128,0.15)', color: '#4ade80' }}>
+                        Wins
+                      </span>
+                    </div>
+                  </div>
+                </div>
+                {/* Longest Loss */}
+                <div style={{ ...glass.row, padding: '16px' }}>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                    <span style={{ fontSize: '12px', color: '#64748b' }}>Longest Loss</span>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <span style={{ fontSize: '28px', fontWeight: 700, color: '#f87171' }}>
                         {streaks.longestLossStreak}
-                      </Text>
-                      <Badge color="red" variant="soft">Losses</Badge>
-                    </Flex>
-                  </Flex>
-                </Box>
-              </Grid>
-            </Flex>
-          </Card>
+                      </span>
+                      <span style={{ fontSize: '11px', fontWeight: 600, padding: '2px 8px', borderRadius: '20px', background: 'rgba(248,113,113,0.15)', color: '#f87171' }}>
+                        Losses
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
 
           {/* Best/Worst Days */}
-          <Card className="card-simple animate-fade-in">
-            <Flex direction="column" gap="4" p="5">
-              <Flex align="center" gap="2">
-                <Calendar className="w-5 h-5 text-purple-400" />
-                <Heading size="4">Best & Worst Days</Heading>
-              </Flex>
+          <div style={{ ...glass.card, padding: '20px' }} className="animate-fade-in">
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <Calendar style={{ width: '20px', height: '20px', color: '#a78bfa' }} />
+                <h2 style={{ fontSize: '18px', fontWeight: 600, color: '#f1f5f9', margin: 0 }}>Best &amp; Worst Days</h2>
+              </div>
               {dayStats.bestDay ? (
-                <Grid columns="2" gap="4">
-                  <Box className="p-4 rounded-lg bg-green-500/10 border border-green-500/30 hover-lift">
-                    <Flex direction="column" gap="2">
-                      <Text size="2" color="gray">Best Day</Text>
-                      <Text size="1" className="text-green-400">{dayStats.bestDay.date}</Text>
-                      <Text size="4" weight="bold" className="text-green-400">
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                  <div style={{ padding: '16px', borderRadius: '12px', background: 'rgba(74,222,128,0.08)', border: '1px solid rgba(74,222,128,0.25)' }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                      <span style={{ fontSize: '12px', color: '#64748b' }}>Best Day</span>
+                      <span style={{ fontSize: '12px', color: '#4ade80' }}>{dayStats.bestDay.date}</span>
+                      <span style={{ fontSize: '18px', fontWeight: 700, color: '#4ade80' }}>
                         +{dayStats.bestDay.profit.toFixed(4)} ETH
-                      </Text>
-                      <Text size="1" color="gray">
+                      </span>
+                      <span style={{ fontSize: '11px', color: '#64748b' }}>
                         {dayStats.bestDay.wins}W / {dayStats.bestDay.losses}L
-                      </Text>
-                    </Flex>
-                  </Box>
-                  <Box className="p-4 rounded-lg bg-red-500/10 border border-red-500/30 hover-lift">
-                    <Flex direction="column" gap="2">
-                      <Text size="2" color="gray">Worst Day</Text>
-                      <Text size="1" className="text-red-400">{dayStats.worstDay.date}</Text>
-                      <Text size="4" weight="bold" className="text-red-400">
+                      </span>
+                    </div>
+                  </div>
+                  <div style={{ padding: '16px', borderRadius: '12px', background: 'rgba(248,113,113,0.08)', border: '1px solid rgba(248,113,113,0.25)' }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                      <span style={{ fontSize: '12px', color: '#64748b' }}>Worst Day</span>
+                      <span style={{ fontSize: '12px', color: '#f87171' }}>{dayStats.worstDay.date}</span>
+                      <span style={{ fontSize: '18px', fontWeight: 700, color: '#f87171' }}>
                         {dayStats.worstDay.profit.toFixed(4)} ETH
-                      </Text>
-                      <Text size="1" color="gray">
+                      </span>
+                      <span style={{ fontSize: '11px', color: '#64748b' }}>
                         {dayStats.worstDay.wins}W / {dayStats.worstDay.losses}L
-                      </Text>
-                    </Flex>
-                  </Box>
-                </Grid>
+                      </span>
+                    </div>
+                  </div>
+                </div>
               ) : (
-                <Box className="p-8 rounded-lg bg-slate-800/30 text-center">
-                  <Text size="2" color="gray">No games played yet</Text>
-                </Box>
+                <div style={{ padding: '32px', borderRadius: '12px', background: 'rgba(255,255,255,0.02)', textAlign: 'center' }}>
+                  <span style={{ fontSize: '14px', color: '#64748b' }}>No games played yet</span>
+                </div>
               )}
-            </Flex>
-          </Card>
-        </Grid>
+            </div>
+          </div>
+        </div>
 
         {/* Financial Overview */}
-        <Card className="card-simple animate-fade-in">
-          <Flex direction="column" gap="4" p="5">
-            <Flex align="center" gap="2">
-              <BarChart3 className="w-5 h-5 text-cyan-400" />
-              <Heading size="4">Financial Overview</Heading>
-            </Flex>
-            <Grid columns={{ initial: '1', md: '3' }} gap="4">
-              <Box className="p-4 rounded-lg bg-cyan-500/10 border border-cyan-500/30 hover-lift">
-                <Flex direction="column" gap="2">
-                  <Text size="2" color="gray">Total Wagered</Text>
-                  <Flex align="baseline" gap="1">
-                    <Text size="5" weight="bold">{formatAmount(displayStats.totalWagered)}</Text>
-                    <Text size="2" color="gray">ETH</Text>
-                  </Flex>
-                </Flex>
-              </Box>
-              <Box className="p-4 rounded-lg bg-green-500/10 border border-green-500/30 hover-lift">
-                <Flex direction="column" gap="2">
-                  <Text size="2" color="gray">Total Won</Text>
-                  <Flex align="baseline" gap="1">
-                    <Text size="5" weight="bold" className="text-green-400">
-                      {formatAmount(displayStats.totalWon)}
-                    </Text>
-                    <Text size="2" color="gray">ETH</Text>
-                  </Flex>
-                </Flex>
-              </Box>
-              <Box className={`p-4 rounded-lg ${displayStats.netProfit >= 0n ? 'bg-green-500/10 border-green-500/30' : 'bg-red-500/10 border-red-500/30'} border hover-lift`}>
-                <Flex direction="column" gap="2">
-                  <Text size="2" color="gray">Net Profit</Text>
-                  <Flex align="baseline" gap="1">
-                    <Text
-                      size="5"
-                      weight="bold"
-                      className={displayStats.netProfit >= 0n ? 'text-green-400' : 'text-red-400'}
-                    >
+        <div style={{ ...glass.card, padding: '20px' }} className="animate-fade-in">
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <BarChart3 style={{ width: '20px', height: '20px', color: '#22d3ee' }} />
+              <h2 style={{ fontSize: '18px', fontWeight: 600, color: '#f1f5f9', margin: 0 }}>Financial Overview</h2>
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '12px' }} className="md:grid-cols-3">
+              {/* Total Wagered */}
+              <div style={{ padding: '16px', borderRadius: '12px', background: 'rgba(6,182,212,0.08)', border: '1px solid rgba(6,182,212,0.25)' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                  <span style={{ fontSize: '12px', color: '#64748b' }}>Total Wagered</span>
+                  <div style={{ display: 'flex', alignItems: 'baseline', gap: '4px' }}>
+                    <span style={{ fontSize: '22px', fontWeight: 700, color: '#f1f5f9' }}>{formatAmount(displayStats.totalWagered)}</span>
+                    <span style={{ fontSize: '13px', color: '#64748b' }}>ETH</span>
+                  </div>
+                </div>
+              </div>
+              {/* Total Won */}
+              <div style={{ padding: '16px', borderRadius: '12px', background: 'rgba(74,222,128,0.08)', border: '1px solid rgba(74,222,128,0.25)' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                  <span style={{ fontSize: '12px', color: '#64748b' }}>Total Won</span>
+                  <div style={{ display: 'flex', alignItems: 'baseline', gap: '4px' }}>
+                    <span style={{ fontSize: '22px', fontWeight: 700, color: '#4ade80' }}>{formatAmount(displayStats.totalWon)}</span>
+                    <span style={{ fontSize: '13px', color: '#64748b' }}>ETH</span>
+                  </div>
+                </div>
+              </div>
+              {/* Net Profit */}
+              <div style={{
+                padding: '16px',
+                borderRadius: '12px',
+                background: displayStats.netProfit >= 0n ? 'rgba(74,222,128,0.08)' : 'rgba(248,113,113,0.08)',
+                border: `1px solid ${displayStats.netProfit >= 0n ? 'rgba(74,222,128,0.25)' : 'rgba(248,113,113,0.25)'}`,
+              }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                  <span style={{ fontSize: '12px', color: '#64748b' }}>Net Profit</span>
+                  <div style={{ display: 'flex', alignItems: 'baseline', gap: '4px' }}>
+                    <span style={{ fontSize: '22px', fontWeight: 700, color: displayStats.netProfit >= 0n ? '#4ade80' : '#f87171' }}>
                       {displayStats.netProfit >= 0n ? '+' : ''}
                       {formatAmount(displayStats.netProfit)}
-                    </Text>
-                    <Text size="2" color="gray">ETH</Text>
-                  </Flex>
-                </Flex>
-              </Box>
-            </Grid>
-          </Flex>
-        </Card>
+                    </span>
+                    <span style={{ fontSize: '13px', color: '#64748b' }}>ETH</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
 
         {/* Tier Breakdown */}
-        <Card className="card-simple animate-fade-in">
-          <Flex direction="column" gap="4" p="5">
-            <Flex align="center" gap="2">
-              <Target className="w-5 h-5 text-purple-400" />
-              <Heading size="4">Performance by Tier</Heading>
-            </Flex>
+        <div style={{ ...glass.card, padding: '20px' }} className="animate-fade-in">
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <Target style={{ width: '20px', height: '20px', color: '#a78bfa' }} />
+              <h2 style={{ fontSize: '18px', fontWeight: 600, color: '#f1f5f9', margin: 0 }}>Performance by Tier</h2>
+            </div>
             {tierStats.length > 0 ? (
-              <Flex direction="column" gap="3">
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                 {tierStats.map((tier) => (
-                  <Flex
+                  <div
                     key={tier.tier}
-                    align="center"
-                    justify="between"
-                    className="p-4 rounded-lg bg-slate-800/50 hover-lift transition-all"
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      ...glass.rowSm,
+                      transition: 'background 0.2s',
+                    }}
                   >
-                    <Flex align="center" gap="3">
-                      <Badge size="2" color="cyan" variant="soft">
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                      <span style={{
+                        fontSize: '12px',
+                        fontWeight: 600,
+                        padding: '3px 10px',
+                        borderRadius: '20px',
+                        background: 'rgba(6,182,212,0.15)',
+                        color: '#22d3ee',
+                        border: '1px solid rgba(6,182,212,0.3)',
+                      }}>
                         {tier.name}
-                      </Badge>
-                      <Text size="2" color="gray">
-                        {tier.games} games
-                      </Text>
-                    </Flex>
-                    <Flex align="center" gap="4">
-                      <Text size="2">
-                        <span className="text-green-400">{tier.wins}W</span>
-                        {' / '}
-                        <span className="text-red-400">{tier.games - tier.wins}L</span>
-                      </Text>
-                      <Box className="w-24">
-                        <Flex align="center" gap="2">
-                          <Box
-                            className="flex-1 h-2 rounded-full overflow-hidden"
-                            style={{ backgroundColor: theme.charts.tierProgress.background }}
-                          >
-                            <Box
-                              className="h-full transition-all"
-                              style={{
-                                width: `${tier.winRate}%`,
-                                background: `linear-gradient(to right, ${theme.charts.tierProgress.gradient.from}, ${theme.charts.tierProgress.gradient.to})`,
-                              }}
-                            />
-                          </Box>
-                          <Text size="1" color="gray" className="w-10 text-right">
-                            {tier.winRate.toFixed(0)}%
-                          </Text>
-                        </Flex>
-                      </Box>
-                    </Flex>
-                  </Flex>
+                      </span>
+                      <span style={{ fontSize: '13px', color: '#64748b' }}>{tier.games} games</span>
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+                      <span style={{ fontSize: '13px' }}>
+                        <span style={{ color: '#4ade80' }}>{tier.wins}W</span>
+                        <span style={{ color: '#64748b' }}> / </span>
+                        <span style={{ color: '#f87171' }}>{tier.games - tier.wins}L</span>
+                      </span>
+                      <div style={{ width: '96px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <div style={{ flex: 1, height: '6px', borderRadius: '999px', overflow: 'hidden', background: theme.charts.tierProgress.background }}>
+                          <div
+                            style={{
+                              height: '100%',
+                              width: `${tier.winRate}%`,
+                              background: `linear-gradient(to right, ${theme.charts.tierProgress.gradient.from}, ${theme.charts.tierProgress.gradient.to})`,
+                              transition: 'width 0.4s',
+                            }}
+                          />
+                        </div>
+                        <span style={{ fontSize: '11px', color: '#64748b', width: '32px', textAlign: 'right' }}>
+                          {tier.winRate.toFixed(0)}%
+                        </span>
+                      </div>
+                    </div>
+                  </div>
                 ))}
-              </Flex>
+              </div>
             ) : (
-              <Box className="p-8 rounded-lg bg-slate-800/30 text-center">
-                <Text size="2" color="gray">
+              <div style={{ padding: '32px', borderRadius: '12px', background: 'rgba(255,255,255,0.02)', textAlign: 'center' }}>
+                <span style={{ fontSize: '14px', color: '#64748b' }}>
                   No games played yet. Start playing to see your tier breakdown!
-                </Text>
-              </Box>
+                </span>
+              </div>
             )}
-          </Flex>
-        </Card>
-      </Flex>
+          </div>
+        </div>
+
+      </div>
     </DashboardLayout>
   );
 }
+
+// ─── Sub-components ────────────────────────────────────────────────────────
 
 function StatCard({
   label,
@@ -616,26 +691,32 @@ function StatCard({
   color: 'cyan' | 'purple' | 'green' | 'red';
   comparison?: string;
 }) {
-  const colorClasses = {
-    cyan: 'text-cyan-400',
-    purple: 'text-purple-400',
-    green: 'text-green-400',
-    red: 'text-red-400',
-  };
+  const c = colorMap[color];
 
   return (
-    <Card className="card-simple hover-lift animate-fade-in">
-      <Flex direction="column" gap="3" p="4">
-        <Flex align="center" justify="between">
-          <Text size="2" color="gray">{label}</Text>
-          <span className={colorClasses[color]}>{icon}</span>
-        </Flex>
-        <Text size="7" weight="bold">{value}</Text>
+    <div
+      style={{
+        background: 'rgba(255,255,255,0.03)',
+        border: `1px solid rgba(255,255,255,0.07)`,
+        borderRadius: '16px',
+        padding: '16px',
+        transition: 'transform 0.2s, box-shadow 0.2s',
+      }}
+      className="animate-fade-in hover-lift"
+    >
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <span style={{ fontSize: '13px', color: '#64748b' }}>{label}</span>
+          <span style={{ color: c.text }}>{icon}</span>
+        </div>
+        <span style={{ fontSize: '32px', fontWeight: 700, color: c.text, textShadow: `0 0 20px ${c.glow}` }}>
+          {value}
+        </span>
         {comparison && (
-          <Text size="1" color="gray">{comparison}</Text>
+          <span style={{ fontSize: '11px', color: '#64748b' }}>{comparison}</span>
         )}
-      </Flex>
-    </Card>
+      </div>
+    </div>
   );
 }
 
@@ -650,24 +731,24 @@ function RankCard({
   total: number;
   color: 'green' | 'cyan' | 'yellow' | 'purple';
 }) {
-  const colorClasses = {
-    green: 'text-green-400 border-green-500/30',
-    cyan: 'text-cyan-400 border-cyan-500/30',
-    yellow: 'text-yellow-400 border-yellow-500/30',
-    purple: 'text-purple-400 border-purple-500/30',
-  };
-
+  const c = colorMap[color];
   const percentile = ((total - rank + 1) / total) * 100;
 
   return (
-    <Box className={`p-4 rounded-lg bg-slate-800/50 border ${colorClasses[color]} hover-lift`}>
-      <Flex direction="column" gap="2" align="center">
-        <Text size="1" color="gray">{label}</Text>
-        <Text size="5" weight="bold" className={colorClasses[color].split(' ')[0]}>
-          #{rank}
-        </Text>
-        <Text size="1" color="gray">Top {percentile.toFixed(0)}%</Text>
-      </Flex>
-    </Box>
+    <div style={{
+      padding: '16px',
+      borderRadius: '12px',
+      background: c.glow,
+      border: `1px solid ${c.border}`,
+      display: 'flex',
+      flexDirection: 'column',
+      alignItems: 'center',
+      gap: '6px',
+      transition: 'transform 0.2s',
+    }} className="hover-lift">
+      <span style={{ fontSize: '12px', color: '#64748b' }}>{label}</span>
+      <span style={{ fontSize: '24px', fontWeight: 700, color: c.text }}>#{rank}</span>
+      <span style={{ fontSize: '11px', color: '#64748b' }}>Top {percentile.toFixed(0)}%</span>
+    </div>
   );
 }

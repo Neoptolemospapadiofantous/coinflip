@@ -96,7 +96,7 @@ const RPC_TIMEOUT = RPC_TIMEOUT_MS;
 // Note: Methods in UNCACHEABLE_METHODS below are never cached regardless of TTL here
 const CACHE_TTLS: Record<string, number> = {
   'eth_chainId': 3600000,       // 1 hour (chain ID never changes)
-  'eth_blockNumber': 6000,      // 6 seconds (new block every ~12s, half block time is sufficient)
+  'eth_blockNumber': 2000,      // 2 seconds (short TTL to avoid using a cached future block for log queries)
   'eth_gasPrice': 15000,        // 15 seconds (gas price doesn't change rapidly)
   'eth_maxPriorityFeePerGas': 15000, // 15 seconds
   'net_version': 3600000,       // 1 hour (network version doesn't change)
@@ -127,8 +127,29 @@ interface CacheEntry {
 // Using Map which maintains insertion order, combined with lastAccessed tracking
 const responseCache = new Map<string, CacheEntry>();
 
+// Deterministic cache key generation (handles object key ordering)
 function getCacheKey(chainId: number, method: string, params?: unknown[]): string {
-  return `${chainId}:${method}:${params ? JSON.stringify(params) : ''}`;
+  if (!params || params.length === 0) {
+    return `${chainId}:${method}`;
+  }
+
+  // Recursively sort object keys for deterministic serialization
+  const sortKeys = (value: unknown): unknown => {
+    if (value === null || typeof value !== 'object') {
+      return value;
+    }
+    if (Array.isArray(value)) {
+      return value.map(sortKeys);
+    }
+    // Sort object keys and recursively process values
+    const sorted: Record<string, unknown> = {};
+    for (const key of Object.keys(value as Record<string, unknown>).sort()) {
+      sorted[key] = sortKeys((value as Record<string, unknown>)[key]);
+    }
+    return sorted;
+  };
+
+  return `${chainId}:${method}:${JSON.stringify(sortKeys(params))}`;
 }
 
 function getCachedResponse(key: string): unknown | null {
@@ -152,21 +173,12 @@ function getCachedResponse(key: string): unknown | null {
 function setCachedResponse(key: string, response: unknown, ttlMs: number): void {
   const now = Date.now();
 
-  // LRU eviction: Remove least recently used entries if cache is full
+  // O(1) LRU eviction: Map maintains insertion order, so first entry is oldest
+  // Since getCachedResponse moves accessed entries to the end, first entry is LRU
   if (responseCache.size >= MAX_RPC_CACHE_SIZE) {
-    // Find and remove the least recently accessed entry
-    let lruKey: string | null = null;
-    let lruTime = Infinity;
-
-    for (const [k, v] of responseCache.entries()) {
-      if (v.lastAccessed < lruTime) {
-        lruTime = v.lastAccessed;
-        lruKey = k;
-      }
-    }
-
-    if (lruKey) {
-      responseCache.delete(lruKey);
+    const firstKey = responseCache.keys().next().value;
+    if (firstKey) {
+      responseCache.delete(firstKey);
     }
   }
 
@@ -177,15 +189,8 @@ function setCachedResponse(key: string, response: unknown, ttlMs: number): void 
   });
 }
 
-// Cleanup expired entries periodically
-setInterval(() => {
-  const now = Date.now();
-  for (const [key, entry] of responseCache.entries()) {
-    if (now > entry.expiresAt) {
-      responseCache.delete(key);
-    }
-  }
-}, 60000); // Every minute
+// Note: Expired entries are cleaned up lazily in getCachedResponse
+// No periodic cleanup needed - lazy eviction is sufficient and more efficient
 
 // Validate JSON-RPC request structure
 function isValidJsonRpcRequest(body: unknown): body is { jsonrpc: string; method: string; id: number | string; params?: unknown[] } {
@@ -210,12 +215,17 @@ export async function POST(request: NextRequest) {
   try {
     // Rate limiting check using distributed RateLimiter (Redis with in-memory fallback)
     const clientId = getClientId(request);
-    const isAllowed = await rateLimiter.isAllowed(clientId);
-    if (!isAllowed) {
-      return addSecurityHeaders(NextResponse.json(
-        { jsonrpc: '2.0', error: { code: -32005, message: 'Rate limit exceeded. Please try again later.' }, id: null },
-        { status: 429 }
-      ));
+    // Skip rate limiting for localhost in development (all local requests share 'unknown' key)
+    const isLocalDev = process.env.NODE_ENV === 'development' &&
+      (clientId === 'unknown' || clientId === '127.0.0.1' || clientId === '::1');
+    if (!isLocalDev) {
+      const isAllowed = await rateLimiter.isAllowed(clientId);
+      if (!isAllowed) {
+        return addSecurityHeaders(NextResponse.json(
+          { jsonrpc: '2.0', error: { code: -32005, message: 'Rate limit exceeded. Please try again later.' }, id: null },
+          { status: 429 }
+        ));
+      }
     }
 
     // Check content length to prevent DoS

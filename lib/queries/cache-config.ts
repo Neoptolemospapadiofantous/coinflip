@@ -10,13 +10,18 @@
 // ============================================
 
 /**
- * Real-time data: Very short cache, frequent updates
+ * Real-time data: Very short cache, NO polling (realtime handles updates)
  * Used for: active games, pending transactions, game status
+ *
+ * NOTE: refetchInterval is disabled because:
+ * - Centralized mode: Supabase realtime subscriptions handle all updates
+ * - Decentralized mode: Individual hooks handle their own polling
+ * This eliminates ~720 redundant requests per user per hour.
  */
 export const CACHE_REALTIME = {
-  staleTime: 2_000,       // 2 seconds - data becomes stale quickly
-  gcTime: 30_000,         // 30 seconds - keep in memory briefly
-  refetchInterval: 5_000, // 5 seconds - poll for updates
+  staleTime: 5_000,       // 5 seconds - data considered fresh
+  gcTime: 60_000,         // 60 seconds - keep in memory longer
+  refetchInterval: false, // Disabled - realtime subscriptions handle updates
 } as const;
 
 /**

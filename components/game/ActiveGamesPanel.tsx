@@ -1,53 +1,36 @@
 'use client';
 
 import { useMemo, useState, memo, useCallback, useEffect, useRef } from 'react';
-import { Card, Flex, Heading, Text, Badge, ScrollArea, IconButton } from '@radix-ui/themes';
+import { ScrollArea } from '@radix-ui/themes';
 import { useGameStore, MAX_CONCURRENT_GAMES } from '@/store/gameStore';
 import { useUserActiveGames } from '@/hooks/useGames';
 import { usePendingTransactions, PendingTransaction } from '@/hooks/usePendingTransactions';
 import { useUserPreferences } from '@/hooks/useUserPreferences';
 import { Game } from '@/types/game';
-import { Users, Loader2, Trophy, Wifi, WifiOff, Clock, ChevronDown, ChevronUp, RefreshCw } from 'lucide-react';
+import { Users, Loader2, Trophy, Wifi, WifiOff, Clock, ChevronDown, ChevronUp, RefreshCw, Zap } from 'lucide-react';
 import { formatCurrency, formatGameId, devLog } from '@/lib/utils';
 import { useAccount } from 'wagmi';
 import { useConnectionStatus } from '@/hooks/useRealtimeSync';
 import { formatGameTimeRemaining, isGameWarning, isGameExpired } from '@/hooks/useGameTimeout';
 import { useSharedTimer } from '@/hooks/useSharedTimer';
 import { useDataMode } from '@/lib/data';
-import { Zap, Database } from 'lucide-react';
 
-// Connection/Mode status indicator component
 function ConnectionStatusIndicator() {
   const { isConnected, isConnecting, isPolling } = useConnectionStatus();
   const dataMode = useDataMode();
 
-  // In decentralized (blockchain) mode, show blockchain icon
   if (dataMode === 'blockchain') {
-    return (
-      <span title="Decentralized Mode (Blockchain)" className="flex items-center gap-1">
-        <Zap className="w-3 h-3 text-yellow-400" />
-      </span>
-    );
+    return <span title="Decentralized Mode"><Zap className="w-3 h-3 text-yellow-400" /></span>;
   }
-
-  // In centralized (supabase) mode, show connection status
-  if (isConnected) {
-    return <span title="Live Sync"><Wifi className="w-3 h-3 text-green-400" /></span>;
-  } else if (isConnecting) {
-    return <span title="Connecting"><Loader2 className="w-3 h-3 text-yellow-400 animate-spin" /></span>;
-  } else if (isPolling) {
-    return <span title="Polling"><RefreshCw className="w-3 h-3 text-yellow-400 animate-spin" /></span>;
-  }
+  if (isConnected) return <span title="Live Sync"><Wifi className="w-3 h-3 text-green-400" /></span>;
+  if (isConnecting) return <span title="Connecting"><Loader2 className="w-3 h-3 text-yellow-400 animate-spin" /></span>;
+  if (isPolling) return <span title="Polling"><RefreshCw className="w-3 h-3 text-yellow-400 animate-spin" /></span>;
   return <span title="Offline"><WifiOff className="w-3 h-3 text-red-400" /></span>;
 }
 
-// Card for DB-backed pending transactions (Confirming... state)
-interface PendingTxCardProps {
-  tx: PendingTransaction;
-}
+interface PendingTxCardProps { tx: PendingTransaction; }
 
 const PendingTxCard = memo(function PendingTxCard({ tx }: PendingTxCardProps) {
-  // amount_eth is stored as wei string (e.g., "1000000000000000")
   const amount = tx.amount_eth ? BigInt(tx.amount_eth) : BigInt(0);
 
   const getTypeLabel = () => {
@@ -60,284 +43,202 @@ const PendingTxCard = memo(function PendingTxCard({ tx }: PendingTxCardProps) {
   };
 
   return (
-    <Card className="card-simple opacity-75 transition-all">
-      <Flex direction="column" gap="2" p="3">
-        <Flex justify="between" align="center">
-          <Flex align="center" gap="2">
-            <Text size="2">{tx.choice ? '🪙' : '👑'}</Text>
-            <Text size="2" weight="bold">{formatCurrency(amount)}</Text>
-          </Flex>
-          <Badge size="1" color="purple" variant="soft">
-            <Loader2 className="w-3 h-3 animate-spin" />
-          </Badge>
-        </Flex>
-        <Text size="1" color="gray">{getTypeLabel()}...</Text>
-      </Flex>
-    </Card>
+    <div className="rounded-xl p-3 opacity-75 transition-all"
+      style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.07)' }}>
+      <div className="flex items-center justify-between mb-1">
+        <div className="flex items-center gap-1.5">
+          <span className="text-sm">{tx.choice ? '🪙' : '👑'}</span>
+          <span className="text-sm font-bold text-slate-200">{formatCurrency(amount)}</span>
+        </div>
+        <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] font-medium text-purple-300"
+          style={{ background: 'rgba(168,85,247,0.15)', border: '1px solid rgba(168,85,247,0.25)' }}>
+          <Loader2 className="w-2.5 h-2.5 animate-spin" />
+        </span>
+      </div>
+      <p className="text-xs text-slate-500">{getTypeLabel()}...</p>
+    </div>
   );
 });
 
-interface ActiveGameCardProps {
-  game: Game;
-  onViewGame: (game: Game) => void;
-  userAddress?: string;
-}
+interface ActiveGameCardProps { game: Game; onViewGame: (game: Game) => void; userAddress?: string; }
 
-// Memoized to prevent re-renders when parent updates but props haven't changed
-// This component now only handles real DB-backed games (not optimistic/pending transactions)
 const ActiveGameCard = memo(function ActiveGameCard({ game, onViewGame, userAddress }: ActiveGameCardProps) {
   const isCreator = game.creator_address?.toLowerCase() === userAddress?.toLowerCase();
   const isWinner = game.winner_address?.toLowerCase() === userAddress?.toLowerCase();
   const userChoice = isCreator ? game.creator_choice : game.joiner_choice;
 
-  // Use shared timer for countdown - only enabled for pending games
-  // This uses a single global timer shared across all cards
   useSharedTimer(1000, game.status === 'pending');
 
-  // Time-based states for pending games
   const warning = game.status === 'pending' && isGameWarning(game);
   const expired = game.status === 'pending' && isGameExpired(game);
 
-  const getStatusColor = () => {
-    if (game.status === 'pending') {
-      if (expired) return 'red';
-      if (warning) return 'orange';
-      return 'yellow';
-    }
-    switch (game.status) {
-      case 'matched':
-        return 'cyan';
-      case 'resolved':
-        return isWinner ? 'green' : 'red';
-      default:
-        return 'gray';
-    }
+  const statusStyle = () => {
+    if (game.status === 'resolved') return isWinner ? { bg: 'rgba(34,197,94,0.15)', border: 'rgba(34,197,94,0.3)', color: '#86efac' } : { bg: 'rgba(239,68,68,0.15)', border: 'rgba(239,68,68,0.3)', color: '#fca5a5' };
+    if (game.status === 'matched') return { bg: 'rgba(6,182,212,0.15)', border: 'rgba(6,182,212,0.3)', color: '#67e8f9' };
+    if (expired) return { bg: 'rgba(239,68,68,0.12)', border: 'rgba(239,68,68,0.25)', color: '#f87171' };
+    if (warning) return { bg: 'rgba(249,115,22,0.12)', border: 'rgba(249,115,22,0.25)', color: '#fb923c' };
+    return { bg: 'rgba(234,179,8,0.12)', border: 'rgba(234,179,8,0.25)', color: '#fbbf24' };
   };
 
   const getStatusIcon = () => {
-    switch (game.status) {
-      case 'pending':
-        return <Users className="w-3 h-3" />;
-      case 'matched':
-        return <Loader2 className="w-3 h-3 animate-spin" />;
-      case 'resolved':
-        return <Trophy className="w-3 h-3" />;
-      default:
-        return null;
-    }
+    if (game.status === 'pending') return <Users className="w-2.5 h-2.5" />;
+    if (game.status === 'matched') return <Loader2 className="w-2.5 h-2.5 animate-spin" />;
+    return <Trophy className="w-2.5 h-2.5" />;
   };
 
   const getStatusText = () => {
-    switch (game.status) {
-      case 'pending':
-        return 'Waiting';
-      case 'matched':
-        return 'Flipping';
-      case 'resolved':
-        return isWinner ? 'Won!' : 'Lost';
-      default:
-        return game.status;
-    }
+    if (game.status === 'pending') return 'Waiting';
+    if (game.status === 'matched') return 'Flipping';
+    if (game.status === 'resolved') return isWinner ? 'Won!' : 'Lost';
+    return game.status;
   };
 
-  const getBorderClass = () => {
-    if (game.status === 'resolved' && isWinner) return 'border-green-500/50';
-    if (expired) return 'border-red-500/50';
-    if (warning) return 'border-yellow-500/50';
-    return '';
+  const cardBorderStyle = () => {
+    if (game.status === 'resolved' && isWinner) return 'rgba(34,197,94,0.4)';
+    if (expired) return 'rgba(239,68,68,0.4)';
+    if (warning) return 'rgba(249,115,22,0.4)';
+    return 'rgba(255,255,255,0.07)';
   };
+
+  const s = statusStyle();
 
   return (
-    <Card
-      className={`card-simple cursor-pointer hover:border-cyan-500/50 transition-all ${getBorderClass()}`}
+    <div
+      className="rounded-xl p-3 cursor-pointer transition-all hover:scale-[1.02]"
+      style={{ background: 'rgba(255,255,255,0.03)', border: `1px solid ${cardBorderStyle()}` }}
       onClick={() => onViewGame(game)}
     >
-      <Flex direction="column" gap="2" p="3">
-        <Flex justify="between" align="center">
-          <Flex align="center" gap="2">
-            <Text size="2">{userChoice ? '🪙' : '👑'}</Text>
-            <Text size="2" weight="bold">{formatCurrency(BigInt(game.amount))}</Text>
-          </Flex>
-          <Badge size="1" color={getStatusColor()} variant="soft">
-            <Flex align="center" gap="1">
-              {getStatusIcon()}
-              {getStatusText()}
-            </Flex>
-          </Badge>
-        </Flex>
+      <div className="flex items-center justify-between mb-1.5">
+        <div className="flex items-center gap-1.5">
+          <span className="text-sm">{userChoice ? '🪙' : '👑'}</span>
+          <span className="text-sm font-bold text-slate-200">{formatCurrency(BigInt(game.amount))}</span>
+        </div>
+        <span
+          className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] font-medium"
+          style={{ background: s.bg, border: `1px solid ${s.border}`, color: s.color }}
+        >
+          {getStatusIcon()} {getStatusText()}
+        </span>
+      </div>
 
-        <Flex justify="between" align="center">
-          <Text size="1" className="font-mono text-gray-500">{formatGameId(game.id)}</Text>
-          {game.status === 'pending' && (
-            <Flex align="center" gap="1">
-              <Clock className={`w-3 h-3 ${expired ? 'text-red-400' : warning ? 'text-yellow-400' : 'text-gray-400'}`} />
-              <Text size="1" className={expired ? 'text-red-400' : warning ? 'text-yellow-400' : 'text-gray-400'}>
-                {formatGameTimeRemaining(game)}
-              </Text>
-            </Flex>
-          )}
-          {game.status === 'resolved' && (
-            <Text size="1" className={isWinner ? 'text-green-400' : 'text-red-400'}>
-              {isWinner ? `+${formatCurrency(BigInt(game.payout || 0))}` : `-${formatCurrency(BigInt(game.amount))}`}
-            </Text>
-          )}
-          {game.status === 'matched' && (
-            <Text size="1" className="text-cyan-400">Flipping...</Text>
-          )}
-        </Flex>
-      </Flex>
-    </Card>
+      <div className="flex items-center justify-between">
+        <span className="text-[10px] font-mono text-slate-600">{formatGameId(game.id)}</span>
+        {game.status === 'pending' && (
+          <span className={`flex items-center gap-1 text-[10px] ${expired ? 'text-red-400' : warning ? 'text-yellow-400' : 'text-slate-500'}`}>
+            <Clock className="w-2.5 h-2.5" /> {formatGameTimeRemaining(game)}
+          </span>
+        )}
+        {game.status === 'resolved' && (
+          <span className={`text-[10px] font-bold ${isWinner ? 'text-green-400' : 'text-red-400'}`}>
+            {isWinner ? `+${formatCurrency(BigInt(game.payout || 0))}` : `-${formatCurrency(BigInt(game.amount))}`}
+          </span>
+        )}
+        {game.status === 'matched' && <span className="text-[10px] text-cyan-400">Flipping...</span>}
+      </div>
+    </div>
   );
 });
 
 export function ActiveGamesPanel() {
   const { address } = useAccount();
-  // DB-backed active games (source of truth)
   const { data: dbActiveGames = [], isLoading: isLoadingGames } = useUserActiveGames(address);
-  // DB-backed pending transactions (Confirming... state)
   const { pendingTransactions, isLoading: isLoadingTx } = usePendingTransactions();
-  // User preferences for panel state (synced across devices)
   const { activeGamesCollapsed, setActiveGamesCollapsed } = useUserPreferences();
   const { queueModal } = useGameStore();
 
-  // Track if we've ever had games (to prevent flash on page switch)
   const [hadGames, setHadGames] = useState(false);
   const hideTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-
-  // Use DB-backed preference for collapsed state
   const isCollapsed = activeGamesCollapsed;
 
-  // Consolidate all derived state in a single memoization to prevent
-  // intermediate re-renders when one source changes but not the other
   const { pendingCreateTxs, visibleGames, totalCount } = useMemo(() => {
-    // Filter pending transactions to only show 'create' type
     const createTxs = pendingTransactions.filter(tx => tx.tx_type === 'create');
-
-    // Filter to only show pending/matched games (resolved ones auto-close)
-    // Also deduplicate by ID as a safeguard against race conditions
     const seen = new Set<string>();
     const visible = dbActiveGames
-      .filter((g) => g.status === 'pending' || g.status === 'matched')
-      .filter((g) => {
-        if (seen.has(g.id)) return false;
-        seen.add(g.id);
-        return true;
-      });
-
-    return {
-      pendingCreateTxs: createTxs,
-      visibleGames: visible,
-      totalCount: createTxs.length + visible.length,
-    };
+      .filter(g => g.status === 'pending' || g.status === 'matched')
+      .filter(g => { if (seen.has(g.id)) return false; seen.add(g.id); return true; });
+    return { pendingCreateTxs: createTxs, visibleGames: visible, totalCount: createTxs.length + visible.length };
   }, [pendingTransactions, dbActiveGames]);
 
   const isLoading = isLoadingGames || isLoadingTx;
 
-  // Toggle collapse state (persisted to DB for cross-device sync)
-  const toggleCollapsed = useCallback(() => {
-    setActiveGamesCollapsed(!isCollapsed);
-  }, [isCollapsed, setActiveGamesCollapsed]);
+  const toggleCollapsed = useCallback(() => setActiveGamesCollapsed(!isCollapsed), [isCollapsed, setActiveGamesCollapsed]);
 
-  // Memoized handler to prevent ActiveGameCard memo invalidation
   const handleViewGame = useCallback((game: Game) => {
     if (game.status === 'matched' || game.status === 'resolved') {
       queueModal(game, game.status === 'matched' ? 'matched' : 'resolved');
     }
   }, [queueModal]);
 
-  // Debug logging
   useEffect(() => {
-    devLog.log('[ActiveGamesPanel] State:', {
-      pendingTxs: pendingCreateTxs.length,
-      visibleGames: visibleGames.length,
-      totalCount,
-      isLoading,
-      hadGames,
-      dbActiveGames: dbActiveGames.map(g => ({ id: g.id, status: g.status })),
-    });
-  }, [pendingCreateTxs.length, visibleGames.length, totalCount, isLoading, hadGames, dbActiveGames]);
+    devLog.log('[ActiveGamesPanel] State:', { userAddress: address?.toLowerCase(), pendingTxs: pendingCreateTxs.length, visibleGames: visibleGames.length, totalCount, isLoading, hadGames });
+  }, [address, pendingCreateTxs.length, visibleGames.length, totalCount, isLoading, hadGames]);
 
-  // Track if we've had games (reset when count goes to 0 after delay)
   useEffect(() => {
     if (totalCount > 0) {
-      // Clear any pending hide timeout
-      if (hideTimeoutRef.current) {
-        clearTimeout(hideTimeoutRef.current);
-        hideTimeoutRef.current = null;
-      }
+      if (hideTimeoutRef.current) { clearTimeout(hideTimeoutRef.current); hideTimeoutRef.current = null; }
       setHadGames(true);
     } else if (!isLoading && hadGames) {
-      // Only reset after a longer delay to allow cache to update
       if (!hideTimeoutRef.current) {
         hideTimeoutRef.current = setTimeout(() => {
           devLog.log('[ActiveGamesPanel] Timeout fired, checking if should hide');
           setHadGames(false);
           hideTimeoutRef.current = null;
-        }, 1000); // Longer delay to allow cache sync
+        }, 1000);
       }
     }
-
-    return () => {
-      // Don't clear on every re-render, only on unmount
-    };
+    return () => {};
   }, [totalCount, isLoading, hadGames]);
 
-  // Cleanup on unmount
-  useEffect(() => {
-    return () => {
-      if (hideTimeoutRef.current) {
-        clearTimeout(hideTimeoutRef.current);
-      }
-    };
-  }, []);
+  useEffect(() => { return () => { if (hideTimeoutRef.current) clearTimeout(hideTimeoutRef.current); }; }, []);
 
-  // Don't render if nothing to show
-  if (totalCount === 0 && !hadGames) {
-    return null;
-  }
+  if (totalCount === 0 && !hadGames) return null;
 
   return (
-    <Card className="card-solid border-purple-500/30 fixed bottom-4 right-4 z-40 w-72">
-      <Flex direction="column" gap="3" p="4">
+    <div
+      className="fixed bottom-4 right-4 z-40 w-72 rounded-2xl overflow-hidden"
+      style={{
+        background: 'rgba(5,8,22,0.9)',
+        backdropFilter: 'blur(20px)',
+        border: '1px solid rgba(168,85,247,0.25)',
+        boxShadow: '0 20px 40px rgba(0,0,0,0.4), 0 0 20px rgba(168,85,247,0.08)',
+      }}
+    >
+      <div className="p-4 flex flex-col gap-3">
         {/* Header */}
-        <Flex justify="between" align="center">
-          <Flex align="center" gap="2">
-            <Heading size="3">Active Games</Heading>
-            <Badge size="1" color="cyan">{totalCount}/{MAX_CONCURRENT_GAMES}</Badge>
-          </Flex>
-          <Flex align="center" gap="2">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <span className="text-sm font-bold text-white">Active Games</span>
+            <span
+              className="inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] font-bold text-cyan-300"
+              style={{ background: 'rgba(6,182,212,0.15)', border: '1px solid rgba(6,182,212,0.3)' }}
+            >
+              {totalCount}/{MAX_CONCURRENT_GAMES}
+            </span>
+          </div>
+          <div className="flex items-center gap-2">
             <ConnectionStatusIndicator />
-            <IconButton
-              size="1"
-              variant="ghost"
-              color="gray"
+            <button
               onClick={toggleCollapsed}
               title={isCollapsed ? 'Expand' : 'Collapse'}
+              className="p-1 rounded-lg text-slate-500 hover:text-slate-300 hover:bg-white/[0.06] transition-all cursor-pointer"
             >
               {isCollapsed ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-            </IconButton>
-          </Flex>
-        </Flex>
+            </button>
+          </div>
+        </div>
 
         {/* Games List */}
         {!isCollapsed && (
           <ScrollArea style={{ maxHeight: '240px' }}>
-            <Flex direction="column" gap="2">
-              {pendingCreateTxs.map((tx) => (
-                <PendingTxCard key={`tx-${tx.id}`} tx={tx} />
+            <div className="flex flex-col gap-2">
+              {pendingCreateTxs.map(tx => <PendingTxCard key={`tx-${tx.id}`} tx={tx} />)}
+              {visibleGames.map(game => (
+                <ActiveGameCard key={game.id} game={game} onViewGame={handleViewGame} userAddress={address} />
               ))}
-              {visibleGames.map((game) => (
-                <ActiveGameCard
-                  key={game.id}
-                  game={game}
-                  onViewGame={handleViewGame}
-                  userAddress={address}
-                />
-              ))}
-            </Flex>
+            </div>
           </ScrollArea>
         )}
-      </Flex>
-    </Card>
+      </div>
+    </div>
   );
 }

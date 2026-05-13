@@ -73,20 +73,14 @@ export function usePendingGames() {
   return useQuery({
     queryKey: [...queryKeys.games.pending, isLoggedIn ? 'supabase' : 'blockchain'],
     queryFn: async (): Promise<Game[]> => {
-      // Wallet-only users (decentralized mode): fetch from blockchain
       if (!isLoggedIn) {
-        devLog.log('[usePendingGames] Using blockchain data source (decentralized mode)');
         try {
-          const blockchainSource = getBlockchainDataSource();
-          return await blockchainSource.getPendingGames();
+          return await getBlockchainDataSource().getPendingGames();
         } catch (err) {
           devLog.error('[usePendingGames] Blockchain fetch failed:', err);
           return [];
         }
       }
-
-      // Registered users (centralized mode): fetch from Supabase
-      devLog.log('[usePendingGames] Using Supabase data source (centralized mode)');
       const { data, error } = await queryPendingGames();
 
       if (error) {
@@ -96,8 +90,8 @@ export function usePendingGames() {
 
       return normalizeGames(data);
     },
-    staleTime: isLoggedIn ? PENDING_GAMES_STALE_TIME_MS : 30000,
-    refetchInterval: isLoggedIn ? false : 15000, // Poll every 15s in decentralized mode
+    staleTime: isLoggedIn ? PENDING_GAMES_STALE_TIME_MS : 12000,
+    refetchInterval: isLoggedIn ? false : 12000, // One block time — no point polling faster than block production
     retry: 2,
   });
 }
@@ -110,12 +104,9 @@ export function useActiveGames() {
   return useQuery({
     queryKey: [...queryKeys.games.active, isLoggedIn ? 'supabase' : 'blockchain'],
     queryFn: async (): Promise<Game[]> => {
-      // Wallet-only users: fetch from blockchain
       if (!isLoggedIn) {
-        devLog.log('[useActiveGames] Using blockchain data source');
         try {
-          const blockchainSource = getBlockchainDataSource();
-          return await blockchainSource.getActiveGames();
+          return await getBlockchainDataSource().getActiveGames();
         } catch (err) {
           devLog.error('[useActiveGames] Blockchain fetch failed:', err);
           return [];
@@ -132,8 +123,8 @@ export function useActiveGames() {
 
       return normalizeGames(data);
     },
-    staleTime: isLoggedIn ? ACTIVE_GAMES_STALE_TIME_MS : 30000,
-    refetchInterval: isLoggedIn ? false : 15000,
+    staleTime: isLoggedIn ? ACTIVE_GAMES_STALE_TIME_MS : 12000,
+    refetchInterval: isLoggedIn ? false : 12000,
     retry: 2,
   });
 }
@@ -154,12 +145,9 @@ export function usePlayerGames(address: string | undefined, limit: number = 50) 
         return [];
       }
 
-      // Wallet-only users: fetch from blockchain
       if (!isLoggedIn) {
-        devLog.log('[usePlayerGames] Using blockchain data source');
         try {
-          const blockchainSource = getBlockchainDataSource();
-          return await blockchainSource.getPlayerGames(address, limit);
+          return await getBlockchainDataSource().getPlayerGames(address, limit);
         } catch (err) {
           devLog.error('[usePlayerGames] Blockchain fetch failed:', err);
           return [];
@@ -177,8 +165,8 @@ export function usePlayerGames(address: string | undefined, limit: number = 50) 
       return normalizeGames(data);
     },
     enabled: !!address,
-    staleTime: isLoggedIn ? PLAYER_GAMES_STALE_TIME_MS : 30000,
-    refetchInterval: isLoggedIn ? false : 15000,
+    staleTime: isLoggedIn ? PLAYER_GAMES_STALE_TIME_MS : 12000,
+    refetchInterval: isLoggedIn ? false : 12000,
     retry: 2,
   });
 }
@@ -200,12 +188,9 @@ export function useUserActiveGames(address: string | undefined) {
         return [];
       }
 
-      // Wallet-only users: fetch from blockchain
       if (!isLoggedIn) {
-        devLog.log('[useUserActiveGames] Using blockchain data source');
         try {
-          const blockchainSource = getBlockchainDataSource();
-          return await blockchainSource.getPlayerActiveGames(address);
+          return await getBlockchainDataSource().getPlayerActiveGames(address);
         } catch (err) {
           devLog.error('[useUserActiveGames] Blockchain fetch failed:', err);
           return [];
@@ -223,8 +208,8 @@ export function useUserActiveGames(address: string | undefined) {
       return normalizeGames(data);
     },
     enabled: !!address,
-    staleTime: isLoggedIn ? USER_ACTIVE_GAMES_STALE_TIME_MS : 30000,
-    refetchInterval: isLoggedIn ? false : 15000,
+    staleTime: isLoggedIn ? USER_ACTIVE_GAMES_STALE_TIME_MS : 12000,
+    refetchInterval: isLoggedIn ? false : 12000,
     retry: 2,
   });
 }
@@ -325,7 +310,6 @@ export function useGame(gameId: string | null) {
 
       // Wallet-only users: fetch from blockchain
       if (!isLoggedIn) {
-        devLog.log('[useGame] Using blockchain data source');
         try {
           const blockchainSource = getBlockchainDataSource();
           return await blockchainSource.getGame(gameId);
@@ -346,8 +330,8 @@ export function useGame(gameId: string | null) {
       return data ? parseGame(data) : null;
     },
     enabled: !!gameId,
-    staleTime: isLoggedIn ? SINGLE_GAME_STALE_TIME_MS : 15000,
-    refetchInterval: isLoggedIn ? false : 10000, // Poll more frequently for single game
+    staleTime: isLoggedIn ? SINGLE_GAME_STALE_TIME_MS : 12000,
+    refetchInterval: isLoggedIn ? false : 12000, // One block time — blockchain state can't change faster
   });
 }
 
@@ -361,7 +345,6 @@ export function useGameStats() {
     queryFn: async () => {
       // Wallet-only users: fetch from blockchain
       if (!isLoggedIn) {
-        devLog.log('[useGameStats] Using blockchain data source');
         try {
           const blockchainSource = getBlockchainDataSource();
           const stats = await blockchainSource.getGameStats();
@@ -394,6 +377,6 @@ export function useGameStats() {
       return data;
     },
     staleTime: isLoggedIn ? GAME_STATS_STALE_TIME_MS : 60000,
-    refetchInterval: isLoggedIn ? false : 30000,
+    refetchInterval: isLoggedIn ? false : 60000,
   });
 }

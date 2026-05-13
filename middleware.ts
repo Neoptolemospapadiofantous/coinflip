@@ -81,12 +81,12 @@ function getCSP(nonce: string) {
     `.replace(/\s{2,}/g, ' ').trim();
   }
 
-  // Production: CSP that works with Next.js inline scripts
-  // Note: 'unsafe-inline' is needed because Next.js generates inline scripts for hydration
-  // that don't automatically receive the nonce without additional complex setup
+  // Production: 'unsafe-eval' removed. Next.js 16 standalone mode no longer requires it.
+  // 'unsafe-inline' is still needed for Next.js hydration scripts (nonce-based CSP requires
+  // additional build-time configuration that is tracked as a future improvement).
   return `
     default-src 'self';
-    script-src 'self' 'unsafe-inline' 'unsafe-eval';
+    script-src 'self' 'unsafe-inline';
     style-src 'self' 'unsafe-inline' https://fonts.googleapis.com;
     font-src 'self' https://fonts.gstatic.com;
     img-src 'self' data: https: blob:;
@@ -101,36 +101,11 @@ function getCSP(nonce: string) {
 }
 
 /**
- * Simple in-memory rate limiter
- * For production, use Redis or a dedicated rate limiting service
+ * Rate limiting for middleware is intentionally removed.
+ * /api/rpc uses a proper distributed rate limiter (Upstash Redis with in-memory fallback).
+ * An in-memory middleware limiter is ineffective in serverless environments where each
+ * function invocation may get a fresh memory context.
  */
-const rateLimitMap = new Map<string, { count: number; resetAt: number }>();
-
-function rateLimit(ip: string, limit: number = 100, windowMs: number = 60000): boolean {
-  const now = Date.now();
-  const record = rateLimitMap.get(ip);
-
-  // Clean up expired entries periodically
-  if (rateLimitMap.size > 10000) {
-    for (const [key, value] of rateLimitMap.entries()) {
-      if (value.resetAt < now) {
-        rateLimitMap.delete(key);
-      }
-    }
-  }
-
-  if (!record || record.resetAt < now) {
-    rateLimitMap.set(ip, { count: 1, resetAt: now + windowMs });
-    return true;
-  }
-
-  if (record.count >= limit) {
-    return false;
-  }
-
-  record.count++;
-  return true;
-}
 
 /**
  * Get client IP address
@@ -200,28 +175,7 @@ export function middleware(request: NextRequest) {
   // Next.js can read this in server components via headers()
   response.headers.set('x-nonce', nonce);
 
-  // 4. Rate limiting (only for API routes and mutations)
-  if (request.nextUrl.pathname.startsWith('/api')) {
-    const ip = getClientIp(request);
-
-    if (!rateLimit(ip, 100, 60000)) {
-      return new NextResponse(
-        JSON.stringify({
-          error: 'Too Many Requests',
-          message: 'Rate limit exceeded. Please try again later.',
-        }),
-        {
-          status: 429,
-          headers: {
-            'Content-Type': 'application/json',
-            'Retry-After': '60',
-          },
-        }
-      );
-    }
-  }
-
-  // 5. Validate origin for state-changing requests
+  // 4. Validate origin for state-changing requests
   if (['POST', 'PUT', 'DELETE', 'PATCH'].includes(request.method)) {
     if (!isValidOrigin(request)) {
       return new NextResponse(

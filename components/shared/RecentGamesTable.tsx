@@ -1,7 +1,7 @@
 'use client';
 
 import { memo } from 'react';
-import { Table, Badge, Flex, Text, Skeleton } from '@radix-ui/themes';
+import { Table, Skeleton } from '@radix-ui/themes';
 import { ExternalLink } from 'lucide-react';
 import { Game } from '@/types/game';
 import { formatCurrency, formatRelativeTime, formatGameId, getCoinSideLabel, formatTxHash, getBlockExplorerUrl, formatAddress } from '@/lib/utils';
@@ -62,14 +62,47 @@ export const RecentGamesTable = memo(function RecentGamesTable({
 
   if (games.length === 0) {
     return (
-      <Flex direction="column" align="center" gap="3" py="8">
-        <Text size="3" color="gray">{emptyMessage}</Text>
-      </Flex>
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '12px', paddingTop: '32px', paddingBottom: '32px' }}>
+        <span style={{ fontSize: '14px', color: 'rgba(156,163,175,1)' }}>{emptyMessage}</span>
+      </div>
     );
   }
 
   const displayGames = games.slice(0, maxRows);
   const normalizedUserAddress = userAddress?.toLowerCase();
+
+  const getStatusBadge = (game: Game, isWin: boolean) => {
+    let color: string;
+    let label: string;
+
+    if (game.status === 'resolved') {
+      color = isWin ? '#86efac' : '#fca5a5';
+      label = isWin ? 'Won' : 'Lost';
+    } else if (game.status === 'matched') {
+      color = '#67e8f9';
+      label = 'Matched';
+    } else if (game.status === 'cancelled') {
+      color = 'rgba(156,163,175,1)';
+      label = 'Cancelled';
+    } else {
+      color = '#fbbf24';
+      label = 'Pending';
+    }
+
+    return (
+      <span style={{
+        background: color + '20',
+        border: '1px solid ' + color + '40',
+        color,
+        padding: '2px 8px',
+        borderRadius: '999px',
+        fontSize: '11px',
+        fontWeight: 600,
+      }}>
+        {label}
+      </span>
+    );
+  };
 
   return (
     <div className="overflow-x-auto">
@@ -95,70 +128,52 @@ export const RecentGamesTable = memo(function RecentGamesTable({
               : null;
 
             return (
-              <Table.Row key={game.id} className="hover:bg-white/5 transition-colors">
+              <Table.Row key={game.id} className="hover:bg-white/[0.03] transition-colors">
                 <Table.Cell>
                   <code className="text-cyan-400">{formatGameId(game.id)}</code>
                 </Table.Cell>
 
                 {showPlayer && (
                   <Table.Cell>
-                    <Text size="2" color="gray">
+                    <span style={{ fontSize: '12px', color: 'rgba(156,163,175,1)' }}>
                       {playerAddress ? formatAddress(playerAddress) : '-'}
-                    </Text>
+                    </span>
                   </Table.Cell>
                 )}
 
                 {!compact && (
                   <Table.Cell>
-                    <Badge
-                      color={
-                        game.status === 'resolved'
-                          ? isWin ? 'green' : 'red'
-                          : game.status === 'matched'
-                          ? 'blue'
-                          : game.status === 'cancelled'
-                          ? 'gray'
-                          : 'yellow'
-                      }
-                    >
-                      {game.status === 'resolved'
-                        ? isWin ? 'Won' : 'Lost'
-                        : game.status === 'cancelled'
-                        ? 'Cancelled'
-                        : game.status === 'matched'
-                        ? 'Matched'
-                        : 'Pending'}
-                    </Badge>
+                    {getStatusBadge(game, isWin)}
                   </Table.Cell>
                 )}
 
                 <Table.Cell>
-                  <Text size="2">{formatCurrency(game.amount)}</Text>
+                  <span style={{ fontSize: '12px' }}>{formatCurrency(game.amount)}</span>
                 </Table.Cell>
 
                 <Table.Cell>
                   {game.status === 'resolved' ? (
-                    <Flex gap="2" align="center">
+                    <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
                       <span className={compact ? 'text-sm' : ''}>
                         {getCoinSideLabel(isCreator ? game.creator_choice : game.joiner_choice || false)}
                       </span>
                       {isWin && (
-                        <Text color="green" weight="bold" size={compact ? '1' : '2'}>
+                        <span style={{ color: '#86efac', fontWeight: 700, fontSize: compact ? '11px' : '12px' }}>
                           +{formatCurrency(game.payout || '0')}
-                        </Text>
+                        </span>
                       )}
                       {!isWin && normalizedUserAddress && (
-                        <Text color="red" size={compact ? '1' : '2'}>
+                        <span style={{ color: '#fca5a5', fontSize: compact ? '11px' : '12px' }}>
                           -{formatCurrency(game.amount)}
-                        </Text>
+                        </span>
                       )}
-                    </Flex>
+                    </div>
                   ) : game.status === 'cancelled' ? (
-                    <Text color="gray" size={compact ? '1' : '2'}>Refunded</Text>
+                    <span style={{ color: 'rgba(156,163,175,1)', fontSize: compact ? '11px' : '12px' }}>Refunded</span>
                   ) : (
-                    <Text color="gray" size={compact ? '1' : '2'}>
+                    <span style={{ color: 'rgba(156,163,175,1)', fontSize: compact ? '11px' : '12px' }}>
                       {getCoinSideLabel(game.creator_choice)}
-                    </Text>
+                    </span>
                   )}
                 </Table.Cell>
 
@@ -175,15 +190,15 @@ export const RecentGamesTable = memo(function RecentGamesTable({
                         <ExternalLink className="w-3 h-3" />
                       </a>
                     ) : (
-                      <Text size="1" color="gray">-</Text>
+                      <span style={{ fontSize: '11px', color: 'rgba(156,163,175,1)' }}>-</span>
                     )}
                   </Table.Cell>
                 )}
 
                 <Table.Cell>
-                  <Text size="2" color="gray">
+                  <span style={{ fontSize: '12px', color: 'rgba(156,163,175,1)' }}>
                     {formatRelativeTime(game.created_at)}
-                  </Text>
+                  </span>
                 </Table.Cell>
               </Table.Row>
             );

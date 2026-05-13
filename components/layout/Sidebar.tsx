@@ -2,21 +2,12 @@
 
 import { usePathname } from 'next/navigation';
 import Link from 'next/link';
-import { Flex, Text, Box, Avatar, Separator } from '@radix-ui/themes';
+import { Flex, Text, Box, Avatar } from '@radix-ui/themes';
 import {
-  Dices,
-  History,
-  Trophy,
-  Wallet,
-  Settings,
-  LogOut,
-  Home,
-  Users,
-  BarChart3,
-  Bell,
-  ChevronLeft,
-  ChevronRight,
+  Dices, History, Trophy, Wallet, Settings, LogOut,
+  Home, Users, BarChart3, Bell, ChevronLeft, ChevronRight,
 } from 'lucide-react';
+import { LogoIcon } from '@/components/ui/LogoIcon';
 import { useAuth } from '@/hooks/useAuth';
 import { useAccount } from 'wagmi';
 import { useState } from 'react';
@@ -25,21 +16,20 @@ interface NavItem {
   href: string;
   label: string;
   icon: React.ReactNode;
-  badge?: number;
 }
 
 const mainNavItems: NavItem[] = [
-  { href: '/dashboard', label: 'Dashboard', icon: <Home className="w-5 h-5" /> },
-  { href: '/play', label: 'Play', icon: <Dices className="w-5 h-5" /> },
-  { href: '/queue', label: 'Game Queue', icon: <Users className="w-5 h-5" /> },
-  { href: '/history', label: 'History', icon: <History className="w-5 h-5" /> },
-  { href: '/leaderboard', label: 'Leaderboard', icon: <Trophy className="w-5 h-5" /> },
-  { href: '/stats', label: 'Statistics', icon: <BarChart3 className="w-5 h-5" /> },
+  { href: '/dashboard',   label: 'Dashboard',   icon: <Home      className="w-[18px] h-[18px]" /> },
+  { href: '/play',        label: 'Play',         icon: <Dices     className="w-[18px] h-[18px]" /> },
+  { href: '/queue',       label: 'Queue',        icon: <Users     className="w-[18px] h-[18px]" /> },
+  { href: '/history',     label: 'History',      icon: <History   className="w-[18px] h-[18px]" /> },
+  { href: '/leaderboard', label: 'Leaderboard',  icon: <Trophy    className="w-[18px] h-[18px]" /> },
+  { href: '/stats',       label: 'Statistics',   icon: <BarChart3 className="w-[18px] h-[18px]" /> },
 ];
 
 const secondaryNavItems: NavItem[] = [
-  { href: '/notifications', label: 'Notifications', icon: <Bell className="w-5 h-5" /> },
-  { href: '/settings', label: 'Settings', icon: <Settings className="w-5 h-5" /> },
+  { href: '/notifications', label: 'Notifications', icon: <Bell     className="w-[18px] h-[18px]" /> },
+  { href: '/settings',      label: 'Settings',      icon: <Settings className="w-[18px] h-[18px]" /> },
 ];
 
 export function Sidebar() {
@@ -48,180 +38,148 @@ export function Sidebar() {
   const { address } = useAccount();
   const [collapsed, setCollapsed] = useState(false);
 
-  const isActive = (href: string) => {
-    if (href === '/dashboard') {
-      return pathname === '/dashboard';
-    }
-    return pathname.startsWith(href);
-  };
+  const isActive = (href: string) =>
+    href === '/dashboard' ? pathname === '/dashboard' : pathname.startsWith(href);
 
-  const truncateAddress = (addr: string) => {
-    return `${addr.slice(0, 6)}...${addr.slice(-4)}`;
-  };
+  const truncateAddress = (addr: string) => `${addr.slice(0, 6)}…${addr.slice(-4)}`;
 
   return (
-    <Flex
-      direction="column"
-      className={`h-screen bg-slate-900/95 border-r border-slate-700/50 transition-all duration-300 ${
-        collapsed ? 'w-[72px]' : 'w-64'
-      }`}
+    <div
+      className={`h-screen flex flex-col transition-all duration-300 flex-shrink-0 ${collapsed ? 'w-[72px]' : 'w-60'}`}
+      style={{
+        background: 'rgba(5, 8, 22, 0.9)',
+        backdropFilter: 'blur(20px)',
+        borderRight: '1px solid rgba(255,255,255,0.07)',
+      }}
     >
-      {/* Logo / Brand */}
-      <Flex
-        align="center"
-        justify={collapsed ? 'center' : 'between'}
-        className="h-16 px-4 border-b border-slate-700/50"
+      {/* Logo */}
+      <div
+        className="flex items-center h-[60px] px-4 flex-shrink-0"
+        style={{ borderBottom: '1px solid rgba(255,255,255,0.07)' }}
       >
-        {!collapsed && (
-          <Link href="/dashboard">
-            <Flex align="center" gap="2" className="cursor-pointer">
-              <Dices className="w-8 h-8 text-cyan-400" />
-              <Text size="5" weight="bold" className="text-gradient-cyan">
-                CoinFlip
-              </Text>
-            </Flex>
+        {collapsed ? (
+          <Link href="/dashboard" className="mx-auto">
+            <LogoIcon size={28} className="transition-transform duration-300 hover:scale-110" />
           </Link>
-        )}
-        {collapsed && (
-          <Link href="/dashboard">
-            <Dices className="w-8 h-8 text-cyan-400 cursor-pointer" />
+        ) : (
+          <Link href="/dashboard" className="no-underline flex items-center gap-2.5 flex-1">
+            <LogoIcon size={26} />
+            <span className="flex items-baseline gap-0 text-base tracking-tight">
+              <span style={{ color: '#94a3b8', fontWeight: 400 }}>Coin</span>
+              <span style={{ background: 'linear-gradient(to right,#67e8f9,#a78bfa)', WebkitBackgroundClip:'text', WebkitTextFillColor:'transparent', fontWeight: 800 }}>Flip</span>
+            </span>
           </Link>
         )}
         <button
           onClick={() => setCollapsed(!collapsed)}
-          className="p-1.5 rounded-lg hover:bg-slate-800 transition-colors text-slate-400 hover:text-white"
+          className="ml-auto p-1.5 rounded-lg text-slate-500 hover:text-slate-300 hover:bg-white/[0.06] transition-all duration-200 cursor-pointer"
         >
-          {collapsed ? (
-            <ChevronRight className="w-4 h-4" />
-          ) : (
-            <ChevronLeft className="w-4 h-4" />
-          )}
+          {collapsed ? <ChevronRight className="w-4 h-4" /> : <ChevronLeft className="w-4 h-4" />}
         </button>
-      </Flex>
+      </div>
 
       {/* User Info */}
-      <Box className="p-4 border-b border-slate-700/50">
-        <Flex align="center" gap="3">
-          <Avatar
-            size="3"
-            fallback={user?.email?.[0]?.toUpperCase() || 'U'}
-            radius="full"
-            className="bg-gradient-to-br from-cyan-500 to-purple-500"
-          />
-          {!collapsed && (
-            <Flex direction="column" className="flex-1 min-w-0">
-              <Text size="2" weight="medium" className="truncate">
-                {user?.email?.split('@')[0] || 'User'}
-              </Text>
+      {!collapsed && (
+        <div className="px-3 py-3 flex-shrink-0" style={{ borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+          <div className="flex items-center gap-3 px-2 py-2 rounded-xl" style={{ background: 'rgba(255,255,255,0.04)' }}>
+            <Avatar
+              size="2"
+              fallback={(user?.email?.[0] ?? 'U').toUpperCase()}
+              radius="full"
+              style={{ background: 'linear-gradient(135deg,#06b6d4,#a855f7)' }}
+            />
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-medium text-slate-200 truncate">
+                {user?.email?.split('@')[0] ?? 'User'}
+              </p>
               {address && (
-                <Text size="1" color="gray" className="truncate">
+                <p className="text-xs text-slate-500 truncate font-mono">
                   {truncateAddress(address)}
-                </Text>
+                </p>
               )}
-            </Flex>
-          )}
-        </Flex>
-      </Box>
+            </div>
+          </div>
+        </div>
+      )}
 
-      {/* Main Navigation */}
-      <Flex direction="column" gap="1" className="flex-1 p-3 overflow-y-auto">
-        <Text size="1" color="gray" weight="medium" className={`px-3 py-2 ${collapsed ? 'hidden' : ''}`}>
-          MAIN MENU
-        </Text>
-        {mainNavItems.map((item) => (
-          <NavLink
-            key={item.href}
-            item={item}
-            isActive={isActive(item.href)}
-            collapsed={collapsed}
-          />
+      {/* Navigation */}
+      <div className="flex-1 overflow-y-auto px-2 py-3 space-y-0.5">
+        {!collapsed && (
+          <p className="px-3 pb-1.5 text-[10px] font-semibold text-slate-600 tracking-widest uppercase">
+            Menu
+          </p>
+        )}
+        {mainNavItems.map(item => (
+          <NavLink key={item.href} item={item} active={isActive(item.href)} collapsed={collapsed} />
         ))}
 
-        <Separator size="4" className="my-3" />
+        <div className="my-3" style={{ height: '1px', background: 'rgba(255,255,255,0.05)' }} />
 
-        <Text size="1" color="gray" weight="medium" className={`px-3 py-2 ${collapsed ? 'hidden' : ''}`}>
-          ACCOUNT
-        </Text>
-        {secondaryNavItems.map((item) => (
-          <NavLink
-            key={item.href}
-            item={item}
-            isActive={isActive(item.href)}
-            collapsed={collapsed}
-          />
+        {!collapsed && (
+          <p className="px-3 pb-1.5 text-[10px] font-semibold text-slate-600 tracking-widest uppercase">
+            Account
+          </p>
+        )}
+        {secondaryNavItems.map(item => (
+          <NavLink key={item.href} item={item} active={isActive(item.href)} collapsed={collapsed} />
         ))}
-      </Flex>
+      </div>
 
-      {/* Wallet Status */}
+      {/* Wallet indicator */}
       {address && (
-        <Box className="p-3 border-t border-slate-700/50">
-          <Flex
-            align="center"
-            gap="2"
-            className={`p-3 rounded-lg bg-green-500/10 border border-green-500/30 ${
-              collapsed ? 'justify-center' : ''
-            }`}
+        <div className="px-3 py-2 flex-shrink-0" style={{ borderTop: '1px solid rgba(255,255,255,0.06)' }}>
+          <div
+            className={`flex items-center gap-2 px-3 py-2 rounded-xl ${collapsed ? 'justify-center' : ''}`}
+            style={{ background: 'rgba(34,197,94,0.08)', border: '1px solid rgba(34,197,94,0.2)' }}
           >
             <Wallet className="w-4 h-4 text-green-400 flex-shrink-0" />
             {!collapsed && (
-              <Text size="1" color="green" className="truncate">
-                Wallet Connected
-              </Text>
+              <span className="text-xs text-green-400 font-medium truncate">Connected</span>
             )}
-          </Flex>
-        </Box>
+          </div>
+        </div>
       )}
 
       {/* Sign Out */}
-      <Box className="p-3 border-t border-slate-700/50">
+      <div className="px-3 pb-4 flex-shrink-0">
         <button
           onClick={() => signOut()}
-          className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-slate-400 hover:text-red-400 hover:bg-red-500/10 transition-colors ${
-            collapsed ? 'justify-center' : ''
-          }`}
+          className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-slate-500 hover:text-red-400 hover:bg-red-500/[0.08] transition-all duration-200 cursor-pointer ${collapsed ? 'justify-center' : ''}`}
         >
-          <LogOut className="w-5 h-5 flex-shrink-0" />
-          {!collapsed && <Text size="2">Sign Out</Text>}
+          <LogOut className="w-[18px] h-[18px] flex-shrink-0" />
+          {!collapsed && <span className="text-sm font-medium">Sign Out</span>}
         </button>
-      </Box>
-    </Flex>
+      </div>
+    </div>
   );
 }
 
-function NavLink({
-  item,
-  isActive,
-  collapsed,
-}: {
-  item: NavItem;
-  isActive: boolean;
-  collapsed: boolean;
-}) {
+function NavLink({ item, active, collapsed }: { item: NavItem; active: boolean; collapsed: boolean }) {
   return (
-    <Link href={item.href}>
-      <Flex
-        align="center"
-        gap="3"
-        className={`px-3 py-2.5 rounded-lg cursor-pointer transition-all ${
-          collapsed ? 'justify-center' : ''
-        } ${
-          isActive
-            ? 'bg-cyan-500/20 text-cyan-400 border border-cyan-500/30'
-            : 'text-slate-400 hover:text-white hover:bg-slate-800/50'
-        }`}
+    <Link href={item.href} className="no-underline block">
+      <div
+        className={`
+          flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-200 cursor-pointer
+          ${collapsed ? 'justify-center' : ''}
+          ${active
+            ? 'text-cyan-300'
+            : 'text-slate-500 hover:text-slate-200 hover:bg-white/[0.05]'
+          }
+        `}
+        style={active ? {
+          background: 'rgba(6,182,212,0.1)',
+          boxShadow: 'inset 0 0 0 1px rgba(6,182,212,0.2)',
+        } : undefined}
+        title={collapsed ? item.label : undefined}
       >
-        <span className="flex-shrink-0">{item.icon}</span>
+        <span className={`flex-shrink-0 ${active ? 'text-cyan-400' : ''}`}>{item.icon}</span>
         {!collapsed && (
-          <Text size="2" weight={isActive ? 'medium' : 'regular'}>
-            {item.label}
-          </Text>
+          <span className={`text-sm ${active ? 'font-semibold' : 'font-medium'}`}>{item.label}</span>
         )}
-        {!collapsed && item.badge && item.badge > 0 && (
-          <Box className="ml-auto px-2 py-0.5 rounded-full bg-cyan-500/20 text-cyan-400">
-            <Text size="1">{item.badge}</Text>
-          </Box>
+        {!collapsed && active && (
+          <div className="ml-auto w-1.5 h-1.5 rounded-full bg-cyan-400" style={{ boxShadow: '0 0 6px rgba(6,182,212,0.8)' }} />
         )}
-      </Flex>
+      </div>
     </Link>
   );
 }

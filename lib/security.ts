@@ -262,7 +262,7 @@ let apiRateLimiter: DistributedRateLimiter | null = null;
 
 export function getApiRateLimiter(): DistributedRateLimiter {
   if (!apiRateLimiter) {
-    apiRateLimiter = new DistributedRateLimiter(100, 60, 'api:rpc');
+    apiRateLimiter = new DistributedRateLimiter(300, 60, 'api:rpc');
   }
   return apiRateLimiter;
 }

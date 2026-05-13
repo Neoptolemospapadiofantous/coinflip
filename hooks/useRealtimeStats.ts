@@ -118,9 +118,7 @@ export function usePendingByTier() {
           }
         }
       )
-      .subscribe((status) => {
-        devLog.log('[PendingByTier] Subscription status:', status);
-      });
+      .subscribe();
 
     return () => {
       channel.unsubscribe();
@@ -201,7 +199,6 @@ export function useActivityFeed(limit: number = 10) {
         return [];
       }
 
-      devLog.log('[ActivityFeed] Fetched', data?.length || 0, 'items');
       return data || [];
     },
     staleTime: 10000, // 10 seconds
@@ -239,12 +236,9 @@ export function useActivityFeed(limit: number = 10) {
           });
         }
       )
-      .subscribe((status, err) => {
-        devLog.log('[ActivityFeed] Subscription status:', status, err?.message || '');
-      });
+      .subscribe();
 
     return () => {
-      devLog.log('[ActivityFeed] Cleaning up subscription');
       channel.unsubscribe();
     };
   }, [limit]);

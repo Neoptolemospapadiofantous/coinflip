@@ -4,17 +4,7 @@ import { useState, useCallback, useEffect, useRef, useMemo } from 'react';
 import { useAccount } from 'wagmi';
 import { useSearchParams } from 'next/navigation';
 import { ConnectButton } from '@rainbow-me/rainbowkit';
-import {
-  Container,
-  Section,
-  Flex,
-  Heading,
-  Text,
-  Button,
-  Card,
-  Callout,
-  Badge,
-} from '@radix-ui/themes';
+import { Container, Section, Flex, Heading, Text } from '@radix-ui/themes';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { TierSelector } from '@/components/game/TierSelector';
 import { CoinChoice } from '@/components/game/CoinChoice';
@@ -23,7 +13,10 @@ import { useCreateGame, useCancelGame } from '@/hooks/useContract';
 import { useTiers } from '@/hooks/useTiers';
 import { useCreatedGameTracking } from '@/hooks/useCreatedGameTracking';
 import { useOptimisticUpdates } from '@/hooks/useOptimisticUpdates';
-import { Info, Loader2, CheckCircle2, AlertCircle, Clock, Users, X, Plus, Gamepad2, Zap, Activity } from 'lucide-react';
+import {
+  Info, Loader2, CheckCircle2, AlertCircle, Clock,
+  Users, X, Plus, Gamepad2, Zap, Activity,
+} from 'lucide-react';
 import { parseError } from '@/lib/errors';
 import { formatGameId, devLog } from '@/lib/utils';
 import { PLATFORM_FEE_PERCENT } from '@/lib/constants';
@@ -52,41 +45,21 @@ export default function PlayPage() {
   const isQuickRebet = searchParams.get('quickRebet') === 'true';
   const [step, setStep] = useState<GameStep>(GameStep.SELECT_TIER);
 
-  // Check data mode - decentralized (blockchain) vs centralized (supabase)
   const dataMode = useDataMode();
   const hasRealtime = useFeature('realtime');
   const isCentralizedMode = dataMode === 'supabase';
-  // Use optimized selectors for state to prevent unnecessary re-renders
   const selectedTier = useSelectedTier();
   const coinChoice = useCoinChoice();
-  // Actions are stable references, safe to destructure directly
-  const {
-    resetGameCreation,
-    addActiveGame,
-    updateActiveGame,
-    queueModal,
-  } = useGameStore();
+  const { resetGameCreation, addActiveGame, updateActiveGame, queueModal } = useGameStore();
 
-  // Local state for cancel tracking (no longer using Zustand optimistic cancel)
   const [isCancellingGame, setIsCancellingGame] = useState(false);
 
-  // DB-backed game limits (replaces Zustand-based getActiveGamesCount/canCreateNewGame)
   const { activeGamesCount, canCreateNewGame, confirmedActiveCount: pendingGamesCount } = useGameLimits();
 
-  // DB-backed pending transactions for persistence across refreshes
-  const {
-    addPendingTransaction: addDbPendingTx,
-    markConfirmed: markDbTxConfirmed,
-    markFailed: markDbTxFailed,
-  } = usePendingTransactions();
-
-  // DB-backed user preferences for quick re-bet
+  const { addPendingTransaction: addDbPendingTx, markConfirmed: markDbTxConfirmed, markFailed: markDbTxFailed } = usePendingTransactions();
   const { lastGameSettings } = useUserPreferences();
-
-  // DB-backed notification state for deduplication across devices/tabs
   const { markModalShown } = useNotificationState();
 
-  // Ref to track the DB pending tx ID for the current create operation
   const pendingTxIdRef = useRef<number | null>(null);
   const { createGame, isLoading, isSuccess, txHash, error, wasRejected: createWasRejected, reset: resetCreateGame } = useCreateGame();
   const { cancelGame, isLoading: isCancelling, error: cancelError, isSuccess: cancelSuccess, wasRejected: cancelWasRejected, reset: resetCancelState } = useCancelGame();
@@ -94,25 +67,18 @@ export default function PlayPage() {
   const queryClient = useQueryClient();
   const { optimisticCreateGame, rollbackOptimisticCreate, removeOptimisticGame } = useOptimisticUpdates();
 
-  // Realtime stats for activity display
-  usePendingByTier(); // Subscribe to pending games for realtime updates
+  usePendingByTier();
   const { data: matchTimes } = useTierMatchTimes();
 
-  // Refs for race condition prevention
   const isCancellingRef = useRef(false);
   const isMatchedRef = useRef(false);
   const mountedRef = useRef(true);
   const cancelTrackingRef = useRef<(() => void) | null>(null);
   const cancellingGameIdRef = useRef<string | null>(null);
 
-  // Memoize computed values to prevent unnecessary re-renders
-  const currentTier = useMemo(() =>
-    tiers?.find((t) => t.id === selectedTier),
-    [tiers, selectedTier]
-  );
+  const currentTier = useMemo(() => tiers?.find((t) => t.id === selectedTier), [tiers, selectedTier]);
   const canCreate = canCreateNewGame;
 
-  // Stable reset function - only resets the creation form, not active games
   const handleReset = useCallback(() => {
     if (!mountedRef.current) return;
     resetGameCreation();
@@ -121,29 +87,18 @@ export default function PlayPage() {
     isMatchedRef.current = false;
     resetCancelState();
     resetCreateGame?.();
-    // Mark pending tx as failed if user resets manually
     if (pendingTxIdRef.current) {
       markDbTxFailed(pendingTxIdRef.current, 'User cancelled');
       pendingTxIdRef.current = null;
     }
   }, [resetGameCreation, resetCancelState, resetCreateGame, markDbTxFailed]);
 
-  // Track the created game in real-time
   const handleGameFound = useCallback((game: Game) => {
     if (!mountedRef.current) return;
     devLog.log('🎮 Game found in database:', game.id);
-    // Mark pending tx as confirmed (DB trigger also handles this)
-    if (pendingTxIdRef.current) {
-      markDbTxConfirmed(pendingTxIdRef.current);
-      pendingTxIdRef.current = null;
-    }
-    // Remove optimistic game now that real one exists
-    if (game.tx_hash) {
-      removeOptimisticGame(game.tx_hash);
-    }
-    // Add the real game to active games
+    if (pendingTxIdRef.current) { markDbTxConfirmed(pendingTxIdRef.current); pendingTxIdRef.current = null; }
+    if (game.tx_hash) removeOptimisticGame(game.tx_hash);
     addActiveGame(game);
-    // Show toast and play sound
     showToast.gameCreated(formatGameId(game.id));
     playSound.success();
   }, [addActiveGame, markDbTxConfirmed, removeOptimisticGame]);
@@ -153,16 +108,10 @@ export default function PlayPage() {
     isMatchedRef.current = true;
     devLog.log('🎮 Game matched! Queueing modal...');
     updateActiveGame(game);
-    // Mark as shown in DB BEFORE queuing to prevent duplicates across tabs/refreshes
     markModalShown(game.id, 'matched');
     queueModal(game, 'matched');
-    // Reset creation UI after a brief delay to show transition
     setTimeout(() => {
-      if (mountedRef.current) {
-        cancelTrackingRef.current?.();
-        resetGameCreation();
-        setStep(GameStep.SELECT_TIER);
-      }
+      if (mountedRef.current) { cancelTrackingRef.current?.(); resetGameCreation(); setStep(GameStep.SELECT_TIER); }
     }, 500);
   }, [updateActiveGame, queueModal, resetGameCreation, markModalShown]);
 
@@ -170,10 +119,8 @@ export default function PlayPage() {
     if (!mountedRef.current) return;
     devLog.log('🎮 Game resolved:', game.winner_address);
     updateActiveGame(game);
-    // Mark as shown in DB BEFORE queuing to prevent duplicates across tabs/refreshes
     markModalShown(game.id, 'resolved');
     queueModal(game, 'resolved');
-    // Reset creation UI immediately
     cancelTrackingRef.current?.();
     resetGameCreation();
     setStep(GameStep.SELECT_TIER);
@@ -182,21 +129,12 @@ export default function PlayPage() {
   const handleGameCancelled = useCallback((_game: Game) => {
     if (!mountedRef.current) return;
     devLog.log('🎮 Game cancelled');
-    // Mark pending tx as confirmed (cancellation succeeded)
-    if (pendingTxIdRef.current) {
-      markDbTxConfirmed(pendingTxIdRef.current);
-      pendingTxIdRef.current = null;
-    }
-    // Game will be removed when modal closes
+    if (pendingTxIdRef.current) { markDbTxConfirmed(pendingTxIdRef.current); pendingTxIdRef.current = null; }
     handleReset();
   }, [handleReset, markDbTxConfirmed]);
 
   const {
-    game: trackedGame,
-    isSearching,
-    phase: trackingPhase,
-    elapsedSeconds,
-    cancelTracking,
+    game: trackedGame, isSearching, phase: trackingPhase, elapsedSeconds, cancelTracking,
   } = useCreatedGameTracking({
     txHash: isSuccess ? txHash : undefined,
     creatorAddress: address,
@@ -206,67 +144,49 @@ export default function PlayPage() {
     onGameCancelled: handleGameCancelled,
   });
 
-  // Sync cancelTracking to ref for use in callbacks
   cancelTrackingRef.current = cancelTracking;
 
-  // Handle quick re-bet: if we have settings and query param, skip to confirm
   const quickRebetHandledRef = useRef(false);
   useEffect(() => {
     if (isQuickRebet && lastGameSettings && !quickRebetHandledRef.current && canCreate) {
       quickRebetHandledRef.current = true;
-      // Settings are already set by setupQuickRebet in the modal
-      // Just skip to confirm step
       setStep(GameStep.CONFIRM);
       showToast.info('Quick re-bet: Same tier and choice loaded!');
     }
   }, [isQuickRebet, lastGameSettings, canCreate]);
 
-  // Cleanup on unmount
   useEffect(() => {
     mountedRef.current = true;
-    return () => {
-      mountedRef.current = false;
-      cancelTracking();
-    };
+    return () => { mountedRef.current = false; cancelTracking(); };
   }, [cancelTracking]);
 
-  // Handle cancel success/failure
   useEffect(() => {
     if (cancelSuccess && mountedRef.current && cancellingGameIdRef.current) {
       const gameId = cancellingGameIdRef.current;
       devLog.log('🎮 Game cancelled successfully:', gameId);
       setIsCancellingGame(false);
-
-      // Invalidate all game queries for real-time sync across pages
       invalidateGameQueries(queryClient, gameId);
-
-      // Show success toast
       showToast.success('Game cancelled - bet refunded');
-
       cancellingGameIdRef.current = null;
       cancelTracking();
       handleReset();
     }
   }, [cancelSuccess, cancelTracking, handleReset, queryClient]);
 
-  // Handle cancel error - revert optimistic update
   useEffect(() => {
     if (cancelError && mountedRef.current && cancellingGameIdRef.current) {
       devLog.log('🎮 Game cancel failed, reverting');
       setIsCancellingGame(false);
-      // Refetch pending games to restore the optimistically removed game
       invalidateGameQueries(queryClient, cancellingGameIdRef.current);
       isCancellingRef.current = false;
       cancellingGameIdRef.current = null;
     }
   }, [cancelError, queryClient]);
 
-  // Handle user rejection - silently revert without error
   useEffect(() => {
     if (cancelWasRejected && mountedRef.current && cancellingGameIdRef.current) {
       devLog.log('🎮 Cancel rejected by user, reverting UI for game:', cancellingGameIdRef.current);
       setIsCancellingGame(false);
-      // Refetch pending games to restore the optimistically removed game
       invalidateGameQueries(queryClient, cancellingGameIdRef.current);
       isCancellingRef.current = false;
       cancellingGameIdRef.current = null;
@@ -274,181 +194,97 @@ export default function PlayPage() {
     }
   }, [cancelWasRejected, resetCancelState, queryClient]);
 
-  // Handle create game rejection - reset UI and mark pending tx as failed
   useEffect(() => {
     if (createWasRejected && mountedRef.current) {
       devLog.log('🎮 Create game rejected by user, resetting UI');
-      if (pendingTxIdRef.current) {
-        markDbTxFailed(pendingTxIdRef.current, 'User rejected');
-        pendingTxIdRef.current = null;
-      }
+      if (pendingTxIdRef.current) { markDbTxFailed(pendingTxIdRef.current, 'User rejected'); pendingTxIdRef.current = null; }
       handleReset();
     }
   }, [createWasRejected, handleReset, markDbTxFailed]);
 
-  // Handle create game error - mark pending tx as failed and rollback optimistic update
   useEffect(() => {
     if (error && mountedRef.current) {
       devLog.log('🎮 Create game error, marking pending tx as failed');
-      if (pendingTxIdRef.current) {
-        markDbTxFailed(pendingTxIdRef.current, error.message || 'Transaction failed');
-        pendingTxIdRef.current = null;
-      }
-      // Rollback optimistic game if we had a txHash
-      if (txHash) {
-        rollbackOptimisticCreate(txHash);
-      }
+      if (pendingTxIdRef.current) { markDbTxFailed(pendingTxIdRef.current, error.message || 'Transaction failed'); pendingTxIdRef.current = null; }
+      if (txHash) rollbackOptimisticCreate(txHash);
     }
   }, [error, txHash, markDbTxFailed, rollbackOptimisticCreate]);
 
-  // Create optimistic game when txHash is available
   useEffect(() => {
     if (txHash && selectedTier !== null && coinChoice !== null && currentTier) {
       devLog.log('🎮 Transaction submitted, creating optimistic game');
-      // Create optimistic game for instant UI feedback
       optimisticCreateGame(txHash, selectedTier, coinChoice, currentTier.amount);
     }
   }, [txHash, selectedTier, coinChoice, currentTier, optimisticCreateGame]);
 
-  // Reset matched ref when tracked game changes
   useEffect(() => {
-    if (trackedGame?.status === 'pending') {
-      isMatchedRef.current = false;
-    } else if (trackedGame?.status === 'matched' || trackedGame?.status === 'resolved') {
-      isMatchedRef.current = true;
-    }
+    if (trackedGame?.status === 'pending') isMatchedRef.current = false;
+    else if (trackedGame?.status === 'matched' || trackedGame?.status === 'resolved') isMatchedRef.current = true;
   }, [trackedGame?.status]);
 
   const handleCreateGame = useCallback(async () => {
     if (selectedTier === null || coinChoice === null || !currentTier) return;
-    if (!canCreate) {
-      devLog.warn('Cannot create game - at max concurrent games');
-      return;
-    }
+    if (!canCreate) { devLog.warn('Cannot create game - at max concurrent games'); return; }
     setStep(GameStep.CREATING);
     isMatchedRef.current = false;
     isCancellingRef.current = false;
-
-    // Add pending transaction to DB (persists across refreshes)
     try {
-      const pendingTx = await addDbPendingTx({
-        tx_type: 'create',
-        tier: selectedTier,
-        choice: coinChoice,
-        amount_eth: currentTier.amount,
-      });
-      if (pendingTx) {
-        pendingTxIdRef.current = pendingTx.id;
-      }
-    } catch (err) {
-      devLog.warn('Failed to save pending tx to DB:', err);
-    }
-
+      const pendingTx = await addDbPendingTx({ tx_type: 'create', tier: selectedTier, choice: coinChoice, amount_eth: currentTier.amount });
+      if (pendingTx) pendingTxIdRef.current = pendingTx.id;
+    } catch (err) { devLog.warn('Failed to save pending tx to DB:', err); }
     createGame(selectedTier, coinChoice, currentTier.amount);
   }, [selectedTier, coinChoice, currentTier, createGame, canCreate, addDbPendingTx]);
 
   const handleCancelGame = useCallback(() => {
     if (!trackedGame?.id) return;
-
-    if (isCancellingRef.current || isCancellingGame) {
-      devLog.warn('Cancel already in progress');
-      return;
-    }
-    if (isMatchedRef.current || trackedGame.status !== 'pending') {
-      devLog.warn('Cannot cancel - game is no longer pending:', trackedGame.status);
-      return;
-    }
-
-    // Confirmation dialog
-    if (!confirm('Cancel this game and get your bet refunded?')) {
-      return;
-    }
-
+    if (isCancellingRef.current || isCancellingGame) { devLog.warn('Cancel already in progress'); return; }
+    if (isMatchedRef.current || trackedGame.status !== 'pending') { devLog.warn('Cannot cancel - game is no longer pending:', trackedGame.status); return; }
+    if (!confirm('Cancel this game and get your bet refunded?')) return;
     isCancellingRef.current = true;
     cancellingGameIdRef.current = trackedGame.id;
-    // Optimistic UI update - mark as cancelling immediately
     setIsCancellingGame(true);
-    // Optimistically remove from pending games cache for instant UI update
     removeGameFromPendingCache(queryClient, trackedGame.id);
     cancelGame(trackedGame.id);
   }, [trackedGame, cancelGame, isCancellingGame, queryClient]);
 
-  const handleCreateAnother = useCallback(() => {
-    cancelTracking();
-    handleReset();
-  }, [cancelTracking, handleReset]);
+  const handleCreateAnother = useCallback(() => { cancelTracking(); handleReset(); }, [cancelTracking, handleReset]);
 
-  // Format elapsed time
   const formatElapsedTime = (seconds: number): string => {
     if (seconds < 60) return `${seconds}s`;
-    const mins = Math.floor(seconds / 60);
-    const secs = seconds % 60;
-    return `${mins}m ${secs}s`;
+    return `${Math.floor(seconds / 60)}m ${seconds % 60}s`;
   };
 
-  // Parse cancel error message
   const getCancelErrorMessage = (err: Error | null): { title: string; message: string; isMatchedError: boolean } => {
     if (!err) return { title: '', message: '', isMatchedError: false };
     const msg = err.message.toLowerCase();
-
-    if (msg.includes('user rejected') || msg.includes('user denied')) {
-      return {
-        title: 'Transaction Cancelled',
-        message: 'You cancelled the transaction in your wallet.',
-        isMatchedError: false,
-      };
-    }
-    if (msg.includes('not creator') || msg.includes('unauthorized')) {
-      return {
-        title: 'Unauthorized',
-        message: 'Only the game creator can cancel this game.',
-        isMatchedError: false,
-      };
-    }
-    if (msg.includes('not pending') || msg.includes('already matched') || msg.includes('invalidgamestate')) {
-      return {
-        title: 'Good News!',
-        message: 'Your game was just matched with an opponent! The coin flip is starting.',
-        isMatchedError: true,
-      };
-    }
-    if (msg.includes('gas') || msg.includes('execution reverted')) {
-      return {
-        title: 'Game Already Matched',
-        message: 'Someone joined your game! The coin flip should start any moment.',
-        isMatchedError: true,
-      };
-    }
-    return {
-      title: 'Cancel Failed',
-      message: 'Unable to cancel. The game may have already been joined.',
-      isMatchedError: false,
-    };
+    if (msg.includes('user rejected') || msg.includes('user denied')) return { title: 'Transaction Cancelled', message: 'You cancelled the transaction in your wallet.', isMatchedError: false };
+    if (msg.includes('not creator') || msg.includes('unauthorized')) return { title: 'Unauthorized', message: 'Only the game creator can cancel this game.', isMatchedError: false };
+    if (msg.includes('not pending') || msg.includes('already matched') || msg.includes('invalidgamestate')) return { title: 'Good News!', message: 'Your game was just matched with an opponent! The coin flip is starting.', isMatchedError: true };
+    if (msg.includes('gas') || msg.includes('execution reverted')) return { title: 'Game Already Matched', message: 'Someone joined your game! The coin flip should start any moment.', isMatchedError: true };
+    return { title: 'Cancel Failed', message: 'Unable to cancel. The game may have already been joined.', isMatchedError: false };
   };
 
-  // Determine if cancel button should be disabled
   const isCancelDisabled = isCancelling || isMatchedRef.current || trackedGame?.status !== 'pending';
-
-  // Update step based on selection
   const canProceedToChooseSide = selectedTier !== null;
   const canProceedToConfirm = selectedTier !== null && coinChoice !== null;
+
+  void hasRealtime;
 
   if (!isConnected) {
     return (
       <AppLayout title="Play" description="Connect your wallet to start playing">
         <Section size="3">
           <Container size="2">
-            <Flex direction="column" align="center" gap="6" py="9">
-              <Card className="card-simple" size="4">
-                <Flex direction="column" gap="4" p="6" align="center">
-                  <Heading size="6">Connect Your Wallet</Heading>
-                  <Text size="3" color="gray" align="center">
-                    Please connect your Web3 wallet to start playing
-                  </Text>
-                  <ConnectButton />
-                </Flex>
-              </Card>
-            </Flex>
+            <div className="flex flex-col items-center justify-center py-24">
+              <div
+                className="w-full max-w-md rounded-2xl p-8 flex flex-col items-center gap-5"
+                style={{ background: 'rgba(5,8,22,0.8)', backdropFilter: 'blur(20px)', border: '1px solid rgba(255,255,255,0.08)' }}
+              >
+                <Heading size="6" className="text-white">Connect Your Wallet</Heading>
+                <Text size="3" color="gray" align="center">Please connect your Web3 wallet to start playing</Text>
+                <ConnectButton />
+              </div>
+            </div>
           </Container>
         </Section>
       </AppLayout>
@@ -461,499 +297,321 @@ export default function PlayPage() {
         <Container size="3">
           <Flex direction="column" gap="6" py="6">
             {/* Header */}
-            <Flex direction="column" gap="2" align="center" className="animate-fade-in">
-              <Heading size="8" className="text-gradient-rainbow">Create a Game</Heading>
-              <Flex align="center" gap="3">
-                <Text size="3" color="gray">
-                  Choose your bet amount, pick a side, and let's flip!
-                </Text>
+            <div className="flex flex-col items-center gap-2 animate-fade-in">
+              <h1
+                className="text-4xl font-black"
+                style={{ background: 'linear-gradient(135deg, #67e8f9, #a78bfa)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}
+              >
+                Create a Game
+              </h1>
+              <div className="flex items-center gap-3">
+                <p className="text-slate-400">Choose your bet amount, pick a side, and let's flip!</p>
                 {activeGamesCount > 0 && (
-                  <Badge size="2" color="cyan" variant="soft">
-                    <Gamepad2 className="w-3 h-3 mr-1" />
-                    {activeGamesCount} Active
-                  </Badge>
+                  <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium text-cyan-300"
+                    style={{ background: 'rgba(6,182,212,0.12)', border: '1px solid rgba(6,182,212,0.3)' }}>
+                    <Gamepad2 className="w-3 h-3" /> {activeGamesCount} Active
+                  </span>
                 )}
-              </Flex>
-            </Flex>
+              </div>
+            </div>
 
             {/* Max games warning */}
             {!canCreate && (
-              <Callout.Root color="orange" size="2">
-                <Callout.Icon>
-                  <AlertCircle className="w-4 h-4" />
-                </Callout.Icon>
-                <Text>
+              <div className="flex items-center gap-3 px-4 py-3 rounded-xl"
+                style={{ background: 'rgba(249,115,22,0.1)', border: '1px solid rgba(249,115,22,0.25)' }}>
+                <AlertCircle className="w-4 h-4 text-orange-400 flex-shrink-0" />
+                <span className="text-sm text-orange-200">
                   You have {MAX_CONCURRENT_GAMES} active games. Wait for one to complete before creating another.
-                </Text>
-              </Callout.Root>
+                </span>
+              </div>
             )}
 
-            {/* Steps Indicator */}
-            <Card className="card-solid border-purple-500/60 animate-slide-down">
-              <Flex gap="2" p="4" justify="center" wrap="wrap">
-                <StepIndicator
-                  number={1}
-                  label="Select Tier"
-                  active={step === GameStep.SELECT_TIER}
-                  completed={selectedTier !== null}
-                />
-                <StepIndicator
-                  number={2}
-                  label="Choose Side"
-                  active={step === GameStep.CHOOSE_SIDE}
-                  completed={coinChoice !== null}
-                />
-                <StepIndicator
-                  number={3}
-                  label="Confirm"
-                  active={step === GameStep.CONFIRM}
-                  completed={step === GameStep.CREATING || step === GameStep.WAITING}
-                />
-              </Flex>
-            </Card>
+            {/* Step Indicators */}
+            <div
+              className="rounded-2xl px-6 py-4 flex items-center justify-center gap-4 flex-wrap animate-slide-down"
+              style={{ background: 'rgba(5,8,22,0.7)', backdropFilter: 'blur(16px)', border: '1px solid rgba(168,85,247,0.2)' }}
+            >
+              <StepIndicator number={1} label="Select Tier" active={step === GameStep.SELECT_TIER} completed={selectedTier !== null} />
+              <div className="w-8 h-px hidden sm:block" style={{ background: 'rgba(255,255,255,0.1)' }} />
+              <StepIndicator number={2} label="Choose Side" active={step === GameStep.CHOOSE_SIDE} completed={coinChoice !== null} />
+              <div className="w-8 h-px hidden sm:block" style={{ background: 'rgba(255,255,255,0.1)' }} />
+              <StepIndicator number={3} label="Confirm" active={step === GameStep.CONFIRM} completed={step === GameStep.CREATING || step === GameStep.WAITING} />
+            </div>
 
             {/* Step Content */}
-            <Card className="card-simple" size="4">
-              <Flex direction="column" gap="6" p="6">
-                {/* Step 1: Select Tier */}
-                {step === GameStep.SELECT_TIER && (
-                  <>
-                    <TierSelector />
-                    <Button
-                      size="4"
-                      disabled={!canProceedToChooseSide || !canCreate}
-                      onClick={() => setStep(GameStep.CHOOSE_SIDE)}
-                    >
-                      Next: Choose Your Side
-                    </Button>
-                  </>
-                )}
+            <div
+              className="rounded-2xl p-6 sm:p-8 flex flex-col gap-6"
+              style={{ background: 'rgba(5,8,22,0.75)', backdropFilter: 'blur(20px)', border: '1px solid rgba(255,255,255,0.07)', boxShadow: '0 20px 40px rgba(0,0,0,0.3)' }}
+            >
+              {/* Step 1: Select Tier */}
+              {step === GameStep.SELECT_TIER && (
+                <>
+                  <TierSelector />
+                  <GradientButton
+                    disabled={!canProceedToChooseSide || !canCreate}
+                    onClick={() => setStep(GameStep.CHOOSE_SIDE)}
+                  >
+                    Next: Choose Your Side
+                  </GradientButton>
+                </>
+              )}
 
-                {/* Step 2: Choose Side */}
-                {step === GameStep.CHOOSE_SIDE && (
-                  <>
-                    <CoinChoice />
-                    <Flex gap="3">
-                      <Button size="4" variant="soft" onClick={() => setStep(GameStep.SELECT_TIER)}>
-                        Back
-                      </Button>
-                      <Button
-                        size="4"
-                        className="flex-1"
-                        disabled={!canProceedToConfirm}
-                        onClick={() => setStep(GameStep.CONFIRM)}
-                      >
-                        Next: Confirm
-                      </Button>
-                    </Flex>
-                  </>
-                )}
+              {/* Step 2: Choose Side */}
+              {step === GameStep.CHOOSE_SIDE && (
+                <>
+                  <CoinChoice />
+                  <div className="flex gap-3">
+                    <GhostButton onClick={() => setStep(GameStep.SELECT_TIER)}>Back</GhostButton>
+                    <GradientButton className="flex-1" disabled={!canProceedToConfirm} onClick={() => setStep(GameStep.CONFIRM)}>
+                      Next: Confirm
+                    </GradientButton>
+                  </div>
+                </>
+              )}
 
-                {/* Step 3: Confirm */}
-                {step === GameStep.CONFIRM && (
-                  <>
-                    <Flex direction="column" gap="4">
-                      <Flex align="center" gap="2">
-                        <Heading size="5">Confirm Your Game</Heading>
-                        {isQuickRebet && lastGameSettings && (
-                          <Badge color={lastGameSettings.wasWin ? 'green' : 'orange'} size="2">
-                            <Zap className="w-3 h-3 mr-1" />
-                            Quick Re-bet
-                          </Badge>
+              {/* Step 3: Confirm */}
+              {step === GameStep.CONFIRM && (
+                <div className="flex flex-col gap-5">
+                  <div className="flex items-center gap-3">
+                    <h2 className="text-xl font-bold text-white">Confirm Your Game</h2>
+                    {isQuickRebet && lastGameSettings && (
+                      <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium"
+                        style={{
+                          background: lastGameSettings.wasWin ? 'rgba(34,197,94,0.12)' : 'rgba(249,115,22,0.12)',
+                          border: lastGameSettings.wasWin ? '1px solid rgba(34,197,94,0.3)' : '1px solid rgba(249,115,22,0.3)',
+                          color: lastGameSettings.wasWin ? '#86efac' : '#fdba74',
+                        }}>
+                        <Zap className="w-3 h-3" /> Quick Re-bet
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Game summary */}
+                  <div className="rounded-xl p-4 flex flex-col gap-3" style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.07)' }}>
+                    <ConfirmRow label="Bet Amount" value={`$${currentTier?.amountUsd}`} />
+                    <ConfirmRow label="Your Choice" value={coinChoice ? 'Tails 🪙' : 'Heads 👑'} />
+                    <ConfirmRow label="Opponent Gets" value={!coinChoice ? 'Tails 🪙' : 'Heads 👑'} muted />
+                    <ConfirmRow label="Potential Win" value={`$${currentTier?.winAmountUsd}`} highlight />
+                    <ConfirmRow label="Platform Fee" value={`${PLATFORM_FEE_PERCENT}% on wins`} small />
+                  </div>
+
+                  {/* Info box */}
+                  <div className="flex items-start gap-3 px-4 py-3 rounded-xl"
+                    style={{ background: 'rgba(6,182,212,0.07)', border: '1px solid rgba(6,182,212,0.2)' }}>
+                    <Info className="w-4 h-4 text-cyan-400 flex-shrink-0 mt-0.5" />
+                    <div className="text-sm text-slate-300">
+                      <p className="font-semibold text-cyan-300 mb-1">What Happens Next:</p>
+                      <p className="leading-relaxed text-slate-400">
+                        1. Your game enters the queue<br />
+                        2. Another player joins (gets opposite side)<br />
+                        3. Chainlink VRF flips the coin (10-30 seconds)<br />
+                        4. Winner gets paid automatically!
+                      </p>
+                      <p className="text-xs text-slate-500 mt-2 italic">You can create up to {MAX_CONCURRENT_GAMES} games at once!</p>
+                    </div>
+                  </div>
+
+                  <div className="flex gap-3">
+                    <GhostButton onClick={() => setStep(GameStep.CHOOSE_SIDE)}>Back</GhostButton>
+                    <GradientButton className="flex-1" onClick={handleCreateGame} disabled={!canCreate || isLoading}>
+                      {isLoading ? <><Loader2 className="w-4 h-4 animate-spin" /> Creating...</> : 'Create Game'}
+                    </GradientButton>
+                  </div>
+                </div>
+              )}
+
+              {/* Step 4: Creating / Waiting */}
+              {(step === GameStep.CREATING || step === GameStep.WAITING) && (
+                <div className="flex flex-col items-center gap-6 py-4">
+                  {/* Progress steps */}
+                  {!trackedGame && (
+                    <div className="w-full max-w-md rounded-xl p-4 flex flex-col gap-3"
+                      style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.06)' }}>
+                      <ProgressStep
+                        label="Confirm in Wallet" sublabel={isLoading ? 'Waiting for signature...' : isSuccess ? 'Signed' : ''}
+                        state={isSuccess ? 'done' : isLoading ? 'active' : 'pending'} number={1} />
+                      <ProgressStep
+                        label="Broadcasting to Blockchain"
+                        sublabel={isSuccess && isSearching ? 'Confirming...' : isSuccess && !isSearching ? 'Confirmed' : ''}
+                        state={isSuccess && !isSearching ? 'done' : isSuccess && isSearching ? 'active' : 'pending'} number={2} />
+                      {isCentralizedMode && (
+                        <ProgressStep
+                          label="Syncing to Database"
+                          sublabel={trackedGame ? 'Synced' : isSuccess && isSearching ? 'Almost there...' : ''}
+                          state={trackedGame ? 'done' : isSuccess && isSearching ? 'active' : 'pending'} number={3} />
+                      )}
+                    </div>
+                  )}
+
+                  {isLoading && (
+                    <div className="flex flex-col items-center gap-4 animate-fade-in">
+                      <Loader2 className="w-16 h-16 text-cyan-400 animate-spin" style={{ filter: 'drop-shadow(0 0 16px rgba(6,182,212,0.5))' }} />
+                      <h2 className="text-xl font-bold text-cyan-300">Creating Game...</h2>
+                      <p className="text-sm text-slate-400 text-center">Please confirm the transaction in your wallet</p>
+                    </div>
+                  )}
+
+                  {isSuccess && isSearching && !trackedGame && (
+                    <div className="flex flex-col items-center gap-4 animate-fade-in">
+                      <Loader2 className="w-16 h-16 text-yellow-400 animate-spin" />
+                      <h2 className="text-xl font-bold" style={{ background: 'linear-gradient(to right, #fbbf24, #f59e0b)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
+                        Transaction Confirmed!
+                      </h2>
+                      <p className="text-sm text-slate-400 text-center">
+                        {isCentralizedMode ? 'Syncing game to database...' : 'Waiting for blockchain confirmation...'}
+                      </p>
+                      {txHash && <p className="text-xs font-mono text-slate-600">TX: {txHash.slice(0, 10)}...{txHash.slice(-8)}</p>}
+                    </div>
+                  )}
+
+                  {/* Decentralized mode: success after blockchain confirmation */}
+                  {!isCentralizedMode && isSuccess && !isSearching && !trackedGame && (
+                    <div className="flex flex-col items-center gap-5 animate-slide-up w-full max-w-sm">
+                      <div className="flex flex-col items-center gap-2">
+                        <CheckCircle2 className="w-12 h-12 text-green-400" style={{ filter: 'drop-shadow(0 0 12px rgba(34,197,94,0.5))' }} />
+                        <h2 className="text-xl font-bold text-green-400">Game Created!</h2>
+                        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium text-cyan-300"
+                          style={{ background: 'rgba(6,182,212,0.12)', border: '1px solid rgba(6,182,212,0.3)' }}>
+                          <Zap className="w-3 h-3" /> On Blockchain
+                        </span>
+                      </div>
+                      <div className="w-full rounded-xl p-4 text-center" style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.07)' }}>
+                        <p className="text-sm text-slate-400">Your game is live on the blockchain. Check the Queue page to see available games and wait for an opponent.</p>
+                        {txHash && <p className="text-xs font-mono text-slate-600 mt-2">TX: {txHash.slice(0, 10)}...{txHash.slice(-8)}</p>}
+                      </div>
+                      <div className="flex gap-3">
+                        <GhostButton onClick={() => window.location.href = '/queue'}>View Queue</GhostButton>
+                        <GradientButton onClick={handleCreateAnother}><Plus className="w-4 h-4" /> Create Another</GradientButton>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Waiting for opponent */}
+                  {isSuccess && trackedGame && trackedGame.status === 'pending' && (
+                    <div className="flex flex-col items-center gap-5 animate-slide-up w-full">
+                      <div className="flex flex-col items-center gap-2">
+                        <CheckCircle2 className="w-12 h-12 text-green-400" style={{ filter: 'drop-shadow(0 0 12px rgba(34,197,94,0.5))' }} />
+                        <h2 className="text-xl font-bold text-green-400">Game Created!</h2>
+                        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium text-cyan-300"
+                          style={{ background: 'rgba(6,182,212,0.12)', border: '1px solid rgba(6,182,212,0.3)' }}>
+                          <Users className="w-3 h-3" /> Waiting for Opponent
+                        </span>
+                      </div>
+
+                      <div className="w-full max-w-sm rounded-xl p-4 flex flex-col gap-3"
+                        style={{ background: 'rgba(168,85,247,0.05)', border: '1px solid rgba(168,85,247,0.2)' }}>
+                        <ConfirmRow label="Game ID" value={formatGameId(trackedGame.id)} mono />
+                        <ConfirmRow label="Your Choice" value={trackedGame.creator_choice ? 'Tails 🪙' : 'Heads 👑'} />
+                        <ConfirmRow label="Bet Amount" value={`$${currentTier?.amountUsd}`} />
+                        <div className="flex justify-between items-center">
+                          <span className="text-sm text-slate-400">Time Waiting</span>
+                          <span className="flex items-center gap-1 text-sm font-bold text-cyan-400">
+                            <Clock className="w-3 h-3" /> {formatElapsedTime(elapsedSeconds)}
+                          </span>
+                        </div>
+                        {selectedTier !== null && (
+                          <div className="flex justify-between items-center pt-2" style={{ borderTop: '1px solid rgba(255,255,255,0.06)' }}>
+                            <span className="text-sm text-slate-400">Est. Match Time</span>
+                            <span className="flex items-center gap-1 text-sm font-bold text-purple-400">
+                              <Activity className="w-3 h-3" /> {getEstimatedMatchTime(matchTimes ?? null, selectedTier).estimate}
+                            </span>
+                          </div>
                         )}
-                      </Flex>
+                      </div>
 
-                      <Flex direction="column" gap="3">
-                        <Flex justify="between">
-                          <Text color="gray">Bet Amount:</Text>
-                          <Text weight="bold">${currentTier?.amountUsd}</Text>
-                        </Flex>
-                        <Flex justify="between">
-                          <Text color="gray">Your Choice:</Text>
-                          <Text weight="bold">{coinChoice ? 'Tails 🪙' : 'Heads 👑'}</Text>
-                        </Flex>
-                        <Flex justify="between">
-                          <Text color="gray">Opponent Gets:</Text>
-                          <Text weight="bold" color="gray">{!coinChoice ? 'Tails 🪙' : 'Heads 👑'}</Text>
-                        </Flex>
-                        <Flex justify="between">
-                          <Text color="gray">Potential Win:</Text>
-                          <Text weight="bold" className="text-green-400">
-                            ${currentTier?.winAmountUsd}
-                          </Text>
-                        </Flex>
-                        <Flex justify="between">
-                          <Text size="1" color="gray">Platform Fee:</Text>
-                          <Text size="1" color="gray">{PLATFORM_FEE_PERCENT}% on wins</Text>
-                        </Flex>
-                      </Flex>
+                      <div className="flex items-center gap-2">
+                        <div className={`w-2 h-2 rounded-full animate-pulse ${trackingPhase === 'waiting_indexer' ? 'bg-green-400' : 'bg-yellow-400'}`} />
+                        <span className="text-xs text-slate-500">
+                          {trackingPhase === 'waiting_indexer' ? 'Waiting for confirmation...' :
+                           trackingPhase === 'found' ? 'Game found!' : 'Connecting...'}
+                        </span>
+                      </div>
 
-                      <Callout.Root color="blue" size="2">
-                        <Callout.Icon>
-                          <Info className="w-4 h-4" />
-                        </Callout.Icon>
-                        <Flex direction="column" gap="2" style={{ flex: 1 }}>
-                          <Text weight="bold">What Happens Next:</Text>
-                          <Text size="2">
-                            1. Your game enters the queue<br />
-                            2. Another player joins (gets opposite side)<br />
-                            3. Chainlink VRF flips the coin (10-30 seconds)<br />
-                            4. Winner gets paid automatically!
-                          </Text>
-                          <Text size="1" style={{ fontStyle: 'italic' }}>
-                            You can create up to {MAX_CONCURRENT_GAMES} games at once!
-                          </Text>
-                        </Flex>
-                      </Callout.Root>
-                    </Flex>
-
-                    <Flex gap="3">
-                      <Button size="4" variant="soft" onClick={() => setStep(GameStep.CHOOSE_SIDE)}>
-                        Back
-                      </Button>
-                      <Button size="4" className="flex-1 glow-cyan hover:scale-105 transition-transform" onClick={handleCreateGame} disabled={!canCreate || isLoading}>
-                        {isLoading ? (
-                          <>
-                            <Loader2 className="w-4 h-4 animate-spin mr-2" />
-                            Creating...
-                          </>
-                        ) : (
-                          'Create Game'
+                      <div className="flex gap-3 flex-wrap justify-center">
+                        <button
+                          onClick={handleCancelGame}
+                          disabled={isCancelDisabled}
+                          className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium text-red-300 disabled:opacity-40 disabled:cursor-not-allowed transition-all cursor-pointer hover:text-red-200"
+                          style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.25)' }}
+                        >
+                          {isCancelling ? <Loader2 className="w-4 h-4 animate-spin" /> : <X className="w-4 h-4" />}
+                          Cancel & Refund
+                        </button>
+                        {canCreate && (
+                          <GradientButton onClick={handleCreateAnother}>
+                            <Plus className="w-4 h-4" /> Create Another
+                          </GradientButton>
                         )}
-                      </Button>
-                    </Flex>
-                  </>
-                )}
+                      </div>
 
-                {/* Step 4: Creating/Waiting */}
-                {(step === GameStep.CREATING || step === GameStep.WAITING) && (
-                  <Flex direction="column" gap="4" align="center" py="6">
-                    {/* Creation Progress Steps */}
-                    {!trackedGame && (
-                      <Card className="w-full max-w-md card-simple mb-4">
-                        <Flex direction="column" gap="3" p="4">
-                          {/* Step 1: Wallet */}
-                          <Flex align="center" gap="3">
-                            <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
-                              isSuccess ? 'bg-green-500/20 text-green-400' : isLoading ? 'bg-cyan-500/20 text-cyan-400' : 'bg-gray-500/20 text-gray-400'
-                            }`}>
-                              {isSuccess ? <CheckCircle2 className="w-5 h-5" /> : isLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : '1'}
+                      {cancelError && (() => {
+                        const info = getCancelErrorMessage(cancelError);
+                        return (
+                          <div className="w-full max-w-sm rounded-xl p-3 flex flex-col items-center gap-2"
+                            style={{
+                              background: info.isMatchedError ? 'rgba(34,197,94,0.08)' : 'rgba(239,68,68,0.08)',
+                              border: info.isMatchedError ? '1px solid rgba(34,197,94,0.25)' : '1px solid rgba(239,68,68,0.25)',
+                            }}>
+                            <div className="flex items-center gap-2">
+                              {info.isMatchedError ? <CheckCircle2 className="w-4 h-4 text-green-400" /> : <AlertCircle className="w-4 h-4 text-red-400" />}
+                              <span className={`text-sm font-bold ${info.isMatchedError ? 'text-green-400' : 'text-red-400'}`}>{info.title}</span>
                             </div>
-                            <Flex direction="column">
-                              <Text size="2" weight="bold" className={isSuccess ? 'text-green-400' : isLoading ? 'text-cyan-400' : 'text-gray-400'}>
-                                Confirm in Wallet
-                              </Text>
-                              {isLoading && <Text size="1" color="gray">Waiting for signature...</Text>}
-                              {isSuccess && <Text size="1" className="text-green-400">Signed</Text>}
-                            </Flex>
-                          </Flex>
+                            <p className="text-xs text-slate-400 text-center">{info.message}</p>
+                          </div>
+                        );
+                      })()}
 
-                          {/* Step 2: Blockchain */}
-                          <Flex align="center" gap="3">
-                            <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
-                              isSuccess && !isSearching ? 'bg-green-500/20 text-green-400' : isSuccess && isSearching ? 'bg-yellow-500/20 text-yellow-400' : 'bg-gray-500/20 text-gray-400'
-                            }`}>
-                              {isSuccess && !isSearching ? <CheckCircle2 className="w-5 h-5" /> : isSuccess && isSearching ? <Loader2 className="w-5 h-5 animate-spin" /> : '2'}
-                            </div>
-                            <Flex direction="column">
-                              <Text size="2" weight="bold" className={isSuccess ? (isSearching ? 'text-yellow-400' : 'text-green-400') : 'text-gray-400'}>
-                                Broadcasting to Blockchain
-                              </Text>
-                              {isSuccess && isSearching && <Text size="1" color="gray">Confirming...</Text>}
-                              {isSuccess && !isSearching && <Text size="1" className="text-green-400">Confirmed</Text>}
-                            </Flex>
-                          </Flex>
+                      <p className="text-xs text-slate-600 text-center max-w-xs">
+                        {canCreate ? "Cancel anytime for instant refund, or auto-refund in 5 min. Create more games while waiting!" : "Cancel anytime for instant refund. If no one joins, Chainlink auto-refunds after 5 minutes."}
+                      </p>
 
-                          {/* Step 3: Indexing (only in centralized mode) */}
-                          {isCentralizedMode && (
-                            <Flex align="center" gap="3">
-                              <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
-                                trackedGame ? 'bg-green-500/20 text-green-400' : isSuccess && isSearching ? 'bg-cyan-500/20 text-cyan-400' : 'bg-gray-500/20 text-gray-400'
-                              }`}>
-                                {trackedGame ? <CheckCircle2 className="w-5 h-5" /> : isSuccess && isSearching ? <Loader2 className="w-5 h-5 animate-spin" /> : '3'}
-                              </div>
-                              <Flex direction="column">
-                                <Text size="2" weight="bold" className={trackedGame ? 'text-green-400' : isSuccess && isSearching ? 'text-cyan-400' : 'text-gray-400'}>
-                                  Syncing to Database
-                                </Text>
-                                {isSuccess && isSearching && !trackedGame && <Text size="1" color="gray">Almost there...</Text>}
-                                {trackedGame && <Text size="1" className="text-green-400">Synced</Text>}
-                              </Flex>
-                            </Flex>
-                          )}
-                        </Flex>
-                      </Card>
-                    )}
+                      {pendingGamesCount > 1 && (
+                        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium text-purple-300"
+                          style={{ background: 'rgba(168,85,247,0.12)', border: '1px solid rgba(168,85,247,0.3)' }}>
+                          <Gamepad2 className="w-3 h-3" /> {pendingGamesCount} games waiting for opponents
+                        </span>
+                      )}
+                    </div>
+                  )}
 
-                    {/* Main content based on phase */}
-                    {isLoading && (
-                      <div className="animate-fade-in">
-                        <Flex direction="column" gap="4" align="center">
-                          <Loader2 className="w-16 h-16 text-cyan-400 animate-spin glow-cyan" />
-                          <Heading size="5" className="text-gradient-cyan-purple">Creating Game...</Heading>
-                          <Text size="2" color="gray" align="center">
-                            Please confirm the transaction in your wallet
-                          </Text>
-                        </Flex>
+                  {/* Game matched */}
+                  {isSuccess && trackedGame && trackedGame.status === 'matched' && (
+                    <div className="flex flex-col items-center gap-4 animate-slide-up">
+                      <Users className="w-16 h-16 text-cyan-400 animate-pulse" style={{ filter: 'drop-shadow(0 0 16px rgba(6,182,212,0.5))' }} />
+                      <h2 className="text-xl font-bold text-cyan-300">Opponent Found!</h2>
+                      <p className="text-sm text-slate-400 text-center">Opening game session...</p>
+                      {canCreate && (
+                        <GradientButton onClick={handleCreateAnother} className="mt-4">
+                          <Plus className="w-4 h-4" /> Create Another Game
+                        </GradientButton>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Game resolved */}
+                  {isSuccess && trackedGame && trackedGame.status === 'resolved' && (
+                    <div className="flex flex-col items-center gap-4 animate-slide-up">
+                      <CheckCircle2 className="w-16 h-16 text-green-400" style={{ filter: 'drop-shadow(0 0 16px rgba(34,197,94,0.5))' }} />
+                      <h2 className="text-xl font-bold text-green-400">Game Complete!</h2>
+                      <p className="text-sm text-slate-400 text-center">Check the result in the game modal.</p>
+                      <GradientButton onClick={handleCreateAnother}><Plus className="w-4 h-4" /> Create New Game</GradientButton>
+                    </div>
+                  )}
+
+                  {error && (
+                    <div className="flex flex-col items-center gap-4 animate-slide-up">
+                      <AlertCircle className="w-16 h-16 text-red-400 animate-pulse" />
+                      <h2 className="text-xl font-bold text-red-400">{parseError(error).title}</h2>
+                      <div className="flex flex-col items-center gap-1">
+                        <p className="text-sm text-slate-400 text-center">{parseError(error).message}</p>
+                        {parseError(error).suggestion && <p className="text-xs text-slate-500 text-center">{parseError(error).suggestion}</p>}
                       </div>
-                    )}
-
-                    {isSuccess && isSearching && !trackedGame && (
-                      <div className="animate-fade-in">
-                        <Flex direction="column" gap="4" align="center">
-                          <Loader2 className="w-16 h-16 text-yellow-400 animate-spin" />
-                          <Heading size="5" className="text-gradient-gold">Transaction Confirmed!</Heading>
-                          <Text size="2" color="gray" align="center">
-                            {isCentralizedMode ? 'Syncing game to database...' : 'Waiting for blockchain confirmation...'}
-                          </Text>
-                          {txHash && (
-                            <Text size="1" className="font-mono text-gray-500">
-                              TX: {txHash.slice(0, 10)}...{txHash.slice(-8)}
-                            </Text>
-                          )}
-                        </Flex>
-                      </div>
-                    )}
-
-                    {/* Decentralized mode: Show success after blockchain confirmation */}
-                    {!isCentralizedMode && isSuccess && !isSearching && !trackedGame && (
-                      <div className="animate-slide-up">
-                        <Flex direction="column" gap="5" align="center">
-                          <Flex direction="column" gap="2" align="center">
-                            <CheckCircle2 className="w-12 h-12 text-green-400 glow-resolved" />
-                            <Heading size="5" className="text-gradient-gold">Game Created!</Heading>
-                            <Badge size="2" color="cyan" variant="soft">
-                              <Zap className="w-3 h-3 mr-1" />
-                              On Blockchain
-                            </Badge>
-                          </Flex>
-
-                          <Card className="w-full max-w-sm card-simple">
-                            <Flex direction="column" gap="3" p="4">
-                              <Text size="2" color="gray" align="center">
-                                Your game is live on the blockchain. Check the Queue page to see available games and wait for an opponent.
-                              </Text>
-                              {txHash && (
-                                <Text size="1" className="font-mono text-gray-500" align="center">
-                                  TX: {txHash.slice(0, 10)}...{txHash.slice(-8)}
-                                </Text>
-                              )}
-                            </Flex>
-                          </Card>
-
-                          <Flex gap="3">
-                            <Button
-                              size="3"
-                              variant="soft"
-                              onClick={() => window.location.href = '/queue'}
-                            >
-                              View Queue
-                            </Button>
-                            <Button
-                              size="3"
-                              className="bg-gradient-to-r from-cyan-500 to-purple-500"
-                              onClick={handleCreateAnother}
-                            >
-                              <Plus className="w-4 h-4 mr-2" />
-                              Create Another
-                            </Button>
-                          </Flex>
-                        </Flex>
-                      </div>
-                    )}
-
-                    {/* Phase 3: Game indexed, waiting for opponent */}
-                    {isSuccess && trackedGame && trackedGame.status === 'pending' && (
-                      <div className="animate-slide-up">
-                        <Flex direction="column" gap="5" align="center">
-                          {/* Status Header */}
-                          <Flex direction="column" gap="2" align="center">
-                            <CheckCircle2 className="w-12 h-12 text-green-400 glow-resolved" />
-                            <Heading size="5" className="text-gradient-gold">Game Created!</Heading>
-                            <Badge size="2" color="cyan" variant="soft">
-                              <Users className="w-3 h-3 mr-1" />
-                              Waiting for Opponent
-                            </Badge>
-                          </Flex>
-
-                          {/* Game Details Card */}
-                          <Card className="w-full max-w-sm card-solid border-purple-500/30">
-                            <Flex direction="column" gap="3" p="4">
-                              <Flex justify="between" align="center">
-                                <Text size="2" color="gray">Game ID:</Text>
-                                <Text size="2" weight="bold" className="font-mono">{formatGameId(trackedGame.id)}</Text>
-                              </Flex>
-                              <Flex justify="between" align="center">
-                                <Text size="2" color="gray">Your Choice:</Text>
-                                <Text size="2" weight="bold">{trackedGame.creator_choice ? 'Tails 🪙' : 'Heads 👑'}</Text>
-                              </Flex>
-                              <Flex justify="between" align="center">
-                                <Text size="2" color="gray">Bet Amount:</Text>
-                                <Text size="2" weight="bold">${currentTier?.amountUsd}</Text>
-                              </Flex>
-                              <Flex justify="between" align="center">
-                                <Text size="2" color="gray">Time Waiting:</Text>
-                                <Flex align="center" gap="1">
-                                  <Clock className="w-3 h-3 text-cyan-400" />
-                                  <Text size="2" weight="bold" className="text-cyan-400">
-                                    {formatElapsedTime(elapsedSeconds)}
-                                  </Text>
-                                </Flex>
-                              </Flex>
-                              {/* Estimated Match Time */}
-                              {selectedTier !== null && (
-                                <Flex justify="between" align="center" className="border-t border-slate-700/50 pt-3">
-                                  <Text size="2" color="gray">Est. Match Time:</Text>
-                                  <Flex align="center" gap="1">
-                                    <Activity className="w-3 h-3 text-purple-400" />
-                                    <Text size="2" weight="bold" className="text-purple-400">
-                                      {getEstimatedMatchTime(matchTimes ?? null, selectedTier).estimate}
-                                    </Text>
-                                  </Flex>
-                                </Flex>
-                              )}
-                            </Flex>
-                          </Card>
-
-                          {/* Real-time Status */}
-                          <Flex align="center" gap="2">
-                            <div className={`w-2 h-2 rounded-full ${trackingPhase === 'waiting_indexer' ? 'bg-green-400' : 'bg-yellow-400'} animate-pulse`} />
-                            <Text size="1" color="gray">
-                              {trackingPhase === 'waiting_indexer' ? 'Waiting for confirmation...' :
-                               trackingPhase === 'found' ? 'Game found!' : 'Connecting...'}
-                            </Text>
-                          </Flex>
-
-                          {/* Action Buttons */}
-                          <Flex gap="3" wrap="wrap" justify="center">
-                            <Button
-                              size="3"
-                              variant="soft"
-                              color="red"
-                              onClick={handleCancelGame}
-                              disabled={isCancelDisabled}
-                            >
-                              {isCancelling ? (
-                                <Loader2 className="w-4 h-4 animate-spin mr-2" />
-                              ) : (
-                                <X className="w-4 h-4 mr-2" />
-                              )}
-                              Cancel & Refund
-                            </Button>
-                            {canCreate && (
-                              <Button
-                                size="3"
-                                onClick={handleCreateAnother}
-                                className="glow-cyan"
-                              >
-                                <Plus className="w-4 h-4 mr-2" />
-                                Create Another
-                              </Button>
-                            )}
-                          </Flex>
-
-                          {/* Cancel Error */}
-                          {cancelError && (
-                            <Card className={`w-full max-w-sm ${getCancelErrorMessage(cancelError).isMatchedError ? 'bg-green-500/10 border border-green-500/30' : 'bg-red-500/10 border border-red-500/30'}`}>
-                              <Flex direction="column" gap="2" p="3" align="center">
-                                <Flex align="center" gap="2">
-                                  {getCancelErrorMessage(cancelError).isMatchedError ? (
-                                    <CheckCircle2 className="w-4 h-4 text-green-400" />
-                                  ) : (
-                                    <AlertCircle className="w-4 h-4 text-red-400" />
-                                  )}
-                                  <Text size="2" className={getCancelErrorMessage(cancelError).isMatchedError ? 'text-green-400' : 'text-red-400'} weight="bold">
-                                    {getCancelErrorMessage(cancelError).title}
-                                  </Text>
-                                </Flex>
-                                <Text size="1" color="gray" align="center">
-                                  {getCancelErrorMessage(cancelError).message}
-                                </Text>
-                              </Flex>
-                            </Card>
-                          )}
-
-                          {/* Info */}
-                          <Text size="1" color="gray" align="center" style={{ maxWidth: '320px' }}>
-                            {canCreate
-                              ? "Cancel anytime for instant refund, or auto-refund in 5 min. Create more games while waiting!"
-                              : "Cancel anytime for instant refund. If no one joins, Chainlink auto-refunds after 5 minutes."}
-                          </Text>
-
-                          {/* Active Games Count */}
-                          {pendingGamesCount > 1 && (
-                            <Badge size="2" color="purple" variant="soft">
-                              <Gamepad2 className="w-3 h-3 mr-1" />
-                              {pendingGamesCount} games waiting for opponents
-                            </Badge>
-                          )}
-                        </Flex>
-                      </div>
-                    )}
-
-                    {/* Game matched - show brief transition */}
-                    {isSuccess && trackedGame && trackedGame.status === 'matched' && (
-                      <div className="animate-slide-up">
-                        <Flex direction="column" gap="4" align="center">
-                          <Users className="w-16 h-16 text-cyan-400 animate-pulse glow-cyan" />
-                          <Heading size="5" className="text-gradient-cyan-purple">Opponent Found!</Heading>
-                          <Text size="2" color="gray" align="center">
-                            Opening game session...
-                          </Text>
-                          {canCreate && (
-                            <Button size="3" onClick={handleCreateAnother} className="mt-4">
-                              <Plus className="w-4 h-4 mr-2" />
-                              Create Another Game
-                            </Button>
-                          )}
-                        </Flex>
-                      </div>
-                    )}
-
-                    {/* Game resolved - show brief transition */}
-                    {isSuccess && trackedGame && trackedGame.status === 'resolved' && (
-                      <div className="animate-slide-up">
-                        <Flex direction="column" gap="4" align="center">
-                          <CheckCircle2 className="w-16 h-16 text-green-400 glow-resolved" />
-                          <Heading size="5" className="text-gradient-gold">Game Complete!</Heading>
-                          <Text size="2" color="gray" align="center">
-                            Check the result in the game modal.
-                          </Text>
-                          <Button size="3" onClick={handleCreateAnother}>
-                            <Plus className="w-4 h-4 mr-2" />
-                            Create New Game
-                          </Button>
-                        </Flex>
-                      </div>
-                    )}
-
-                    {error && (
-                      <div className="animate-slide-up">
-                        <Flex direction="column" gap="4" align="center">
-                          <AlertCircle className="w-16 h-16 text-red-400 animate-pulse" />
-                          <Heading size="5" className="text-red-400">
-                            {parseError(error).title}
-                          </Heading>
-                          <Flex direction="column" gap="2" align="center">
-                            <Text size="2" color="gray" align="center">
-                              {parseError(error).message}
-                            </Text>
-                            {parseError(error).suggestion && (
-                              <Text size="1" className="text-slate-400" align="center">
-                                {parseError(error).suggestion}
-                              </Text>
-                            )}
-                          </Flex>
-                          <Button size="3" onClick={handleCreateAnother} className="hover:scale-105 transition-transform">
-                            Try Again
-                          </Button>
-                        </Flex>
-                      </div>
-                    )}
-                  </Flex>
-                )}
-              </Flex>
-            </Card>
+                      <GradientButton onClick={handleCreateAnother}>Try Again</GradientButton>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
           </Flex>
         </Container>
       </Section>
@@ -961,45 +619,72 @@ export default function PlayPage() {
   );
 }
 
-function StepIndicator({
-  number,
-  label,
-  active,
-  completed,
-}: {
-  number: number;
-  label: string;
-  active: boolean;
-  completed: boolean;
-}) {
+function StepIndicator({ number, label, active, completed }: { number: number; label: string; active: boolean; completed: boolean }) {
   return (
-    <Flex align="center" gap="2" className="transition-all duration-300">
-      <Flex
-        align="center"
-        justify="center"
-        className={`w-8 h-8 rounded-full border-2 transition-all duration-300 ${
+    <div className="flex items-center gap-2.5 transition-all duration-300">
+      <div
+        className="w-9 h-9 rounded-full flex items-center justify-center text-sm font-bold transition-all duration-300 flex-shrink-0"
+        style={
           completed
-            ? 'bg-gradient-to-br from-green-500 to-green-600 border-green-400 glow-resolved scale-110'
+            ? { background: 'linear-gradient(135deg, #22c55e, #16a34a)', boxShadow: '0 0 12px rgba(34,197,94,0.4)' }
             : active
-              ? 'border-cyan-500 glow-cyan scale-105 animate-pulse-slow'
-              : 'border-slate-600'
-        }`}
+            ? { background: 'rgba(6,182,212,0.15)', border: '2px solid rgba(6,182,212,0.7)', boxShadow: '0 0 12px rgba(6,182,212,0.3)', color: '#67e8f9' }
+            : { background: 'rgba(255,255,255,0.05)', border: '2px solid rgba(255,255,255,0.12)', color: '#64748b' }
+        }
       >
-        <Text
-          size="2"
-          weight="bold"
-          className={completed || active ? 'text-white' : 'text-slate-500'}
-        >
-          {number}
-        </Text>
-      </Flex>
-      <Text
-        size="2"
-        weight={active ? 'bold' : 'regular'}
-        className={active ? 'text-cyan-400' : completed ? 'text-green-400' : 'text-gray-500'}
-      >
-        {label}
-      </Text>
-    </Flex>
+        {completed ? <CheckCircle2 className="w-4 h-4 text-white" /> : <span className={completed || active ? 'text-white' : 'text-slate-500'}>{number}</span>}
+      </div>
+      <span className={`text-sm font-medium transition-colors ${active ? 'text-cyan-400' : completed ? 'text-green-400' : 'text-slate-500'}`}>{label}</span>
+    </div>
+  );
+}
+
+function ProgressStep({ number, label, sublabel, state }: { number: number; label: string; sublabel: string; state: 'pending' | 'active' | 'done' }) {
+  return (
+    <div className="flex items-center gap-3">
+      <div className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 text-sm font-bold transition-all ${
+        state === 'done' ? 'bg-green-500/20 text-green-400' : state === 'active' ? 'bg-cyan-500/20 text-cyan-400' : 'bg-white/[0.05] text-slate-600'
+      }`}>
+        {state === 'done' ? <CheckCircle2 className="w-4 h-4" /> : state === 'active' ? <Loader2 className="w-4 h-4 animate-spin" /> : number}
+      </div>
+      <div className="flex flex-col">
+        <span className={`text-sm font-semibold ${state === 'done' ? 'text-green-400' : state === 'active' ? 'text-cyan-400' : 'text-slate-500'}`}>{label}</span>
+        {sublabel && <span className={`text-xs ${state === 'done' ? 'text-green-400' : 'text-slate-500'}`}>{sublabel}</span>}
+      </div>
+    </div>
+  );
+}
+
+function ConfirmRow({ label, value, highlight, muted, small, mono }: { label: string; value: string; highlight?: boolean; muted?: boolean; small?: boolean; mono?: boolean }) {
+  return (
+    <div className="flex justify-between items-center">
+      <span className={`${small ? 'text-xs' : 'text-sm'} text-slate-400`}>{label}:</span>
+      <span className={`${small ? 'text-xs' : 'text-sm'} font-bold ${highlight ? 'text-green-400' : muted ? 'text-slate-500' : 'text-slate-200'} ${mono ? 'font-mono' : ''}`}>{value}</span>
+    </div>
+  );
+}
+
+function GradientButton({ children, onClick, disabled, className = '' }: { children: React.ReactNode; onClick?: () => void; disabled?: boolean; className?: string }) {
+  return (
+    <button
+      onClick={onClick}
+      disabled={disabled}
+      className={`flex items-center justify-center gap-2 px-6 py-3 rounded-xl font-semibold text-sm text-white transition-all duration-200 hover:opacity-90 active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer ${className}`}
+      style={{ background: 'linear-gradient(135deg, #06b6d4, #7c3aed)', boxShadow: disabled ? 'none' : '0 0 20px rgba(6,182,212,0.2)' }}
+    >
+      {children}
+    </button>
+  );
+}
+
+function GhostButton({ children, onClick, disabled }: { children: React.ReactNode; onClick?: () => void; disabled?: boolean }) {
+  return (
+    <button
+      onClick={onClick}
+      disabled={disabled}
+      className="flex items-center justify-center gap-2 px-6 py-3 rounded-xl font-semibold text-sm text-slate-300 bg-white/[0.05] border border-white/10 hover:bg-white/[0.09] hover:text-white disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 cursor-pointer"
+    >
+      {children}
+    </button>
   );
 }

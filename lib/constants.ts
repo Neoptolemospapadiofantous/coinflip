@@ -35,8 +35,8 @@ export const GAME_TIMEOUT_MS = 5 * 60 * 1000;
 /** Game timeout in seconds */
 export const GAME_TIMEOUT_SECONDS = GAME_TIMEOUT_MS / 1000;
 
-/** VRF timeout in seconds (for UI display) */
-export const VRF_TIMEOUT_SECONDS = 120;
+/** VRF timeout in seconds — derived from contract's vrfTimeoutBlocks (200 blocks × 12s = 2400s ~40 min) */
+export const VRF_TIMEOUT_SECONDS = VRF_TIMEOUT_BLOCKS * AVG_BLOCK_TIME_SECONDS;
 
 /** VRF timeout in milliseconds */
 export const VRF_TIMEOUT_MS = VRF_TIMEOUT_SECONDS * 1000;
@@ -51,8 +51,8 @@ export const POLL_INTERVAL_MS = 1000;
 /** Polling interval for checking expired games (30 seconds) */
 export const EXPIRED_GAMES_CHECK_INTERVAL_MS = 30 * 1000;
 
-/** Timeout for searching for newly created games (30 seconds) */
-export const GAME_SEARCH_TIMEOUT_MS = 30000;
+/** Timeout for searching for newly created games (15 seconds - reduced for faster feedback) */
+export const GAME_SEARCH_TIMEOUT_MS = 15000;
 
 /** Fallback polling intervals with exponential backoff [5s, 10s, 20s, 30s] */
 export const FALLBACK_POLL_INTERVALS_MS = [5000, 10000, 20000, 30000] as const;
@@ -162,8 +162,8 @@ export const MAX_NOTIFICATION_CACHE_SIZE = 100;
 /** Maximum RPC response cache entries */
 export const MAX_RPC_CACHE_SIZE = 1000;
 
-/** Rate limit: requests per minute per IP */
-export const RATE_LIMIT_REQUESTS_PER_MINUTE = 100;
+/** Rate limit: requests per minute per IP (production; bypassed for localhost in dev) */
+export const RATE_LIMIT_REQUESTS_PER_MINUTE = 300;
 
 /** RPC proxy request timeout (ms) */
 export const RPC_TIMEOUT_MS = 15000;

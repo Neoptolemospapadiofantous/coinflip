@@ -24,10 +24,11 @@ interface TrackingState {
   phase: 'waiting_indexer' | 'found' | 'timeout';
 }
 
-// Polling interval in ms - fast since we're just checking DB
+// Polling interval in ms - fast since we're just checking DB/blockchain
 const POLL_INTERVAL = 1000;
-// Timeout for finding game in ms
-const SEARCH_TIMEOUT = 30000;
+// Timeout for finding game in ms (reduced from 30s for faster feedback)
+// Modern indexers should pick up events within 5-10 seconds
+const SEARCH_TIMEOUT = 15000;
 
 /**
  * Hook to track a newly created game from transaction to discovery
@@ -141,33 +142,40 @@ export function useCreatedGameTracking({
         devLog.log('[GameTracking] Decentralized mode - polling blockchain');
         const blockchainSource = getBlockchainDataSource();
 
-        // Get all active games for the creator and find the one with matching txHash
-        const games = await blockchainSource.getPlayerActiveGames(searchCreatorAddress);
+        // Force a scan for new events first to ensure we have latest data
+        // This is a private method, so we call getGames which triggers the scan
+        await blockchainSource.getGames(100);
 
-        // Find game by txHash (if available) or most recent pending game
-        const matchingGame = games.find(g =>
+        // Get all games for the creator (not just active - game might already be matched/resolved)
+        const allGames = await blockchainSource.getPlayerGames(searchCreatorAddress, 50);
+
+        // Primary match: Find game by exact txHash match (most reliable)
+        const txHashMatch = allGames.find(g =>
           g.tx_hash?.toLowerCase() === searchTxHash.toLowerCase()
         );
 
-        if (matchingGame) {
-          devLog.log('[GameTracking] Found game on blockchain:', matchingGame.id);
-          return matchingGame;
+        if (txHashMatch) {
+          devLog.log('[GameTracking] Found game by txHash on blockchain:', txHashMatch.id);
+          return txHashMatch;
         }
 
-        // If no txHash match, check for any recent pending game by this creator
-        // This handles the case where txHash isn't indexed yet
-        const pendingGames = games.filter(g =>
+        // Secondary match: Find the most recent pending game by this creator
+        // Only use this if txHash match fails AND there's exactly one pending game
+        // This avoids the race condition of matching the wrong game
+        const pendingGames = allGames.filter(g =>
           g.status === 'pending' &&
           g.creator_address?.toLowerCase() === searchCreatorAddress.toLowerCase()
         );
 
-        if (pendingGames.length > 0) {
-          // Return most recent
-          const mostRecent = pendingGames.sort((a, b) =>
-            new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime()
-          )[0];
-          devLog.log('[GameTracking] Found pending game on blockchain:', mostRecent.id);
-          return mostRecent;
+        if (pendingGames.length === 1) {
+          // Safe to return - only one pending game
+          devLog.log('[GameTracking] Found single pending game on blockchain:', pendingGames[0].id);
+          return pendingGames[0];
+        } else if (pendingGames.length > 1) {
+          // Multiple pending games - can't reliably determine which one is new
+          // Keep polling until txHash match is found
+          devLog.log('[GameTracking] Multiple pending games found, waiting for txHash match...');
+          return null;
         }
 
         return null;
@@ -266,7 +274,49 @@ export function useCreatedGameTracking({
     } else if (game.status === 'pending' || game.status === 'matched') {
       // Decentralized mode: Use polling instead of subscriptions
       devLog.log(`⚡ Decentralized mode: Using polling for game ${game.id} status updates`);
-      // Polling will be handled by the useUserActiveGames hook which already supports blockchain mode
+
+      // Set up dedicated polling for this game's status
+      const blockchainSource = getBlockchainDataSource();
+      let lastStatus: string = game.status;
+
+      retryIntervalRef.current = setInterval(async () => {
+        if (!mountedRef.current || !gameIdRef.current) return;
+
+        try {
+          const updatedGame = await blockchainSource.getGame(gameIdRef.current);
+          if (updatedGame && updatedGame.status !== lastStatus) {
+            lastStatus = updatedGame.status;
+            devLog.log(`⚡ Game ${gameIdRef.current} status changed to:`, updatedGame.status);
+
+            // Update local state
+            setState((prev) => ({
+              ...prev,
+              game: updatedGame,
+            }));
+
+            // Trigger callbacks based on new status
+            if (updatedGame.status === 'matched') {
+              onGameMatchedRef.current?.(updatedGame);
+            } else if (updatedGame.status === 'resolved') {
+              onGameResolvedRef.current?.(updatedGame);
+              // Stop polling - game is finished
+              if (retryIntervalRef.current) {
+                clearInterval(retryIntervalRef.current);
+                retryIntervalRef.current = null;
+              }
+            } else if (updatedGame.status === 'cancelled') {
+              onGameCancelledRef.current?.(updatedGame);
+              // Stop polling - game is finished
+              if (retryIntervalRef.current) {
+                clearInterval(retryIntervalRef.current);
+                retryIntervalRef.current = null;
+              }
+            }
+          }
+        } catch (error) {
+          devLog.warn(`⚡ Error polling game ${gameIdRef.current}:`, error);
+        }
+      }, 3000); // Poll every 3 seconds for active game tracking
     }
   }, [cleanup]);
 

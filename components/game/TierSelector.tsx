@@ -5,8 +5,8 @@ import { useTiers } from '@/hooks/useTiers';
 import { useGameStore } from '@/store/gameStore';
 import { formatCurrency, devLog } from '@/lib/utils';
 import { PLATFORM_FEE_PERCENT, WINNER_PAYOUT_PERCENT } from '@/lib/constants';
-import { Button, Flex, Text, Grid, Badge, Card, Heading, Skeleton, Tooltip } from '@radix-ui/themes';
-import { Users, Lock, Clock } from 'lucide-react';
+import { Skeleton, Tooltip } from '@radix-ui/themes';
+import { Users, Lock, Clock, TrendingUp } from 'lucide-react';
 import { NetworkIndicator } from '@/components/ui/NetworkIndicator';
 import { usePendingByTier, useTierMatchTimes, getEstimatedMatchTime } from '@/hooks/useRealtimeStats';
 
@@ -19,155 +19,163 @@ export function TierSelector() {
     chainId: chain?.id,
     query: {
       enabled: Boolean(address && chain?.id),
-      // Use Wagmi defaults (4s poll) + refetch on focus for better UX after transactions
       refetchOnWindowFocus: true,
-      staleTime: 10000, // Consider data stale after 10s
+      staleTime: 10000,
     },
   });
 
-  // Realtime pending counts and match times
   const { data: pendingByTier } = usePendingByTier();
   const { data: matchTimes } = useTierMatchTimes();
 
-  // Helper to get pending count for a tier
-  const getPendingCount = (tierId: number) => {
-    const tierData = pendingByTier?.find((t) => t.tier === tierId);
-    return tierData?.pending_count || 0;
-  };
+  const getPendingCount = (tierId: number) =>
+    pendingByTier?.find(t => t.tier === tierId)?.pending_count ?? 0;
+
+  if (balanceError) devLog.error('Balance fetch error:', balanceError);
 
   if (isLoading || (isConnected && isBalanceLoading && !balance)) {
     return <TierSelectorSkeleton />;
   }
 
-  // Show error message if balance fetch failed
-  if (balanceError) {
-    devLog.error('Balance fetch error:', balanceError);
-  }
+  const selectedTierData = tiers?.find(t => t.id === selectedTier);
 
   return (
-    <Flex direction="column" gap="4">
-      <Flex direction="column" gap="2">
-        <Flex align="center" justify="between">
-          <Heading size="5">Choose Your Bet</Heading>
-          {isConnected && balance && (
-            <Text size="2" color="gray">
-              Balance: {formatCurrency(balance.value)}
-            </Text>
-          )}
-          {isConnected && !balance && !isBalanceLoading && (
-            <Text size="2" color="red">
-              Balance unavailable
-            </Text>
-          )}
-        </Flex>
-        <Text size="2" color="gray">
-          Select your bet amount. Higher tiers mean bigger wins! You'll be matched with another player.
-        </Text>
-      </Flex>
+    <div className="flex flex-col gap-5">
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h3 className="text-lg font-bold text-white">Choose Your Bet</h3>
+          <p className="text-sm text-slate-400 mt-0.5">Select amount — you'll be matched with a player at the same tier.</p>
+        </div>
+        {isConnected && balance && (
+          <div className="text-right">
+            <p className="text-xs text-slate-500 mb-0.5">Balance</p>
+            <p className="text-sm font-semibold text-slate-200">{formatCurrency(balance.value)}</p>
+          </div>
+        )}
+        {isConnected && !balance && !isBalanceLoading && (
+          <p className="text-sm text-red-400">Balance unavailable</p>
+        )}
+      </div>
 
-      {/* Network Indicator */}
       <NetworkIndicator />
 
-      <Grid columns={{ initial: '2', sm: '3', md: '5' }} gap={{ initial: '2', sm: '3' }}>
-        {tiers?.map((tier) => {
-          const tierAmount = BigInt(tier.amount); // tier.amount is already in wei
+      {/* Tier Grid */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3">
+        {tiers?.map(tier => {
+          const tierAmount = BigInt(tier.amount);
           const canAfford = balance ? balance.value >= tierAmount : false;
           const isSelected = selectedTier === tier.id;
+          const pendingCount = getPendingCount(tier.id);
+          const matchEta = getEstimatedMatchTime(matchTimes ?? null, tier.id);
+          const hasWaiters = pendingCount > 0;
 
           return (
-            <Button
+            <Tooltip
               key={tier.id}
-              variant={isSelected ? 'solid' : 'soft'}
-              size={{ initial: '3', sm: '4' }}
-              className={`tier-btn cursor-pointer transition-all touch-target ${
-                !canAfford ? 'opacity-50 cursor-not-allowed' : ''
-              } ${isSelected ? 'ring-2 ring-cyan-500' : ''}`}
-              onClick={() => canAfford && setSelectedTier(tier.id)}
-              disabled={!canAfford}
+              content={!canAfford ? 'Insufficient balance' : `Win $${tier.winAmountUsd} · ${WINNER_PAYOUT_PERCENT}% payout`}
             >
-              <Flex direction="column" gap={{ initial: '1', sm: '2' }} align="center" className="w-full">
-                {/* Amount */}
-                <Text size={{ initial: '5', sm: '6' }} weight="bold" className="text-white">
-                  ${tier.amountUsd}
-                </Text>
-
-                {/* Win Amount */}
-                <Text size="1" color="gray" className="whitespace-nowrap">
-                  Win ${tier.winAmountUsd}
-                </Text>
-
-                {/* Realtime Pending Count */}
-                {(() => {
-                  const pendingCount = getPendingCount(tier.id);
-                  const matchEta = getEstimatedMatchTime(matchTimes || null, tier.id);
-
-                  if (pendingCount > 0) {
-                    return (
-                      <Tooltip content={`${pendingCount} game${pendingCount > 1 ? 's' : ''} waiting for opponent`}>
-                        <Badge color="green" variant="soft" size="1">
-                          <Users className="w-3 h-3" />
-                          <span className="hidden sm:inline">{pendingCount} waiting</span>
-                          <span className="sm:hidden">{pendingCount}</span>
-                        </Badge>
-                      </Tooltip>
-                    );
-                  } else if (matchEta.estimate !== 'N/A') {
-                    return (
-                      <Tooltip content={`Avg match time: ${matchEta.estimate} (${matchEta.confidence} confidence)`}>
-                        <Badge color="gray" variant="soft" size="1">
-                          <Clock className="w-3 h-3" />
-                          <span className="hidden sm:inline">{matchEta.estimate}</span>
-                        </Badge>
-                      </Tooltip>
-                    );
-                  }
-                  return null;
-                })()}
-
-                {/* Insufficient Balance Indicator */}
-                {!canAfford && (
-                  <Badge color="red" variant="soft" size="1">
-                    <Lock className="w-3 h-3" />
-                    <span className="hidden sm:inline">Low balance</span>
-                    <span className="sm:hidden">Low</span>
-                  </Badge>
+              <button
+                onClick={() => canAfford && setSelectedTier(tier.id)}
+                disabled={!canAfford}
+                className={`
+                  relative flex flex-col items-center gap-2 p-4 rounded-2xl border transition-all duration-200 cursor-pointer
+                  touch-target w-full
+                  ${!canAfford ? 'opacity-40 cursor-not-allowed' : 'hover:scale-[1.03] hover:-translate-y-0.5'}
+                  ${isSelected ? 'text-cyan-300' : 'text-slate-300'}
+                `}
+                style={
+                  isSelected
+                    ? {
+                        background: 'rgba(6,182,212,0.1)',
+                        borderColor: 'rgba(6,182,212,0.5)',
+                        boxShadow: '0 0 20px rgba(6,182,212,0.2), inset 0 0 20px rgba(6,182,212,0.05)',
+                      }
+                    : hasWaiters
+                    ? {
+                        background: 'rgba(34,197,94,0.05)',
+                        borderColor: 'rgba(34,197,94,0.2)',
+                      }
+                    : {
+                        background: 'rgba(255,255,255,0.03)',
+                        borderColor: 'rgba(255,255,255,0.08)',
+                      }
+                }
+              >
+                {/* Selected indicator */}
+                {isSelected && (
+                  <div className="absolute top-2 right-2 w-2 h-2 rounded-full bg-cyan-400"
+                    style={{ boxShadow: '0 0 6px rgba(6,182,212,0.8)' }} />
                 )}
-              </Flex>
-            </Button>
+
+                {/* Amount */}
+                <span className={`text-2xl font-black tracking-tight ${isSelected ? 'text-cyan-300' : 'text-white'}`}>
+                  ${tier.amountUsd}
+                </span>
+
+                {/* Win amount */}
+                <span className="text-xs text-slate-500 font-medium">
+                  Win <span className={isSelected ? 'text-cyan-400' : 'text-green-400'}>${tier.winAmountUsd}</span>
+                </span>
+
+                {/* Status badge */}
+                {!canAfford ? (
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium text-red-400"
+                    style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.2)' }}>
+                    <Lock className="w-2.5 h-2.5" /> Low bal
+                  </span>
+                ) : hasWaiters ? (
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium text-green-400"
+                    style={{ background: 'rgba(34,197,94,0.1)', border: '1px solid rgba(34,197,94,0.25)' }}>
+                    <Users className="w-2.5 h-2.5" />
+                    <span className="hidden sm:inline">{pendingCount} waiting</span>
+                    <span className="sm:hidden">{pendingCount}</span>
+                  </span>
+                ) : matchEta.estimate !== 'N/A' ? (
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium text-slate-400"
+                    style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)' }}>
+                    <Clock className="w-2.5 h-2.5" />
+                    <span className="hidden sm:inline">{matchEta.estimate}</span>
+                  </span>
+                ) : null}
+              </button>
+            </Tooltip>
           );
         })}
-      </Grid>
+      </div>
 
-      {selectedTier !== null && (
-        <Card className="card-simple">
-          <Flex direction="column" gap="2" p="3">
-            <Text size="2" weight="medium">
-              Selected Tier: ${tiers?.[selectedTier]?.amountUsd}
-            </Text>
-            <Text size="1" color="gray">
-              You'll pay ${tiers?.[selectedTier]?.amountUsd} and can win up to $
-              {tiers?.[selectedTier]?.winAmountUsd} ({WINNER_PAYOUT_PERCENT}% of pot, {PLATFORM_FEE_PERCENT}% fee)
-            </Text>
-          </Flex>
-        </Card>
+      {/* Selected summary */}
+      {selectedTierData && (
+        <div
+          className="flex items-center gap-3 p-4 rounded-xl animate-slide-up"
+          style={{ background: 'rgba(6,182,212,0.07)', border: '1px solid rgba(6,182,212,0.2)' }}
+        >
+          <TrendingUp className="w-5 h-5 text-cyan-400 flex-shrink-0" />
+          <div>
+            <p className="text-sm font-semibold text-cyan-300">
+              ${selectedTierData.amountUsd} bet selected
+            </p>
+            <p className="text-xs text-slate-400 mt-0.5">
+              Win up to ${selectedTierData.winAmountUsd} · {WINNER_PAYOUT_PERCENT}% payout · {PLATFORM_FEE_PERCENT}% platform fee
+            </p>
+          </div>
+        </div>
       )}
-    </Flex>
+    </div>
   );
 }
 
 function TierSelectorSkeleton() {
   return (
-    <Flex direction="column" gap="4">
-      <Skeleton>
-        <Heading size="5">Loading tiers...</Heading>
-      </Skeleton>
-      <Grid columns={{ initial: '2', md: '5' }} gap="3">
+    <div className="flex flex-col gap-5">
+      <div className="flex items-center justify-between">
+        <Skeleton><div className="h-7 w-40 rounded-lg" /></Skeleton>
+        <Skeleton><div className="h-5 w-24 rounded-lg" /></Skeleton>
+      </div>
+      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3">
         {Array.from({ length: 5 }).map((_, i) => (
-          <Skeleton key={i}>
-            <div className="h-32 w-full" />
-          </Skeleton>
+          <Skeleton key={i}><div className="h-28 rounded-2xl" /></Skeleton>
         ))}
-      </Grid>
-    </Flex>
+      </div>
+    </div>
   );
 }

@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useMemo } from 'react';
+import { useCallback, useEffect, useRef, useMemo, useState } from 'react';
 import { useAccount } from 'wagmi';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase, getAuthenticatedClient } from '@/lib/supabase';
@@ -74,7 +74,6 @@ export function usePendingTransactions() {
   // In decentralized mode, return no-op immediately
   // This prevents any Supabase calls
   if (!isLoggedIn) {
-    devLog.log('[PendingTx] Decentralized mode - no database tracking');
     return noopReturn;
   }
 
@@ -121,8 +120,9 @@ export function usePendingTransactions() {
     enabled: !!address && !!authClient,
     staleTime: PENDING_TX_STALE_TIME_MS,
     gcTime: 60 * 1000, // 1 minute
-    // Fallback polling in case realtime fails (DB trigger updates status)
-    refetchInterval: 5000,
+    // No polling needed - realtime subscription below handles all updates instantly
+    // This eliminates redundant requests while maintaining instant updates
+    refetchInterval: false,
   });
 
   // Realtime subscription for instant updates
@@ -470,17 +470,69 @@ export function usePendingTransactionSync() {
 }
 
 /**
- * Hook to get DB-backed game limits for concurrent game enforcement
- * Combines pending transactions (confirming) + active games (pending/matched)
+ * Hook to get game limits for concurrent game enforcement
+ * In centralized mode: Combines pending transactions (confirming) + active games (pending/matched)
+ * In decentralized mode: Uses contract's canCreateGame() for accurate on-chain state
  *
  * This replaces the Zustand-based getActiveGamesCount/canCreateNewGame
- * to ensure consistent counting from the database source of truth.
+ * to ensure consistent counting from the source of truth.
  */
 export function useGameLimits() {
   const { address } = useAccount();
+  const isLoggedIn = useIsLoggedIn();
   const { pendingTransactions } = usePendingTransactions();
   const { data: dbActiveGames = [] } = useUserActiveGames(address);
 
+  // In decentralized mode, use contract data
+  const [contractCanCreate, setContractCanCreate] = useState<boolean | null>(null);
+  const [contractActiveCount, setContractActiveCount] = useState<number>(0);
+  const [contractMaxGames, setContractMaxGames] = useState<number>(MAX_CONCURRENT_GAMES);
+
+  // Fetch from contract in decentralized mode
+  useEffect(() => {
+    if (!isLoggedIn && address) {
+      const fetchFromContract = async () => {
+        try {
+          const { getBlockchainDataSource } = await import('@/lib/data/blockchain');
+          const blockchainSource = getBlockchainDataSource();
+
+          const [canCreate, activeCount, config] = await Promise.all([
+            blockchainSource.canCreateGame(address),
+            blockchainSource.getActiveGameCount(address),
+            blockchainSource.getContractConfig(),
+          ]);
+
+          setContractCanCreate(canCreate);
+          setContractActiveCount(activeCount);
+          setContractMaxGames(config.maxGamesPerPlayer);
+
+        } catch (error) {
+          devLog.error('[useGameLimits] Failed to fetch from contract:', error);
+          // Fallback to allowing game creation
+          setContractCanCreate(true);
+        }
+      };
+
+      fetchFromContract();
+      // Refresh every 30 seconds in decentralized mode
+      // Game limits only change on tx confirmation — no need to poll frequently
+      const interval = setInterval(fetchFromContract, 60000);
+      return () => clearInterval(interval);
+    }
+  }, [address, isLoggedIn]);
+
+  // In decentralized mode, use contract values
+  if (!isLoggedIn) {
+    return {
+      activeGamesCount: contractActiveCount,
+      canCreateNewGame: contractCanCreate ?? true,
+      pendingCreateCount: 0,
+      confirmedActiveCount: contractActiveCount,
+      maxGamesPerPlayer: contractMaxGames,
+    };
+  }
+
+  // Centralized mode: use DB data
   // Count pending create transactions (games being confirmed on blockchain)
   const pendingCreateCount = pendingTransactions.filter(
     tx => tx.tx_type === 'create'
@@ -503,5 +555,6 @@ export function useGameLimits() {
     // Breakdown for debugging
     pendingCreateCount,
     confirmedActiveCount,
+    maxGamesPerPlayer: MAX_CONCURRENT_GAMES,
   };
 }

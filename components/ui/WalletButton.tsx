@@ -34,18 +34,21 @@ export function WalletButton() {
                 return (
                   <button
                     onClick={openConnectModal}
-                    className="
-                      flex items-center gap-2 px-4 py-2.5
-                      bg-gradient-to-r from-cyan-500/20 to-purple-500/20
-                      hover:from-cyan-500/30 hover:to-purple-500/30
-                      border border-cyan-500/50 hover:border-cyan-400
-                      rounded-xl transition-all duration-300
-                      hover:scale-105 hover:shadow-[0_0_20px_rgba(0,255,255,0.3)]
-                      group
-                    "
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '8px',
+                      padding: '10px 16px',
+                      background: 'linear-gradient(135deg, #06b6d4, #7c3aed)',
+                      border: '1px solid rgba(255,255,255,0.1)',
+                      borderRadius: '12px',
+                      cursor: 'pointer',
+                      transition: 'all 0.3s',
+                    }}
+                    className="hover:scale-105 hover:shadow-[0_0_20px_rgba(0,255,255,0.3)] group"
                   >
-                    <Wallet className="w-5 h-5 text-cyan-400 group-hover:text-cyan-300" />
-                    <span className="font-medium text-cyan-300 group-hover:text-cyan-200">
+                    <Wallet style={{ width: '20px', height: '20px', color: '#e0f2fe' }} />
+                    <span style={{ fontWeight: 500, color: '#e0f2fe' }}>
                       Connect
                     </span>
                   </button>
@@ -57,85 +60,104 @@ export function WalletButton() {
                 return (
                   <button
                     onClick={openChainModal}
-                    className="
-                      flex items-center gap-2 px-4 py-2.5
-                      bg-red-500/20 hover:bg-red-500/30
-                      border border-red-500/50 hover:border-red-400
-                      rounded-xl transition-all duration-300
-                      animate-pulse
-                    "
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '8px',
+                      padding: '10px 16px',
+                      background: 'rgba(239,68,68,0.2)',
+                      border: '1px solid rgba(239,68,68,0.5)',
+                      borderRadius: '12px',
+                      cursor: 'pointer',
+                      transition: 'all 0.3s',
+                    }}
+                    className="animate-pulse"
                   >
-                    <span className="text-red-400 font-medium">Wrong Network</span>
-                    <ChevronDown className="w-4 h-4 text-red-400" />
+                    <span style={{ color: '#fca5a5', fontWeight: 500 }}>Wrong Network</span>
+                    <ChevronDown style={{ width: '16px', height: '16px', color: '#fca5a5' }} />
                   </button>
                 );
               }
 
               // Connected - show wallet info
               return (
-                <div className="flex items-center gap-2">
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                   {/* Chain Button */}
                   <button
                     onClick={openChainModal}
-                    className="
-                      flex items-center gap-1.5 px-3 py-2
-                      bg-slate-800/80 hover:bg-slate-700/80
-                      border border-slate-600/50 hover:border-cyan-500/50
-                      rounded-xl transition-all duration-300
-                      group
-                    "
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '6px',
+                      padding: '8px 12px',
+                      background: 'rgba(255,255,255,0.03)',
+                      border: '1px solid rgba(255,255,255,0.07)',
+                      borderRadius: '12px',
+                      cursor: 'pointer',
+                      transition: 'all 0.3s',
+                    }}
+                    className="hover:border-cyan-500/50"
                     title={chain.name}
                   >
                     {chain.hasIcon && chain.iconUrl && (
                       <img
                         src={chain.iconUrl}
                         alt={chain.name ?? 'Chain'}
-                        className="w-5 h-5 rounded-full"
+                        style={{ width: '20px', height: '20px', borderRadius: '50%' }}
                       />
                     )}
-                    <ChevronDown className="w-3 h-3 text-slate-400 group-hover:text-cyan-400" />
+                    <ChevronDown style={{ width: '12px', height: '12px', color: 'rgba(156,163,175,1)' }} />
                   </button>
 
                   {/* Account Button */}
                   <button
                     onClick={openAccountModal}
-                    className="
-                      flex items-center gap-3 px-3 py-2
-                      bg-gradient-to-r from-slate-800/90 to-slate-800/70
-                      hover:from-cyan-500/20 hover:to-purple-500/20
-                      border border-slate-600/50 hover:border-cyan-500/50
-                      rounded-xl transition-all duration-300
-                      hover:shadow-[0_0_15px_rgba(0,255,255,0.2)]
-                      group
-                    "
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '12px',
+                      padding: '8px 12px',
+                      background: 'rgba(255,255,255,0.03)',
+                      border: '1px solid rgba(255,255,255,0.07)',
+                      borderRadius: '12px',
+                      cursor: 'pointer',
+                      transition: 'all 0.3s',
+                    }}
+                    className="hover:border-cyan-500/50 hover:shadow-[0_0_15px_rgba(0,255,255,0.2)] group"
                   >
                     {/* Balance */}
                     {account.balanceFormatted && (
-                      <span className="text-sm font-medium text-slate-300 group-hover:text-cyan-300">
+                      <span style={{ fontSize: '14px', fontWeight: 500, color: 'rgba(209,213,219,1)' }} className="group-hover:text-cyan-300">
                         {parseFloat(account.balanceFormatted).toFixed(3)} {account.balanceSymbol}
                       </span>
                     )}
 
                     {/* Divider */}
-                    <div className="w-px h-5 bg-slate-600/50" />
+                    <div style={{ width: '1px', height: '20px', background: 'rgba(255,255,255,0.07)' }} />
 
                     {/* Address with Avatar */}
-                    <div className="flex items-center gap-2">
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                       {account.ensAvatar ? (
                         <img
                           src={account.ensAvatar}
                           alt="ENS Avatar"
-                          className="w-6 h-6 rounded-full ring-2 ring-cyan-500/30"
+                          style={{ width: '24px', height: '24px', borderRadius: '50%', outline: '2px solid rgba(6,182,212,0.3)' }}
                         />
                       ) : (
-                        <div className="w-6 h-6 rounded-full bg-gradient-to-br from-cyan-400 to-purple-500 ring-2 ring-cyan-500/30" />
+                        <div style={{
+                          width: '24px',
+                          height: '24px',
+                          borderRadius: '50%',
+                          background: 'linear-gradient(135deg, #06b6d4, #7c3aed)',
+                          outline: '2px solid rgba(6,182,212,0.3)',
+                        }} />
                       )}
-                      <span className="text-sm font-mono text-slate-300 group-hover:text-white">
+                      <span style={{ fontSize: '14px', fontFamily: 'monospace', color: 'rgba(209,213,219,1)' }} className="group-hover:text-white">
                         {account.ensName || `${account.address.slice(0, 4)}...${account.address.slice(-4)}`}
                       </span>
                     </div>
 
-                    <ChevronDown className="w-4 h-4 text-slate-400 group-hover:text-cyan-400" />
+                    <ChevronDown style={{ width: '16px', height: '16px', color: 'rgba(156,163,175,1)' }} className="group-hover:text-cyan-400" />
                   </button>
                 </div>
               );

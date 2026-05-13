@@ -1,8 +1,9 @@
 'use client';
 
-import { Coins, Menu, X } from 'lucide-react';
+import { Menu, X } from 'lucide-react';
 import { WalletButton } from '@/components/ui/WalletButton';
-import { Flex, Heading, Badge, Box, Container, Button } from '@radix-ui/themes';
+import { Flex, Box, Container } from '@radix-ui/themes';
+import { LogoIcon } from '@/components/ui/LogoIcon';
 import Link from 'next/link';
 import { SoundToggle } from '@/components/ui/SoundToggle';
 import { MusicToggle } from '@/components/ui/MusicToggle';
@@ -12,19 +13,17 @@ import { useState } from 'react';
 import { usePathname } from 'next/navigation';
 import { useAuth } from '@/hooks/useAuth';
 
-// Navigation items with auth requirements
 interface NavItem {
   href: string;
   label: string;
-  glowClass: string;
-  requiresAuth?: boolean; // If true, only show for registered users
+  requiresAuth?: boolean;
 }
 
 const NAV_ITEMS: NavItem[] = [
-  { href: '/play', label: 'Play', glowClass: 'hover:glow-primary' },
-  { href: '/queue', label: 'Queue', glowClass: 'hover:glow-accent' },
-  { href: '/history', label: 'History', glowClass: 'hover:glow-success', requiresAuth: true },
-  { href: '/leaderboard', label: 'Leaderboard', glowClass: 'hover:glow-warning', requiresAuth: true },
+  { href: '/play',        label: 'Play' },
+  { href: '/queue',       label: 'Queue' },
+  { href: '/history',     label: 'History',     requiresAuth: true },
+  { href: '/leaderboard', label: 'Leaderboard', requiresAuth: true },
 ];
 
 export function Header() {
@@ -32,126 +31,115 @@ export function Header() {
   const pathname = usePathname();
   const { isAuthenticated } = useAuth();
 
-  const isActive = (path: string) => pathname === path;
-
-  // Filter nav items based on auth status
-  const visibleNavItems = NAV_ITEMS.filter(
-    (item) => !item.requiresAuth || isAuthenticated
-  );
+  const isActive = (path: string) => pathname === path || pathname.startsWith(path + '/');
+  const visibleNavItems = NAV_ITEMS.filter(item => !item.requiresAuth || isAuthenticated);
 
   return (
-    <Box className="card-solid border-b border-cyan-500/30 sticky top-0 z-50 backdrop-blur-xl">
+    <Box
+      className="sticky top-0 z-50"
+      style={{
+        background: 'rgba(2, 6, 23, 0.75)',
+        backdropFilter: 'blur(20px)',
+        WebkitBackdropFilter: 'blur(20px)',
+        borderBottom: '1px solid rgba(255,255,255,0.07)',
+        boxShadow: '0 1px 40px rgba(0,0,0,0.4)',
+      }}
+    >
       <Container size="4">
-        <Flex align="center" justify="between" py="3" gap="4">
-          {/* Left: Logo + Navigation */}
-          <Flex align="center" gap="6">
-            {/* Logo */}
-            <Link href="/" className="no-underline">
-              <Flex align="center" gap="2" className="group cursor-pointer">
-                <Box className="p-1.5 rounded-lg bg-gradient-to-br from-cyan-500/20 to-purple-500/20 border border-cyan-500/50 group-hover:scale-110 group-hover:border-cyan-500/70 transition-all duration-300">
-                  <Coins className="w-5 h-5 text-cyan-300 group-hover:rotate-180 transition-transform duration-500" />
-                </Box>
-                <Heading size="5" className="text-gradient-primary hidden sm:block">
-                  CoinFlip
-                </Heading>
-                <Badge
-                  color="cyan"
-                  variant="soft"
-                  radius="full"
-                  className="neon-border-primary animate-pulse-slow hidden lg:flex text-xs"
-                >
-                  v1.0
-                </Badge>
-              </Flex>
-            </Link>
+        <Flex align="center" justify="between" style={{ height: '60px' }} gap="4">
 
-            {/* Desktop Navigation */}
-            <Flex gap="2" className="hidden md:flex">
-              {visibleNavItems.map((item) => (
-                <Link key={item.href} href={item.href}>
-                  <Button
-                    variant={isActive(item.href) ? 'solid' : 'soft'}
-                    size="2"
-                    className={`
-                      hover:scale-105 transition-all duration-200 cursor-pointer
-                      ${item.glowClass}
-                      ${isActive(item.href) ? 'border border-cyan-500/70' : ''}
-                    `}
-                  >
-                    {item.label}
-                  </Button>
-                </Link>
-              ))}
+          {/* ── Logo ── */}
+          <Link href="/" className="no-underline flex-shrink-0">
+            <Flex align="center" gap="2" className="group cursor-pointer">
+              <LogoIcon
+                size={30}
+                className="transition-transform duration-500 group-hover:scale-110 group-hover:rotate-6"
+              />
+              <span className="hidden sm:flex items-baseline gap-0 text-lg tracking-tight">
+                <span style={{ color: '#94a3b8', fontWeight: 400 }}>Coin</span>
+                <span style={{ background: 'linear-gradient(to right, #67e8f9, #a78bfa)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', fontWeight: 800 }}>Flip</span>
+              </span>
             </Flex>
+          </Link>
+
+          {/* ── Desktop Nav ── */}
+          <Flex gap="1" align="center" className="hidden md:flex flex-1 px-4">
+            {visibleNavItems.map(item => (
+              <Link key={item.href} href={item.href} className="no-underline">
+                <button
+                  className={`
+                    px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 cursor-pointer
+                    ${isActive(item.href)
+                      ? 'text-cyan-300'
+                      : 'text-slate-400 hover:text-slate-100 hover:bg-white/[0.06]'
+                    }
+                  `}
+                  style={isActive(item.href) ? {
+                    background: 'rgba(6,182,212,0.12)',
+                    boxShadow: 'inset 0 0 0 1px rgba(6,182,212,0.3)',
+                  } : undefined}
+                >
+                  {item.label}
+                </button>
+              </Link>
+            ))}
           </Flex>
 
-          {/* Right: Status + Controls + Wallet */}
-          <Flex align="center" gap="3">
-            {/* Status Indicator */}
+          {/* ── Right Controls ── */}
+          <Flex align="center" gap="2" className="flex-shrink-0">
             <Box className="hidden sm:block">
               <SyncStatus />
             </Box>
 
-            {/* Divider */}
-            <Box className="hidden sm:block w-px h-6 bg-slate-600/50" />
+            <div className="hidden sm:block w-px h-5 bg-white/10" />
 
-            {/* Audio Controls Group */}
-            <Flex align="center" gap="2">
+            <Flex align="center" gap="1">
               <MusicToggle />
               <SoundToggle />
               {isAuthenticated && <ThemeSwitcher />}
             </Flex>
 
-            {/* Divider */}
-            <Box className="hidden md:block w-px h-6 bg-slate-600/50" />
+            <div className="hidden md:block w-px h-5 bg-white/10" />
 
-            {/* Wallet */}
             <Box className="hidden md:block">
               <WalletButton />
             </Box>
 
-            {/* Mobile menu button */}
-            <Button
-              variant="soft"
-              size="2"
-              className="md:hidden cursor-pointer"
+            {/* Mobile hamburger */}
+            <button
+              className="md:hidden p-2 rounded-lg text-slate-400 hover:text-white hover:bg-white/[0.08] transition-all duration-200 cursor-pointer"
               onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
             >
-              {mobileMenuOpen ? (
-                <X className="w-5 h-5" />
-              ) : (
-                <Menu className="w-5 h-5" />
-              )}
-            </Button>
+              {mobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
+            </button>
           </Flex>
         </Flex>
 
-        {/* Mobile Navigation Menu */}
+        {/* ── Mobile Menu ── */}
         {mobileMenuOpen && (
-          <Flex
-            direction="column"
-            gap="2"
-            className="md:hidden pb-4 animate-slide-down"
-          >
-            {visibleNavItems.map((item) => (
-              <Link key={item.href} href={item.href} onClick={() => setMobileMenuOpen(false)}>
-                <Button
-                  variant={isActive(item.href) ? 'solid' : 'soft'}
-                  size="3"
-                  className={`
-                    w-full cursor-pointer transition-all duration-200
-                    ${item.glowClass}
-                    ${isActive(item.href) ? 'border-2 border-cyan-500/70' : ''}
-                  `}
-                >
-                  {item.label}
-                </Button>
-              </Link>
-            ))}
-            <Box className="mt-2 pt-2 border-t border-slate-700/50">
+          <div className="md:hidden pb-4 animate-slide-down border-t border-white/[0.06] mt-0 pt-3">
+            <div className="flex flex-col gap-1">
+              {visibleNavItems.map(item => (
+                <Link key={item.href} href={item.href} onClick={() => setMobileMenuOpen(false)} className="no-underline">
+                  <button
+                    className={`
+                      w-full text-left px-4 py-3 rounded-xl text-sm font-medium transition-all duration-200 cursor-pointer
+                      ${isActive(item.href)
+                        ? 'text-cyan-300 bg-cyan-500/10'
+                        : 'text-slate-300 hover:text-white hover:bg-white/[0.06]'
+                      }
+                    `}
+                    style={isActive(item.href) ? { boxShadow: 'inset 0 0 0 1px rgba(6,182,212,0.25)' } : undefined}
+                  >
+                    {item.label}
+                  </button>
+                </Link>
+              ))}
+            </div>
+            <div className="mt-3 pt-3 border-t border-white/[0.06]">
               <WalletButton />
-            </Box>
-          </Flex>
+            </div>
+          </div>
         )}
       </Container>
     </Box>

@@ -100,7 +100,6 @@ export function useUserPreferences() {
   }), [address]);
 
   if (!isLoggedIn) {
-    devLog.log('[Preferences] Decentralized mode - using defaults');
     return noopReturn;
   }
 
